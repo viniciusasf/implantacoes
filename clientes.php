@@ -130,6 +130,12 @@ include 'header.php';
                             <td><span class="badge bg-light text-dark border"><?php echo htmlspecialchars($c['vendedor']); ?></span></td>
                             <td><?php echo htmlspecialchars($c['telefone_ddd']); ?></td>
                             <td class="text-end pe-4">
+                                <!-- Botão Ver Tarefas -->
+                                <a href="tarefas.php?filtro_cliente=<?php echo urlencode($c['fantasia']); ?>" 
+                                   class="btn btn-sm btn-light text-success me-1"
+                                   title="Ver tarefas deste cliente">
+                                    <i class="bi bi-list-task"></i>
+                                </a>
                                 <button class="btn btn-sm btn-light text-info details-btn me-1" 
                                         data-id="<?php echo $c['id_cliente']; ?>"
                                         data-fantasia="<?php echo htmlspecialchars($c['fantasia']); ?>"
