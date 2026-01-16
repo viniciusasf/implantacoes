@@ -193,7 +193,7 @@
                     <a href="treinamentos.php"><i class="bi bi-mortarboard"></i> Treinamentos</a>
                 </li>
                 <li class="<?= $current_page == 'tarefas.php' ? 'active' : '' ?>">
-                    <a href="tarefas.php"><i class="bi bi-mortarboard"></i> Tarefas</a>
+                    <a href="tarefas.php"><i class="bi-list-check"></i> Tarefas</a>
                 </li>
             </ul>
         </nav>
