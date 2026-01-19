@@ -231,6 +231,15 @@ include 'header.php';
                                     <button class="btn btn-sm btn-success" disabled title="Sincronizado">
                                         <i class="bi bi-check-circle"></i>
                                     </button>
+                                    <!-- Botão para abrir link do Google -->
+                                    <?php if (!empty($t['google_event_link'])): ?>
+                                        <a href="<?php echo htmlspecialchars($t['google_event_link']); ?>" 
+                                           target="_blank"
+                                           class="btn btn-sm btn-outline-primary" 
+                                           title="Abrir no Google Agenda">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                        </a>
+                                    <?php endif; ?>
                                     <!-- Botão de Deletar do Google -->
                                     <button class="btn btn-sm btn-outline-danger delete-calendar" 
                                             data-id="<?php echo $t['id_treinamento']; ?>" 
@@ -364,7 +373,15 @@ document.querySelectorAll('.sync-calendar').forEach(btn => {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('✅ ' + data.message);
+                    // Mostrar mensagem com link
+                    if (data.event_link) {
+                        const openLink = confirm('✅ ' + data.message + '\n\nDeseja abrir o evento no Google Agenda agora?');
+                        if (openLink) {
+                            window.open(data.event_link, '_blank');
+                        }
+                    } else {
+                        alert('✅ ' + data.message);
+                    }
                     location.reload(); // Recarrega para atualizar os botões
                 } else {
                     if (data.auth_url) {

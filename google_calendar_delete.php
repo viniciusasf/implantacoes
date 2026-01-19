@@ -84,16 +84,16 @@ try {
     try {
         $service->events->delete($calendarId, $treinamento['google_event_id']);
         
-        // Limpar o google_event_id do banco de dados
-        $stmt = $pdo->prepare("UPDATE treinamentos SET google_event_id = NULL WHERE id_treinamento = ?");
+        // Limpar o google_event_id e google_event_link do banco de dados
+        $stmt = $pdo->prepare("UPDATE treinamentos SET google_event_id = NULL, google_event_link = NULL WHERE id_treinamento = ?");
         $stmt->execute([$id_treinamento]);
         
         echo json_encode(['success' => true, 'message' => 'Evento removido do Google Agenda com sucesso!']);
     } catch (\Google\Service\Exception $e) {
         // Evento pode não existir mais no Google
         if ($e->getCode() == 404) {
-            // Limpa o ID do banco mesmo assim
-            $stmt = $pdo->prepare("UPDATE treinamentos SET google_event_id = NULL WHERE id_treinamento = ?");
+            // Limpa o ID e o LINK do banco mesmo assim
+            $stmt = $pdo->prepare("UPDATE treinamentos SET google_event_id = NULL, google_event_link = NULL WHERE id_treinamento = ?");
             $stmt->execute([$id_treinamento]);
             echo json_encode(['success' => true, 'message' => 'Evento já havia sido removido do Google Agenda.']);
         } else {

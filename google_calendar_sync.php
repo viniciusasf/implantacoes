@@ -116,14 +116,18 @@ try {
     // Inserir evento no Google Agenda
     $createdEvent = $service->events->insert($calendarId, $event);
     
-    // Salvar o ID do evento no banco de dados
-    $stmt = $pdo->prepare("UPDATE treinamentos SET google_event_id = ? WHERE id_treinamento = ?");
-    $stmt->execute([$createdEvent->id, $id_treinamento]);
+    // Obter o link do evento
+    $eventLink = $createdEvent->htmlLink;
+    
+    // Salvar o ID e o LINK do evento no banco de dados
+    $stmt = $pdo->prepare("UPDATE treinamentos SET google_event_id = ?, google_event_link = ? WHERE id_treinamento = ?");
+    $stmt->execute([$createdEvent->id, $eventLink, $id_treinamento]);
     
     echo json_encode([
         'success' => true, 
         'message' => 'Sincronizado com sucesso!',
-        'event_id' => $createdEvent->id
+        'event_id' => $createdEvent->id,
+        'event_link' => $eventLink
     ]);
 
 } catch (Exception $e) {
