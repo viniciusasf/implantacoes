@@ -53,6 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 // Filtros
 $filtro_cliente = isset($_GET['filtro_cliente']) ? trim($_GET['filtro_cliente']) : '';
 $filtro_contato = isset($_GET['filtro_contato']) ? trim($_GET['filtro_contato']) : '';
+$filtro_status = isset($_GET['filtro_status']) ? trim($_GET['filtro_status']) : '';
 
 $sql = "SELECT t.*, c.fantasia FROM treinamentos t JOIN clientes c ON t.id_cliente = c.id_cliente WHERE 1=1";
 $params = [];
@@ -65,6 +66,11 @@ if (!empty($filtro_cliente)) {
 if (!empty($filtro_contato)) {
     $sql .= " AND t.nome_contato LIKE ?";
     $params[] = "%$filtro_contato%";
+}
+
+if (!empty($filtro_status)) {
+    $sql .= " AND t.status = ?";
+    $params[] = $filtro_status;
 }
 
 $sql .= " ORDER BY 
@@ -103,7 +109,7 @@ include 'header.php';
 <div class="card shadow-sm border-0 mb-3">
     <div class="card-body py-3">
         <form method="GET" class="row g-3 align-items-center">
-            <div class="col-md-5">
+            <div class="col-md-3">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0">
                         <i class="bi bi-building text-muted"></i>
@@ -115,7 +121,7 @@ include 'header.php';
                            value="<?php echo htmlspecialchars($filtro_cliente); ?>">
                 </div>
             </div>
-            <div class="col-md-5">
+            <div class="col-md-3">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0">
                         <i class="bi bi-person text-muted"></i>
@@ -127,11 +133,18 @@ include 'header.php';
                            value="<?php echo htmlspecialchars($filtro_contato); ?>">
                 </div>
             </div>
+            <div class="col-md-4">
+                <select name="filtro_status" class="form-select">
+                    <option value="">Todos os status</option>
+                    <option value="Pendente" <?php echo $filtro_status == 'Pendente' ? 'selected' : ''; ?>>Pendente</option>
+                    <option value="Resolvido" <?php echo $filtro_status == 'Resolvido' ? 'selected' : ''; ?>>Resolvido</option>
+                </select>
+            </div>
             <div class="col-md-2 d-flex gap-2">
                 <button type="submit" class="btn btn-primary flex-fill">
                     <i class="bi bi-search me-1"></i>Buscar
                 </button>
-                <?php if (!empty($filtro_cliente) || !empty($filtro_contato)): ?>
+                <?php if (!empty($filtro_cliente) || !empty($filtro_contato) || !empty($filtro_status)): ?>
                     <a href="treinamentos.php" class="btn btn-outline-secondary" title="Limpar filtros">
                         <i class="bi bi-x-lg"></i>
                     </a>
@@ -147,9 +160,9 @@ include 'header.php';
             <div class="text-center py-5">
                 <i class="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
                 <p class="text-muted">
-                    <?php echo (!empty($filtro_cliente) || !empty($filtro_contato)) ? 'Nenhum treinamento encontrado com os filtros aplicados.' : 'Nenhum treinamento cadastrado ainda.'; ?>
+                    <?php echo (!empty($filtro_cliente) || !empty($filtro_contato) || !empty($filtro_status)) ? 'Nenhum treinamento encontrado com os filtros aplicados.' : 'Nenhum treinamento cadastrado ainda.'; ?>
                 </p>
-                <?php if (!empty($filtro_cliente) || !empty($filtro_contato)): ?>
+                <?php if (!empty($filtro_cliente) || !empty($filtro_contato) || !empty($filtro_status)): ?>
                     <a href="treinamentos.php" class="btn btn-sm btn-outline-primary">Limpar filtros</a>
                 <?php endif; ?>
             </div>
