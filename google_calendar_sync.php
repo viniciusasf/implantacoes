@@ -1,135 +1,90 @@
 <?php
-// Configuração de Erros
+session_start();
+date_default_timezone_set('America/Sao_Paulo');
 ini_set('display_errors', 0);
-error_reporting(E_ALL);
 header('Content-Type: application/json');
 
-function returnError($msg)
+require_once __DIR__ . '/vendor/autoload.php';
+require_once 'config.php';
+
+function returnResponse($success, $message, $data = [])
 {
-    die(json_encode(['success' => false, 'message' => $msg]));
+    die(json_encode(array_merge(['success' => $success, 'message' => $message], $data)));
 }
 
-register_shutdown_function(function () {
-    $error = error_get_last();
-    if ($error && ($error['type'] === E_ERROR || $error['type'] === E_PARSE)) {
-        echo json_encode(['success' => false, 'message' => 'Erro Fatal PHP: ' . $error['message'] . ' em ' . $error['file'] . ' linha ' . $error['line']]);
-    }
-});
-
 try {
-    // Verificação de Arquivos Essenciais
-    $autoload = __DIR__ . '/vendor/autoload.php';
-    if (!file_exists($autoload)) {
-        returnError("Pasta VENDOR não encontrada. Verifique se ela está na raiz do sistema.");
-    }
-    require_once $autoload;
+    $client = new Google\Client();
+    $client->setAuthConfig('credentials.json');
+    $client->addScope(Google\Service\Calendar::CALENDAR);
+    $client->setAccessType('offline');
+    $client->setPrompt('consent');
 
-    if (!file_exists('config.php')) {
-        returnError("Arquivo config.php não encontrado.");
-    }
-    require_once 'config.php';
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
+    $redirectUri = $protocol . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'];
+    $client->setRedirectUri($redirectUri);
 
-    if (!file_exists('credentials.json')) {
-        returnError("Arquivo credentials.json não encontrado na raiz.");
+    if (isset($_GET['id_treinamento'])) {
+        $_SESSION['sync_training_id'] = $_GET['id_treinamento'];
     }
 
-    // Lógica da API do Google
-    if (!isset($_GET['id_treinamento'])) {
-        returnError("ID do treinamento não fornecido.");
-    }
-
-    $id_treinamento = $_GET['id_treinamento'];
-
-    // Buscar dados do treinamento
-    $stmt = $pdo->prepare("SELECT t.*, c.fantasia as cliente_nome FROM treinamentos t JOIN clientes c ON t.id_cliente = c.id_cliente WHERE t.id_treinamento = ?");
-    $stmt->execute([$id_treinamento]);
-    $treinamento = $stmt->fetch();
-
-    if (!$treinamento)
-        returnError("Treinamento não encontrado no banco.");
-    if (!$treinamento['data_treinamento'])
-        returnError("Treinamento sem data agendada.");
-
-    // Verificar se já existe um evento criado
-    if (!empty($treinamento['google_event_id'])) {
-        echo json_encode(['success' => true, 'message' => 'Este treinamento já está sincronizado com o Google Agenda.', 'already_synced' => true]);
+    if (isset($_GET['code'])) {
+        $token = $client->fetchAccessTokenWithAuthCode($_GET['code']);
+        file_put_contents('token.json', json_encode($token));
+        header("Location: " . $redirectUri);
         exit;
     }
 
-    // Configurar Google Client
-    $client = new \Google\Client();
-    $client->setApplicationName('Implantacao Pro');
-    $client->setScopes(\Google\Service\Calendar::CALENDAR_EVENTS);
-    $client->setAuthConfig('credentials.json');
-    $client->setAccessType('offline');
-    $client->setPrompt('select_account consent');
-
-    $client->setRedirectUri('http://' . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF']);
-
-    $calendarId = 'gestaoprovideossuporte@gmail.com';
-    $tokenPath = 'token.json';
-
-    if (file_exists($tokenPath)) {
-        $client->setAccessToken(json_decode(file_get_contents($tokenPath), true));
+    if (file_exists('token.json')) {
+        $client->setAccessToken(json_decode(file_get_contents('token.json'), true));
     }
 
     if ($client->isAccessTokenExpired()) {
         if ($client->getRefreshToken()) {
             $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
-            file_put_contents($tokenPath, json_encode($client->getAccessToken()));
+            file_put_contents('token.json', json_encode($client->getAccessToken()));
         } else {
-            returnError("Autenticação necessária. URL: " . $client->createAuthUrl());
+            die(json_encode(['success' => false, 'auth_url' => $client->createAuthUrl()]));
         }
     }
 
-    $service = new \Google\Service\Calendar($client);
+    $id_treinamento = $_SESSION['sync_training_id'] ?? null;
+    if (!$id_treinamento)
+        returnResponse(false, "ID do treinamento não encontrado na sessão.");
 
-    // Define o fuso horário
-    $timezone = new DateTimeZone('America/Sao_Paulo');
-    $startDate = new DateTime($treinamento['data_treinamento'], $timezone);
-    $start = $startDate->format(DateTime::RFC3339);
+    $stmt = $pdo->prepare("SELECT t.*, c.fantasia as cliente_nome, co.nome as contato_nome, co.telefone_ddd as contato_tel 
+                           FROM treinamentos t 
+                           LEFT JOIN clientes c ON t.id_cliente = c.id_cliente 
+                           LEFT JOIN contatos co ON t.id_contato = co.id_contato 
+                           WHERE t.id_treinamento = ?");
+    $stmt->execute([$id_treinamento]);
+    $treinamento = $stmt->fetch();
 
+    $startDate = new DateTime($treinamento['data_treinamento'], new DateTimeZone('America/Sao_Paulo'));
     $endDate = clone $startDate;
-    $endDate->modify('+1 hour');
-    $end = $endDate->format(DateTime::RFC3339);
+    $endDate->modify('+60 minutes');
 
-    $event = new \Google\Service\Calendar\Event([
+    $service = new Google\Service\Calendar($client);
+    $event = new Google\Service\Calendar\Event([
         'summary' => 'Treinamento: ' . $treinamento['cliente_nome'],
-        'description' => 'Tema: ' . $treinamento['tema'] . "\nContato: " . $treinamento['nome_contato'] . "\nTelefone: " . $treinamento['telefone_contato'],
-        'start' => [
-            'dateTime' => $start,
-            'timeZone' => 'America/Sao_Paulo'
-        ],
-        'end' => [
-            'dateTime' => $end,
-            'timeZone' => 'America/Sao_Paulo'
-        ],
-        'reminders' => [
-            'useDefault' => false,
-            'overrides' => [
-                ['method' => 'popup', 'minutes' => 30],
-                ['method' => 'email', 'minutes' => 60]
-            ]
-        ]
+        'description' => "Tema: " . $treinamento['tema'] . "\nContato: " . $treinamento['contato_nome'],
+        'start' => ['dateTime' => $startDate->format(DateTime::RFC3339), 'timeZone' => 'America/Sao_Paulo'],
+        'end' => ['dateTime' => $endDate->format(DateTime::RFC3339), 'timeZone' => 'America/Sao_Paulo'],
+        'reminders' => ['useDefault' => false, 'overrides' => [['method' => 'popup', 'minutes' => 5]]]
     ]);
 
-    // Inserir evento no Google Agenda
-    $createdEvent = $service->events->insert($calendarId, $event);
-    
-    // Obter o link do evento
-    $eventLink = $createdEvent->htmlLink;
-    
-    // Salvar o ID e o LINK do evento no banco de dados
-    $stmt = $pdo->prepare("UPDATE treinamentos SET google_event_id = ?, google_event_link = ? WHERE id_treinamento = ?");
-    $stmt->execute([$createdEvent->id, $eventLink, $id_treinamento]);
-    
-    echo json_encode([
-        'success' => true, 
-        'message' => 'Sincronizado com sucesso!',
-        'event_id' => $createdEvent->id,
-        'event_link' => $eventLink
-    ]);
+    $createdEvent = $service->events->insert('primary', $event);
+
+    // CAPTURA O ID GERADO PELO GOOGLE
+    $google_id = $createdEvent->getId();
+
+    // SALVA NO BANCO
+    $stmtUpdate = $pdo->prepare("UPDATE treinamentos SET google_event_id = ?, google_event_link = ? WHERE id_treinamento = ?");
+    $stmtUpdate->execute([$google_id, $createdEvent->htmlLink, $id_treinamento]);
+
+    unset($_SESSION['sync_training_id']);
+
+    returnResponse(true, "Operação realizada com sucesso! ID Google: " . $google_id, ['google_id' => $google_id]);
 
 } catch (Exception $e) {
-    returnError("Erro de Execução: " . $e->getMessage());
+    returnResponse(false, "Erro: " . $e->getMessage());
 }

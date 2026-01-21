@@ -97,8 +97,7 @@ $hoje = date('Y-m-d');
                                 <th class="ps-4">Data Agendada</th>
                                 <th>Cliente</th>
                                 <th>Tema do Treinamento</th>
-                                <th class="text-center">Status</th>
-                                <th class="text-end pe-4">Agenda</th>
+                                <th class="text-center">Status</th>                                
                             </tr>
                         </thead>
                         <tbody>
@@ -142,16 +141,7 @@ $hoje = date('Y-m-d');
                                             <span
                                                 class="badge bg-warning-subtle text-warning px-3 py-2 rounded-pill">Pendente</span>
                                         </td>
-                                        <td class="text-end pe-4">
-                                            <button class="btn btn-sm btn-outline-danger btn-google-sync"
-                                                data-id="<?= $t['id_treinamento'] ?>"
-                                                data-cliente="<?= htmlspecialchars($t['fantasia']) ?>"
-                                                data-tema="<?= htmlspecialchars($t['tema']) ?>"                                                                                            
-                                                data-data="<?= date('Y-m-d\TH:i', strtotime($t['data_treinamento'])) ?>"
-                                                title="Sincronizar com Google Agenda">
-                                                <i class="bi bi-google"></i>
-                                            </button>
-                                        </td>
+                                        
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>

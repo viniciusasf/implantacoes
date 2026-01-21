@@ -1,106 +1,70 @@
 <?php
-// Configuração de Erros
+session_start();
 ini_set('display_errors', 0);
-error_reporting(E_ALL);
 header('Content-Type: application/json');
 
-function returnError($msg)
-{
-    die(json_encode(['success' => false, 'message' => $msg]));
+require_once __DIR__ . '/vendor/autoload.php';
+require_once 'config.php';
+
+function returnResponse($success, $message) {
+    die(json_encode(['success' => $success, 'message' => $message]));
 }
 
-register_shutdown_function(function () {
-    $error = error_get_last();
-    if ($error && ($error['type'] === E_ERROR || $error['type'] === E_PARSE)) {
-        echo json_encode(['success' => false, 'message' => 'Erro Fatal PHP: ' . $error['message']]);
-    }
-});
+if (!isset($_GET['id_treinamento'])) {
+    returnResponse(false, "ID do treinamento não fornecido.");
+}
+
+$id_treinamento = $_GET['id_treinamento'];
 
 try {
-    // Verificação de Arquivos Essenciais
-    $autoload = __DIR__ . '/vendor/autoload.php';
-    if (!file_exists($autoload)) {
-        returnError("Pasta VENDOR não encontrada.");
-    }
-    require_once $autoload;
-
-    if (!file_exists('config.php')) {
-        returnError("Arquivo config.php não encontrado.");
-    }
-    require_once 'config.php';
-
-    if (!file_exists('credentials.json')) {
-        returnError("Arquivo credentials.json não encontrado.");
-    }
-
-    // Verificar se foi passado o ID do treinamento
-    if (!isset($_GET['id_treinamento'])) {
-        returnError("ID do treinamento não fornecido.");
-    }
-
-    $id_treinamento = $_GET['id_treinamento'];
-
-    // Buscar dados do treinamento incluindo o event_id do Google
+    // 1. Busca o google_event_id no banco de dados
     $stmt = $pdo->prepare("SELECT google_event_id FROM treinamentos WHERE id_treinamento = ?");
     $stmt->execute([$id_treinamento]);
     $treinamento = $stmt->fetch();
 
-    if (!$treinamento) {
-        returnError("Treinamento não encontrado no banco.");
+    if (!$treinamento || empty($treinamento['google_event_id'])) {
+        returnResponse(false, "Este treinamento não possui um agendamento vinculado no Google.");
     }
 
-    // Verificar se existe um event_id vinculado
-    if (empty($treinamento['google_event_id'])) {
-        returnError("Este treinamento não possui evento vinculado no Google Agenda.");
-    }
+    $google_event_id = $treinamento['google_event_id'];
 
-    // Configurar Google Client
-    $client = new \Google\Client();
-    $client->setApplicationName('Implantacao Pro');
-    $client->setScopes(\Google\Service\Calendar::CALENDAR_EVENTS);
+    // 2. Configura o Cliente Google
+    $client = new Google\Client();
     $client->setAuthConfig('credentials.json');
-    $client->setAccessType('offline');
-    $client->setPrompt('select_account consent');
+    $client->addScope(Google\Service\Calendar::CALENDAR);
 
-    $calendarId = 'gestaoprovideossuporte@gmail.com';
-    $tokenPath = 'token.json';
-
-    if (file_exists($tokenPath)) {
-        $client->setAccessToken(json_decode(file_get_contents($tokenPath), true));
+    if (!file_exists('token.json')) {
+        returnResponse(false, "Token não encontrado. Faça login sincronizando um evento primeiro.");
     }
+
+    $client->setAccessToken(json_decode(file_get_contents('token.json'), true));
 
     if ($client->isAccessTokenExpired()) {
         if ($client->getRefreshToken()) {
             $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
-            file_put_contents($tokenPath, json_encode($client->getAccessToken()));
+            file_put_contents('token.json', json_encode($client->getAccessToken()));
         } else {
-            returnError("Autenticação necessária. Por favor, sincronize um evento primeiro.");
+            returnResponse(false, "Sessão expirada. Reautentique sincronizando um evento.");
         }
     }
 
-    $service = new \Google\Service\Calendar($client);
+    // 3. Deleta o evento na API do Google
+    $service = new Google\Service\Calendar($client);
+    $service->events->delete('primary', $google_event_id);
 
-    // Deletar o evento do Google Agenda
-    try {
-        $service->events->delete($calendarId, $treinamento['google_event_id']);
-        
-        // Limpar o google_event_id e google_event_link do banco de dados
-        $stmt = $pdo->prepare("UPDATE treinamentos SET google_event_id = NULL, google_event_link = NULL WHERE id_treinamento = ?");
-        $stmt->execute([$id_treinamento]);
-        
-        echo json_encode(['success' => true, 'message' => 'Evento removido do Google Agenda com sucesso!']);
-    } catch (\Google\Service\Exception $e) {
-        // Evento pode não existir mais no Google
-        if ($e->getCode() == 404) {
-            // Limpa o ID e o LINK do banco mesmo assim
-            $stmt = $pdo->prepare("UPDATE treinamentos SET google_event_id = NULL, google_event_link = NULL WHERE id_treinamento = ?");
-            $stmt->execute([$id_treinamento]);
-            echo json_encode(['success' => true, 'message' => 'Evento já havia sido removido do Google Agenda.']);
-        } else {
-            returnError("Erro ao deletar evento: " . $e->getMessage());
-        }
-    }
+    // 4. Limpa os campos no banco de dados local
+    $stmtUpdate = $pdo->prepare("UPDATE treinamentos SET google_event_id = NULL, google_event_link = NULL WHERE id_treinamento = ?");
+    $stmtUpdate->execute([$id_treinamento]);
+
+    returnResponse(true, "Agendamento removido do Google Agenda com sucesso.");
 
 } catch (Exception $e) {
-    returnError("Erro de Execução: " . $e->getMessage());
+    // Se o evento já foi deletado manualmente na agenda, o Google retorna 404 ou 410.
+    // Nesses casos, apenas limpamos o banco local.
+    if (strpos($e->getMessage(), '404') !== false || strpos($e->getMessage(), '410') !== false) {
+        $stmtUpdate = $pdo->prepare("UPDATE treinamentos SET google_event_id = NULL, google_event_link = NULL WHERE id_treinamento = ?");
+        $stmtUpdate->execute([$id_treinamento]);
+        returnResponse(true, "O evento não existia na agenda, os registros locais foram limpos.");
+    }
+    returnResponse(false, "Erro ao deletar: " . $e->getMessage());
 }
