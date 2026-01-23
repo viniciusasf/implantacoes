@@ -147,7 +147,7 @@ include 'header.php';
                                         data-id="<?php echo $c['id_cliente']; ?>"
                                         data-fantasia="<?php echo htmlspecialchars($c['fantasia']); ?>" data-bs-toggle="modal"
                                         data-bs-target="#modalDetalhes">
-                                        <i class="bi bi-eye"></i>
+                                        <i class="bi bi-eye" title="Ver Históricos deste cliente"></i>
                                     </button>
                                     <button class="btn btn-sm btn-light text-primary edit-btn me-1"
                                         data-id="<?php echo $c['id_cliente']; ?>"
@@ -157,12 +157,12 @@ include 'header.php';
                                         data-telefone="<?php echo htmlspecialchars($c['telefone_ddd']); ?>"
                                         data-obs="<?php echo htmlspecialchars($c['observacao']); ?>" data-bs-toggle="modal"
                                         data-bs-target="#modalCliente">
-                                        <i class="bi bi-pencil-square"></i>
+                                        <i class="bi bi-pencil-square" title="Editar"></i>
                                     </button>
                                     <a href="clientes.php?delete=<?php echo $c['id_cliente']; ?>"
                                         class="btn btn-sm btn-light text-danger"
                                         onclick="return confirm('Deseja realmente excluir este cliente?')">
-                                        <i class="bi bi-trash"></i>
+                                        <i class="bi bi-trash" title="Excluir Cliente"></i></i>
                                     </a>
                                 </td>
                             </tr>
