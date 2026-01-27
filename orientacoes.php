@@ -264,7 +264,7 @@ include 'header.php';
                             <option value="Contatos">Contatos</option>
                             <option value="Treinamentos">Treinamentos</option>
                             <option value="Tarefas">Tarefas</option>
-                            <option value="Google Agenda">Google Agenda</option>
+                            <option value="Sistema">Sistema</option>
                             <option value="Geral">Geral</option>
                         </select>
                     </div>
