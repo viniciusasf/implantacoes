@@ -10,7 +10,8 @@ $treinamentos_resolvidos = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE 
 
 // Consulta focada apenas em treinamentos PENDENTES para o Dashboard
 // Ordenados do mais próximo (mais cedo) para o mais distante.
-$sql = "SELECT t.*, c.fantasia as cliente_nome 
+// 3. Consulta Ajustada: Trazendo Servidor e Vendedor da tabela clientes
+$sql = "SELECT t.*, c.fantasia as cliente_nome, c.servidor, c.vendedor 
         FROM treinamentos t 
         JOIN clientes c ON t.id_cliente = c.id_cliente 
         WHERE t.status = 'PENDENTE'
@@ -96,8 +97,11 @@ $hoje = date('Y-m-d');
                             <tr>
                                 <th class="ps-4">Data Agendada</th>
                                 <th>Cliente</th>
-                                <th>Tema do Treinamento</th>
-                                <th class="text-center">Status</th>                                
+                                <th>Servidor</th>
+                                <th>Vendedor</th>
+                                <th>Tema</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-end pe-4">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -113,35 +117,36 @@ $hoje = date('Y-m-d');
                                     $data_agendada = $t['data_treinamento'] ? date('Y-m-d', strtotime($t['data_treinamento'])) : null;
                                     $is_hoje = ($data_agendada == $hoje);
                                     $row_class = $is_hoje ? 'table-primary bg-opacity-10' : '';
-                                    ?>
-                                    <tr class="<?php echo $row_class; ?>">
+                                ?>
+                                    <tr>
                                         <td class="ps-4">
-                                            <div class="<?php echo $is_hoje ? 'fw-bold text-primary' : 'text-muted small'; ?>">
-                                                <?php
-                                                if ($t['data_treinamento']) {
-                                                    echo date('d/m/Y H:i', strtotime($t['data_treinamento']));
-                                                } else {
-                                                    echo '<span class="text-muted italic">Não agendado</span>';
-                                                }
-                                                ?>
-                                                <?php if ($is_hoje): ?>
-                                                    <span class="badge bg-primary ms-1" style="font-size: 0.6rem;">HOJE</span>
-                                                <?php endif; ?>
+                                            <div class="small fw-bold text-nowrap">
+                                                <i class="bi bi-calendar-event me-1 text-primary"></i>
+                                                <?= date('d/m/Y H:i', strtotime($t['data_treinamento'])) ?>
                                             </div>
                                         </td>
-                                        <td>
-                                            <div class="fw-semibold"><?php echo htmlspecialchars($t['cliente_nome']); ?></div>
-                                        </td>
-                                        <td>
-                                            <div class="text-truncate" style="max-width: 400px;">
-                                                <?php echo htmlspecialchars($t['tema']); ?>
-                                            </div>
-                                        </td>
+                                        <td class="fw-bold"><?= htmlspecialchars($t['cliente_nome']) ?></td>
+                                        <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($t['servidor'] ?? '---') ?></span></td>
+                                        <td><span class="small text-muted"><?= htmlspecialchars($t['vendedor'] ?? '---') ?></span></td>
+                                        <td><span class="small"><?= htmlspecialchars($t['tema']) ?></span></td>
                                         <td class="text-center">
-                                            <span
-                                                class="badge bg-warning-subtle text-warning px-3 py-2 rounded-pill">Pendente</span>
+                                            <span class="badge rounded-pill bg-warning-subtle text-warning px-3">
+                                                <?= $t['status'] ?>
+                                            </span>
                                         </td>
-                                        
+                                        <td class="text-end pe-4">
+                                            <div class="btn-group shadow-sm">
+                                                <a href="?encerrar_id=<?= $t['id_treinamento'] ?>"
+                                                    class="btn btn-sm btn-outline-success"
+                                                    onclick="return confirm('Deseja marcar este treinamento como RESOLVIDO?')"
+                                                    title="Encerrar Treinamento">
+                                                    <i class="bi bi-check-lg"></i>
+                                                </a>
+                                                <a href="treinamentos.php" class="btn btn-sm btn-outline-primary" title="Ver Detalhes">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+                                            </div>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -155,7 +160,7 @@ $hoje = date('Y-m-d');
 
 <script>
     document.querySelectorAll('.sync-calendar').forEach(btn => {
-        btn.addEventListener('click', function () {
+        btn.addEventListener('click', function() {
             const id = this.dataset.id;
             const icon = this.querySelector('i');
             const originalClass = icon.className;

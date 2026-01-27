@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -38,12 +39,12 @@
             color: #fff;
             transition: all 0.3s;
             z-index: 1000;
-            box-shadow: 4px 0 10px rgba(0,0,0,0.1);
+            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
         }
 
         .sidebar-header {
             padding: 2rem 1.5rem;
-            background: rgba(0,0,0,0.1);
+            background: rgba(0, 0, 0, 0.1);
         }
 
         .sidebar-header h4 {
@@ -61,7 +62,7 @@
             padding: 0.8rem 1.5rem;
             display: flex;
             align-items: center;
-            color: rgba(255,255,255,0.7);
+            color: rgba(255, 255, 255, 0.7);
             text-decoration: none;
             transition: 0.2s;
             border-left: 4px solid transparent;
@@ -74,13 +75,13 @@
 
         #sidebar ul li a:hover {
             color: #fff;
-            background: rgba(255,255,255,0.05);
+            background: rgba(255, 255, 255, 0.05);
             border-left-color: var(--primary-color);
         }
 
-        #sidebar ul li.active > a {
+        #sidebar ul li.active>a {
             color: #fff;
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             border-left-color: var(--primary-color);
             font-weight: 600;
         }
@@ -98,7 +99,7 @@
             background: #fff;
             padding: 1rem 2rem;
             margin: -2rem -2rem 2rem -2rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
             display: flex;
             justify-content: flex-end;
             align-items: center;
@@ -164,12 +165,22 @@
         }
 
         @media (max-width: 768px) {
-            #sidebar { margin-left: calc(-1 * var(--sidebar-width)); }
-            #content { width: 100%; margin-left: 0; }
-            #sidebar.active { margin-left: 0; }
+            #sidebar {
+                margin-left: calc(-1 * var(--sidebar-width));
+            }
+
+            #content {
+                width: 100%;
+                margin-left: 0;
+            }
+
+            #sidebar.active {
+                margin-left: 0;
+            }
         }
     </style>
 </head>
+
 <body>
     <div class="wrapper">
         <!-- Sidebar -->
@@ -195,6 +206,11 @@
                 <li class="<?= $current_page == 'tarefas.php' ? 'active' : '' ?>">
                     <a href="tarefas.php"><i class="bi-list-check"></i> Tarefas</a>
                 </li>
+                <li>
+                    <a href="orientacoes.php">
+                        <i class="bi bi-question-circle"></i> Orientações
+                    </a>
+                </li>
             </ul>
         </nav>
 
@@ -202,7 +218,7 @@
         <div id="content">
             <div class="top-nav">
                 <div class="user-info d-flex align-items-center">
-                    <span class="me-2 fw-medium">Administrador</span>
+                    <span class="me-2 fw-medium">-</span>
                     <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
                         <i class="bi bi-person"></i>
                     </div>
