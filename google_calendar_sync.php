@@ -16,7 +16,8 @@ try {
     $client = new Google\Client();
     $client->setAuthConfig('credentials.json');
     $client->addScope(Google\Service\Calendar::CALENDAR);
-    $client->setAccessType('offline');
+    $client->setAccessType('offline'); // Essencial para receber o Refresh Token
+    $client->setApprovalPrompt('force'); // Força o prompt de consentimento para garantir novo token
     $client->setPrompt('consent');
 
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
@@ -84,7 +85,6 @@ try {
     unset($_SESSION['sync_training_id']);
 
     returnResponse(true, "Operação realizada com sucesso! ID Google: " . $google_id, ['google_id' => $google_id]);
-
 } catch (Exception $e) {
     returnResponse(false, "Erro: " . $e->getMessage());
 }

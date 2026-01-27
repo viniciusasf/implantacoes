@@ -17,8 +17,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $vendedor = $_POST['vendedor'];
     $telefone = $_POST['telefone'];
     $data_inicio = $_POST['data_inicio'];
-    // Se a data_fim vier vazia do formulário, salvamos como NULL no banco
-    $data_fim = !empty($_POST['data_fim']) ? $_POST['data_fim'] : null;
+    // Garante que se estiver vazio no formulário, salva como NULL no banco
+    $data_fim = (!empty($_POST['data_fim']) && $_POST['data_fim'] !== '0000-00-00') ? $_POST['data_fim'] : null; 
     $observacao = $_POST['observacao'];
 
     if (isset($_POST['id_cliente']) && !empty($_POST['id_cliente'])) {
@@ -35,7 +35,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 // 3. Consulta de Clientes
 $filtro = isset($_GET['filtro']) ? trim($_GET['filtro']) : '';
 $sql = "SELECT * FROM clientes";
-
 if (!empty($filtro)) {
     $sql .= " WHERE fantasia LIKE ? OR vendedor LIKE ? OR servidor LIKE ?";
     $params = ["%$filtro%", "%$filtro%", "%$filtro%"];
@@ -51,7 +50,7 @@ include 'header.php';
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h2 class="fw-bold mb-0">Clientes</h2>
+        <h2 class="fw-bold mb-0">Gestão de Clientes</h2>
         <p class="text-muted small mb-0">Acompanhamento de implantações e prazos.</p>
     </div>
     <button class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCliente">
@@ -71,16 +70,11 @@ include 'header.php';
         <form method="GET" class="row g-3 align-items-center">
             <div class="col-md-10">
                 <div class="input-group">
-                    <span class="input-group-text bg-white border-end-0">
-                        <i class="bi bi-search text-muted"></i>
-                    </span>
-                    <input type="text" name="filtro" class="form-control border-start-0 ps-0"
-                        placeholder="Buscar cliente..." value="<?php echo htmlspecialchars($filtro); ?>">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" name="filtro" class="form-control border-start-0 ps-0" placeholder="Buscar cliente..." value="<?php echo htmlspecialchars($filtro); ?>">
                 </div>
             </div>
-            <div class="col-md-2 d-flex">
-                <button type="submit" class="btn btn-primary w-100">Buscar</button>
-            </div>
+            <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Buscar</button></div>
         </form>
     </div>
 </div>
@@ -99,29 +93,26 @@ include 'header.php';
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($clientes as $c):
+                    <?php foreach ($clientes as $c): 
                         $dias_exibicao = '<span class="text-muted small">---</span>';
-
-                        // TRATAMENTO REFORÇADO DA DATA:
-                        // Verifica se a data_fim não é nula, não é vazia e não é a data "zero" do MySQL
+                        
+                        // LÓGICA CORRIGIDA: Só considera "Concluído" se a data for válida e diferente de zero
                         $tem_data_fim = (!empty($c['data_fim']) && $c['data_fim'] !== '0000-00-00');
 
                         if ($tem_data_fim) {
-                            // Se tem data_fim real, está Concluído
                             $dias_exibicao = '<span class="badge bg-success-subtle text-success px-3">Concluído</span>';
-                        } elseif (!empty($c['data_inicio']) && $c['data_inicio'] !== '0000-00-00') {
-                            // Se não tem data_fim, mas tem data_inicio válida, conta os dias
+                        } 
+                        elseif (!empty($c['data_inicio']) && $c['data_inicio'] !== '0000-00-00') {
                             try {
                                 $data_ini = new DateTime($c['data_inicio']);
                                 $hoje = new DateTime();
                                 $intervalo = $data_ini->diff($hoje);
                                 $total_dias = $intervalo->days;
 
-                                // Se a data de início for futura (erro de digitação), exibe 0
                                 if ($data_ini > $hoje) {
                                     $dias_exibicao = "<span class='text-dark'>0 dias</span>";
                                 } else {
-                                    $cor = ($total_dias > 15) ? 'text-danger fw-bold' : 'text-dark';
+                                    $cor = ($total_dias > 91) ? 'text-danger fw-bold' : 'text-dark';
                                     $dias_exibicao = "<span class='{$cor}'>{$total_dias} dias</span>";
                                 }
                             } catch (Exception $e) {
@@ -132,10 +123,10 @@ include 'header.php';
                         <tr>
                             <td class="ps-4">
                                 <div class="fw-bold text-dark"><?php echo htmlspecialchars($c['fantasia']); ?></div>
-                                <span class="text-muted x-small">ID: #<?php echo $c['id_cliente']; ?></span>
+                                <span class="text-muted x-small">#<?php echo $c['servidor']; ?></span>
                             </td>
                             <td><span class="badge bg-light text-dark border"><?php echo htmlspecialchars($c['vendedor']); ?></span></td>
-                            <td><small><?php echo !empty($c['data_inicio']) ? date('d/m/Y', strtotime($c['data_inicio'])) : '---'; ?></small></td>
+                            <td><small><?php echo ($c['data_inicio'] && $c['data_inicio'] !== '0000-00-00') ? date('d/m/Y', strtotime($c['data_inicio'])) : '---'; ?></small></td>
                             <td><?php echo $dias_exibicao; ?></td>
                             <td class="text-end pe-4">
                                 <button class="btn btn-sm btn-light text-primary edit-btn me-1"
@@ -145,16 +136,12 @@ include 'header.php';
                                     data-vendedor="<?php echo htmlspecialchars($c['vendedor']); ?>"
                                     data-telefone="<?php echo htmlspecialchars($c['telefone_ddd']); ?>"
                                     data-data_inicio="<?php echo $c['data_inicio']; ?>"
-                                    data-data_fim="<?php echo $c['data_fim']; ?>"
-                                    data-obs="<?php echo htmlspecialchars($c['observacao']); ?>"
+                                    data-data_fim="<?php echo ($c['data_fim'] === '0000-00-00' ? '' : $c['data_fim']); ?>"
+                                    data-obs="<?php echo htmlspecialchars($c['observacao']); ?>" 
                                     data-bs-toggle="modal" data-bs-target="#modalCliente">
                                     <i class="bi bi-pencil-square"></i>
                                 </button>
-                                <a href="clientes.php?delete=<?php echo $c['id_cliente']; ?>"
-                                    class="btn btn-sm btn-light text-danger"
-                                    onclick="return confirm('Deseja realmente excluir este cliente?')">
-                                    <i class="bi bi-trash"></i>
-                                </a>
+                                <a href="clientes.php?delete=<?php echo $c['id_cliente']; ?>" class="btn btn-sm btn-light text-danger" onclick="return confirm('Deseja excluir?')"><i class="bi bi-trash"></i></a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -191,7 +178,7 @@ include 'header.php';
                     <div class="row">
                         <div class="col-md-12 mb-3">
                             <label class="form-label fw-semibold small">Telefone</label>
-                            <input type="text" name="telefone" id="telefone" class="form-control" placeholder="(00) 00000-0000">
+                            <input type="text" name="telefone" id="telefone" class="form-control">
                         </div>
                     </div>
                     <div class="row">
