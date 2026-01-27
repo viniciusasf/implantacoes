@@ -15,7 +15,7 @@ if (isset($_GET['status']) && isset($_GET['id'])) {
     $status = $_GET['status'];
     $id = $_GET['id'];
     $data_encerrado = ($status == 'Resolvido') ? date('Y-m-d H:i:s') : null;
-    
+
     $stmt = $pdo->prepare("UPDATE treinamentos SET status = ?, data_treinamento_encerrado = ? WHERE id_treinamento = ?");
     $stmt->execute([$status, $data_encerrado, $id]);
     header("Location: treinamentos.php?msg=Status atualizado");
@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $tema = $_POST['tema'];
     $status = $_POST['status'];
     $data_treinamento = !empty($_POST['data_treinamento']) ? $_POST['data_treinamento'] : null;
-    
+
     if (isset($_POST['id_treinamento']) && !empty($_POST['id_treinamento'])) {
         $stmt = $pdo->prepare("UPDATE treinamentos SET id_cliente=?, id_contato=?, tema=?, status=?, data_treinamento=? WHERE id_treinamento=?");
         $stmt->execute([$id_cliente, $id_contato, $tema, $status, $data_treinamento, $_POST['id_treinamento']]);
@@ -59,7 +59,10 @@ include 'header.php';
 
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="h4 mb-0 text-gray-800">Gestão de Treinamentos</h2>
+        <div class="mb-4">
+            <h2 class="fw-bold">Treinamentos</h2>
+            <p class="text-muted">Controle de Treinamentos</p>
+        </div>
         <button class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
             <i class="bi bi-plus-lg me-2"></i>Novo Treinamento
         </button>
@@ -87,53 +90,53 @@ include 'header.php';
                     </thead>
                     <tbody>
                         <?php foreach ($treinamentos as $t): ?>
-                        <tr>
-                            <td class="ps-4">
-                                <div class="fw-bold text-dark"><?= htmlspecialchars($t['cliente_nome']) ?></div>
-                                <div class="small text-muted"><?= htmlspecialchars($t['tema']) ?></div>
-                            </td>
-                            <td>
-                                <div class="small">
-                                    <i class="bi bi-calendar3 me-1 text-primary"></i>
-                                    <?= $t['data_treinamento'] ? date('d/m/Y H:i', strtotime($t['data_treinamento'])) : '<span class="text-danger">Não definida</span>' ?>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="badge rounded-pill <?= ($t['status'] == 'Resolvido') ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning' ?>">
-                                    <?= htmlspecialchars($t['status']) ?>
-                                </span>
-                            </td>
-                            <td>
-                                <div class="small fw-medium"><?= htmlspecialchars($t['contato_nome']) ?></div>
-                            </td>
-                            <td class="text-end pe-4">
-                                <div class="btn-group shadow-sm">
-                                    <?php if (empty($t['google_event_id'])): ?>
-                                        <button class="btn btn-sm btn-outline-danger sync-google-btn" data-id="<?= $t['id_treinamento'] ?>" title="Sincronizar Google">
-                                            <i class="bi bi-google"></i>
-                                        </button>
-                                    <?php else: ?>
-                                        <button class="btn btn-sm btn-outline-dark delete-google-btn" data-id="<?= $t['id_treinamento'] ?>" title="Remover da Agenda">
-                                            <i class="bi bi-calendar-x"></i>
-                                        </button>
-                                    <?php endif; ?>
-                                    
-                                    <button class="btn btn-sm btn-outline-primary edit-btn" 
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="fw-bold text-dark"><?= htmlspecialchars($t['cliente_nome']) ?></div>
+                                    <div class="small text-muted"><?= htmlspecialchars($t['tema']) ?></div>
+                                </td>
+                                <td>
+                                    <div class="small">
+                                        <i class="bi bi-calendar3 me-1 text-primary"></i>
+                                        <?= $t['data_treinamento'] ? date('d/m/Y H:i', strtotime($t['data_treinamento'])) : '<span class="text-danger">Não definida</span>' ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge rounded-pill <?= ($t['status'] == 'Resolvido') ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning' ?>">
+                                        <?= htmlspecialchars($t['status']) ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="small fw-medium"><?= htmlspecialchars($t['contato_nome']) ?></div>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <div class="btn-group shadow-sm">
+                                        <?php if (empty($t['google_event_id'])): ?>
+                                            <button class="btn btn-sm btn-outline-danger sync-google-btn" data-id="<?= $t['id_treinamento'] ?>" title="Sincronizar Google">
+                                                <i class="bi bi-google"></i>
+                                            </button>
+                                        <?php else: ?>
+                                            <button class="btn btn-sm btn-outline-dark delete-google-btn" data-id="<?= $t['id_treinamento'] ?>" title="Remover da Agenda">
+                                                <i class="bi bi-calendar-x"></i>
+                                            </button>
+                                        <?php endif; ?>
+
+                                        <button class="btn btn-sm btn-outline-primary edit-btn"
                                             data-id="<?= $t['id_treinamento'] ?>"
                                             data-cliente="<?= $t['id_cliente'] ?>"
                                             data-contato="<?= $t['id_contato'] ?>"
                                             data-tema="<?= htmlspecialchars($t['tema']) ?>"
                                             data-status="<?= $t['status'] ?>"
                                             data-data="<?= $t['data_treinamento'] ? date('Y-m-d\TH:i', strtotime($t['data_treinamento'])) : '' ?>">
-                                        <i class="bi bi-pencil"></i>
-                                    </button>
-                                    
-                                    <a href="?delete=<?= $t['id_treinamento'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Deseja excluir este registro?')">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+
+                                        <a href="?delete=<?= $t['id_treinamento'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Deseja excluir este registro?')">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
@@ -151,7 +154,7 @@ include 'header.php';
             </div>
             <div class="modal-body">
                 <input type="hidden" name="id_treinamento" id="id_treinamento">
-                
+
                 <div class="mb-3">
                     <label class="form-label small fw-bold">Cliente</label>
                     <select name="id_cliente" id="id_cliente" class="form-select" required onchange="filterContatos(this.value)">
@@ -197,85 +200,88 @@ include 'header.php';
 </div>
 
 <script>
-// Scripts de Filtragem de Contato, Sincronização Google e Edição (mantidos conforme versão anterior)
-function filterContatos(id_cliente, selected_contato = null) {
-    const contatoSelect = document.getElementById('id_contato');
-    if (!id_cliente) {
-        contatoSelect.innerHTML = '<option value="">Selecione o cliente primeiro...</option>';
+    // Scripts de Filtragem de Contato, Sincronização Google e Edição (mantidos conforme versão anterior)
+    function filterContatos(id_cliente, selected_contato = null) {
+        const contatoSelect = document.getElementById('id_contato');
+        if (!id_cliente) {
+            contatoSelect.innerHTML = '<option value="">Selecione o cliente primeiro...</option>';
+            contatoSelect.disabled = true;
+            return;
+        }
         contatoSelect.disabled = true;
-        return;
+        contatoSelect.innerHTML = '<option>Carregando...</option>';
+
+        fetch('get_contatos_cliente.php?id_cliente=' + id_cliente)
+            .then(r => r.json())
+            .then(data => {
+                contatoSelect.innerHTML = '<option value="">Selecione o contato...</option>';
+                data.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id_contato;
+                    opt.textContent = c.nome;
+                    if (selected_contato == c.id_contato) opt.selected = true;
+                    contatoSelect.appendChild(opt);
+                });
+                contatoSelect.disabled = false;
+            });
     }
-    contatoSelect.disabled = true;
-    contatoSelect.innerHTML = '<option>Carregando...</option>';
 
-    fetch('get_contatos_cliente.php?id_cliente=' + id_cliente)
-        .then(r => r.json())
-        .then(data => {
-            contatoSelect.innerHTML = '<option value="">Selecione o contato...</option>';
-            data.forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c.id_contato;
-                opt.textContent = c.nome;
-                if (selected_contato == c.id_contato) opt.selected = true;
-                contatoSelect.appendChild(opt);
-            });
-            contatoSelect.disabled = false;
+    document.querySelectorAll('.sync-google-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.id;
+            const icon = this.querySelector('i');
+            icon.className = 'spinner-border spinner-border-sm';
+            this.disabled = true;
+            fetch('google_calendar_sync.php?id_treinamento=' + id)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.auth_url) window.location.href = data.auth_url;
+                    else {
+                        alert(data.message);
+                        if (data.success) location.reload();
+                        else {
+                            icon.className = 'bi bi-google';
+                            this.disabled = false;
+                        }
+                    }
+                });
         });
-}
+    });
 
-document.querySelectorAll('.sync-google-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-        const id = this.dataset.id;
-        const icon = this.querySelector('i');
-        icon.className = 'spinner-border spinner-border-sm';
-        this.disabled = true;
-        fetch('google_calendar_sync.php?id_treinamento=' + id)
-            .then(r => r.json())
-            .then(data => {
-                if (data.auth_url) window.location.href = data.auth_url;
-                else {
+    document.querySelectorAll('.delete-google-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('Remover agendamento do Google Agenda?')) return;
+            const id = this.dataset.id;
+            const icon = this.querySelector('i');
+            icon.className = 'spinner-border spinner-border-sm';
+            fetch('google_calendar_delete.php?id_treinamento=' + id)
+                .then(r => r.json())
+                .then(data => {
                     alert(data.message);
-                    if (data.success) location.reload();
-                    else { icon.className = 'bi bi-google'; this.disabled = false; }
-                }
-            });
+                    location.reload();
+                });
+        });
     });
-});
 
-document.querySelectorAll('.delete-google-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-        if (!confirm('Remover agendamento do Google Agenda?')) return;
-        const id = this.dataset.id;
-        const icon = this.querySelector('i');
-        icon.className = 'spinner-border spinner-border-sm';
-        fetch('google_calendar_delete.php?id_treinamento=' + id)
-            .then(r => r.json())
-            .then(data => {
-                alert(data.message);
-                location.reload();
-            });
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('modalTitle').innerText = 'Editar Treinamento';
+            document.getElementById('id_treinamento').value = this.dataset.id;
+            document.getElementById('id_cliente').value = this.dataset.cliente;
+            document.getElementById('tema').value = this.dataset.tema;
+            document.getElementById('status').value = this.dataset.status;
+            document.getElementById('data_treinamento').value = this.dataset.data;
+            filterContatos(this.dataset.cliente, this.dataset.contato);
+            new bootstrap.Modal(document.getElementById('modalTreinamento')).show();
+        });
     });
-});
 
-document.querySelectorAll('.edit-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-        document.getElementById('modalTitle').innerText = 'Editar Treinamento';
-        document.getElementById('id_treinamento').value = this.dataset.id;
-        document.getElementById('id_cliente').value = this.dataset.cliente;
-        document.getElementById('tema').value = this.dataset.tema;
-        document.getElementById('status').value = this.dataset.status;
-        document.getElementById('data_treinamento').value = this.dataset.data;
-        filterContatos(this.dataset.cliente, this.dataset.contato);
-        new bootstrap.Modal(document.getElementById('modalTreinamento')).show();
+    document.getElementById('modalTreinamento').addEventListener('hidden.bs.modal', function() {
+        document.getElementById('modalTitle').innerText = 'Novo Treinamento';
+        document.querySelector('form').reset();
+        document.getElementById('id_treinamento').value = '';
+        document.getElementById('id_contato').disabled = true;
     });
-});
-
-document.getElementById('modalTreinamento').addEventListener('hidden.bs.modal', function () {
-    document.getElementById('modalTitle').innerText = 'Novo Treinamento';
-    document.querySelector('form').reset();
-    document.getElementById('id_treinamento').value = '';
-    document.getElementById('id_contato').disabled = true;
-});
 </script>
 
 <?php include 'footer.php'; ?>
