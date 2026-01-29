@@ -1,6 +1,28 @@
 <?php
 require_once 'config.php';
 
+
+// Consulta para clientes sem interação há mais de 3 dias
+// Critério: (Data do último treinamento OU data_inicio) < (Hoje - 3 dias) 
+// E não possui nenhum treinamento PENDENTE futuro.
+$sql_inatividade = "
+    SELECT c.id_cliente, c.fantasia, MAX(t.data_treinamento) as última_data, c.data_inicio
+    FROM clientes c
+    LEFT JOIN treinamentos t ON c.id_cliente = t.id_cliente
+    WHERE (c.data_fim IS NULL OR c.data_fim = '0000-00-00')
+    AND c.id_cliente NOT IN (
+        SELECT DISTINCT id_cliente FROM treinamentos WHERE status = 'PENDENTE'
+    )
+    GROUP BY c.id_cliente
+    HAVING 
+        (MAX(t.data_treinamento) < DATE_SUB(CURDATE(), INTERVAL 3 DAY)) OR 
+        (MAX(t.data_treinamento) IS NULL AND c.data_inicio < DATE_SUB(CURDATE(), INTERVAL 3 DAY))
+    ORDER BY última_data ASC";
+
+$clientes_inativos = $pdo->query($sql_inatividade)->fetchAll();
+
+
+
 // 1. Lógica de processamento (deve vir antes de qualquer HTML/Header)
 if (isset($_GET['encerrar_id'])) {
     $id = $_GET['encerrar_id'];
@@ -12,6 +34,9 @@ if (isset($_GET['encerrar_id'])) {
     header("Location: index.php?msg=Treinamento encerrado com sucesso");
     exit;
 }
+
+
+
 
 include 'header.php';
 
@@ -100,6 +125,13 @@ $hoje_data = date('Y-m-d');
     </div>
 </div>
 
+
+
+
+
+
+
+
 <div class="row">
     <div class="col-lg-12">
         <div class="card shadow-sm border-0">
@@ -137,7 +169,7 @@ $hoje_data = date('Y-m-d');
                                         <div class="small fw-bold">
                                             <?= date('d/m/Y H:i', strtotime($t['data_treinamento'])) ?>
                                             <?php if($e_hoje): ?>
-                                                <span class="badge bg-primary ms-1">HOJE</span>
+                                                <span class="badge bg-primary-subtle text-primary badge-border">HOJE</span>
                                             <?php endif; ?>
                                         </div>
                                     </td>
@@ -146,7 +178,7 @@ $hoje_data = date('Y-m-d');
                                     <td><span class="small text-muted"><?= htmlspecialchars($t['vendedor'] ?? '---') ?></span></td>
                                     <td><span class="small text-muted"><?= htmlspecialchars($t['tema']) ?></span></td>
                                     <td class="text-center">
-                                        <span class="badge rounded-pill bg-warning-subtle text-warning">
+                                        <span class="badge bg-primary-subtle text-primary badge-border">
                                             <?= $t['status'] ?>
                                         </span>
                                     </td>

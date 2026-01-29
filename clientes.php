@@ -17,7 +17,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $vendedor = $_POST['vendedor'];
     $telefone = $_POST['telefone'];
     $data_inicio = $_POST['data_inicio'];
-    // Garante que se estiver vazio no formulário, salva como NULL no banco
     $data_fim = (!empty($_POST['data_fim']) && $_POST['data_fim'] !== '0000-00-00') ? $_POST['data_fim'] : null; 
     $observacao = $_POST['observacao'];
 
@@ -32,118 +31,177 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     exit;
 }
 
-// 3. Consulta de Clientes
+// 3. Consulta e Filtros
 $filtro = isset($_GET['filtro']) ? trim($_GET['filtro']) : '';
-$sql = "SELECT * FROM clientes";
+$estagio = isset($_GET['estagio']) ? $_GET['estagio'] : '';
+
+$sql = "SELECT * FROM clientes WHERE 1=1";
+$params = [];
 if (!empty($filtro)) {
-    $sql .= " WHERE fantasia LIKE ? OR vendedor LIKE ? OR servidor LIKE ?";
+    $sql .= " AND (fantasia LIKE ? OR vendedor LIKE ? OR servidor LIKE ?)";
     $params = ["%$filtro%", "%$filtro%", "%$filtro%"];
-    $stmt = $pdo->prepare($sql . " ORDER BY fantasia ASC");
-    $stmt->execute($params);
-} else {
-    $stmt = $pdo->query($sql . " ORDER BY fantasia ASC");
 }
-$clientes = $stmt->fetchAll();
+
+$stmt = $pdo->prepare($sql . " ORDER BY fantasia ASC");
+$stmt->execute($params);
+$todos_clientes = $stmt->fetchAll();
+
+// 4. Lógica de Contagem e Estágios
+$integracao = 0; $operacional = 0; $finalizacao = 0; $critico = 0;
+$clientes_filtrados = [];
+
+foreach ($todos_clientes as $cl) {
+    $status_cl = "concluido";
+    if (empty($cl['data_fim']) || $cl['data_fim'] === '0000-00-00') {
+        $d = (new DateTime($cl['data_inicio']))->diff(new DateTime())->days;
+        if ($d <= 30) { $integracao++; $status_cl = "integracao"; }
+        elseif ($d <= 70) { $operacional++; $status_cl = "operacional"; }
+        elseif ($d <= 91) { $finalizacao++; $status_cl = "finalizacao"; }
+        else { $critico++; $status_cl = "critico"; }
+    }
+    if (empty($estagio) || $estagio == $status_cl) { $clientes_filtrados[] = $cl; }
+}
 
 include 'header.php';
 ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="fw-bold mb-0">Gestão de Clientes</h2>
-        <p class="text-muted small mb-0">Acompanhamento de implantações e prazos.</p>
-    </div>
-    <button class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCliente">
-        <i class="bi bi-plus-lg me-2"></i>Novo Cliente
-    </button>
-</div>
+<style>
+    .card-stat { transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; border: none !important; }
+    .card-stat:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
+    .card-stat.active { border-bottom: 4px solid #000 !important; }
+    .progress { background-color: #f0f0f0; border-radius: 10px; }
+    .table thead th { background-color: #f8f9fa; color: #6c757d; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.5px; border-top: none; }
+    .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+</style>
 
-<?php if (isset($_GET['msg'])): ?>
-    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-4" role="alert">
-        <i class="bi bi-check-circle me-2"></i><?php echo htmlspecialchars($_GET['msg']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+<div class="container-fluid py-4 bg-light min-vh-100">
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h4 class="fw-bold text-dark mb-1">Painel de Implantação</h4>
+            <p class="text-muted small">Acompanhamento do ciclo de 91 dias por cliente</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCliente">
+                <i class="bi bi-plus-lg me-2"></i>Novo Cliente
+            </button>
+        </div>
     </div>
-<?php endif; ?>
 
-<div class="card shadow-sm border-0 mb-3">
-    <div class="card-body py-3">
-        <form method="GET" class="row g-3 align-items-center">
-            <div class="col-md-10">
-                <div class="input-group">
-                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                    <input type="text" name="filtro" class="form-control border-start-0 ps-0" placeholder="Buscar cliente..." value="<?php echo htmlspecialchars($filtro); ?>">
+    <div class="row g-3 mb-4">
+        <?php 
+        $cards = [
+            ['id' => 'integracao', 'label' => 'Integração', 'val' => $integracao, 'color' => '#0dcaf0', 'days' => '0-30d'],
+            ['id' => 'operacional', 'label' => 'Operacional', 'val' => $operacional, 'color' => '#0d6efd', 'days' => '31-70d'],
+            ['id' => 'finalizacao', 'label' => 'Finalização', 'val' => $finalizacao, 'color' => '#ffc107', 'days' => '71-91d'],
+            ['id' => 'critico', 'label' => 'Crítico', 'val' => $critico, 'color' => '#dc3545', 'days' => '> 91d']
+        ];
+        foreach ($cards as $card): 
+            $isActive = ($estagio == $card['id']);
+        ?>
+        <div class="col-md-3">
+            <a href="?estagio=<?= $card['id'] ?>" class="text-decoration-none">
+                <div class="card card-stat shadow-sm h-100 <?= $isActive ? 'active' : '' ?>" style="border-left: 5px solid <?= $card['color'] ?> !important;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <span class="text-muted small fw-bold text-uppercase"><?= $card['label'] ?></span>
+                                <h2 class="fw-bold my-1 text-dark"><?= $card['val'] ?></h2>
+                            </div>
+                            <span class="badge bg-light text-muted border"><?= $card['days'] ?></span>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <?php endforeach; ?>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-3">
+        <div class="card-header bg-white py-3 border-0">
+            <div class="row g-2 align-items-center">
+                <div class="col">
+                    <form method="GET" class="d-flex gap-2">
+                        <input type="hidden" name="estagio" value="<?= $estagio ?>">
+                        <div class="input-group input-group-sm" style="max-width: 300px;">
+                            <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
+                            <input type="text" name="filtro" class="form-control bg-light border-0" placeholder="Pesquisar cliente..." value="<?= htmlspecialchars($filtro) ?>">
+                        </div>
+                        <button type="submit" class="btn btn-dark btn-sm px-3">Filtrar</button>
+                        <?php if($estagio || $filtro): ?>
+                            <a href="clientes.php" class="btn btn-outline-secondary btn-sm">Limpar</a>
+                        <?php endif; ?>
+                    </form>
                 </div>
             </div>
-            <div class="col-md-2"><button type="submit" class="btn btn-primary w-100">Buscar</button></div>
-        </form>
-    </div>
-</div>
-
-<div class="card shadow-sm border-0">
-    <div class="card-body p-0">
+        </div>
+        
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead>
                     <tr>
-                        <th class="ps-4">Empresa</th>
+                        <th class="ps-4">Cliente</th>
                         <th>Vendedor</th>
-                        <th>Data Início</th>
-                        <th>Dias em Aberto</th>
+                        <th>Início</th>
+                        <th>Dias/Status</th>
+                        <th>Progresso da Jornada</th>
                         <th class="text-end pe-4">Ações</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <?php foreach ($clientes as $c): 
-                        $dias_exibicao = '<span class="text-muted small">---</span>';
-                        
-                        // LÓGICA CORRIGIDA: Só considera "Concluído" se a data for válida e diferente de zero
-                        $tem_data_fim = (!empty($c['data_fim']) && $c['data_fim'] !== '0000-00-00');
+                <tbody class="border-top-0">
+                    <?php foreach ($clientes_filtrados as $c): 
+                        $isConcluido = (!empty($c['data_fim']) && $c['data_fim'] !== '0000-00-00');
+                        $perc = 0; $color = "bg-secondary"; $label_dias = "---";
 
-                        if ($tem_data_fim) {
-                            $dias_exibicao = '<span class="badge bg-success-subtle text-success px-3">Concluído</span>';
-                        } 
-                        elseif (!empty($c['data_inicio']) && $c['data_inicio'] !== '0000-00-00') {
-                            try {
-                                $data_ini = new DateTime($c['data_inicio']);
-                                $hoje = new DateTime();
-                                $intervalo = $data_ini->diff($hoje);
-                                $total_dias = $intervalo->days;
-
-                                if ($data_ini > $hoje) {
-                                    $dias_exibicao = "<span class='text-dark'>0 dias</span>";
-                                } else {
-                                    $cor = ($total_dias > 91) ? 'text-danger fw-bold' : 'text-dark';
-                                    $dias_exibicao = "<span class='{$cor}'>{$total_dias} dias</span>";
-                                }
-                            } catch (Exception $e) {
-                                $dias_exibicao = '<span class="text-muted small">Data Inválida</span>';
-                            }
+                        if ($isConcluido) {
+                            $perc = 100; $color = "bg-success"; $label_dias = "Concluído";
+                        } else {
+                            $d = (new DateTime($c['data_inicio']))->diff(new DateTime())->days;
+                            $perc = min(round(($d / 91) * 100), 100);
+                            $label_dias = $d . " dias";
+                            if ($d <= 30) $color = "bg-info";
+                            elseif ($d <= 70) $color = "bg-primary";
+                            elseif ($d <= 91) $color = "bg-warning";
+                            else $color = "bg-danger";
                         }
                     ?>
-                        <tr>
-                            <td class="ps-4">
-                                <div class="fw-bold text-dark"><?php echo htmlspecialchars($c['fantasia']); ?></div>
-                                <span class="text-muted x-small">#<?php echo $c['servidor']; ?></span>
-                            </td>
-                            <td><span class="badge bg-light text-dark border"><?php echo htmlspecialchars($c['vendedor']); ?></span></td>
-                            <td><small><?php echo ($c['data_inicio'] && $c['data_inicio'] !== '0000-00-00') ? date('d/m/Y', strtotime($c['data_inicio'])) : '---'; ?></small></td>
-                            <td><?php echo $dias_exibicao; ?></td>
-                            <td class="text-end pe-4">
-                                <button class="btn btn-sm btn-light text-primary edit-btn me-1"
-                                    data-id="<?php echo $c['id_cliente']; ?>"
-                                    data-fantasia="<?php echo htmlspecialchars($c['fantasia']); ?>"
-                                    data-servidor="<?php echo htmlspecialchars($c['servidor']); ?>"
-                                    data-vendedor="<?php echo htmlspecialchars($c['vendedor']); ?>"
-                                    data-telefone="<?php echo htmlspecialchars($c['telefone_ddd']); ?>"
-                                    data-data_inicio="<?php echo $c['data_inicio']; ?>"
-                                    data-data_fim="<?php echo ($c['data_fim'] === '0000-00-00' ? '' : $c['data_fim']); ?>"
-                                    data-obs="<?php echo htmlspecialchars($c['observacao']); ?>" 
-                                    data-bs-toggle="modal" data-bs-target="#modalCliente">
-                                    <i class="bi bi-pencil-square"></i>
-                                </button>
-                                <a href="clientes.php?delete=<?php echo $c['id_cliente']; ?>" class="btn btn-sm btn-light text-danger" onclick="return confirm('Deseja excluir?')"><i class="bi bi-trash"></i></a>
-                            </td>
-                        </tr>
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold text-dark"><?= htmlspecialchars($c['fantasia']) ?></div>
+                            <small class="text-muted text-uppercase" style="font-size: 0.65rem;">Servidor: <?= htmlspecialchars($c['servidor']) ?></small>
+                        </td>
+                        <td><span class="badge bg-light text-dark border fw-normal"><?= htmlspecialchars($c['vendedor']) ?></span></td>
+                        <td class="text-muted small"><?= date('d/m/Y', strtotime($c['data_inicio'])) ?></td>
+                        <td>
+                            <span class="small fw-bold <?= ($label_dias == 'Concluído') ? 'text-success' : 'text-dark' ?>">
+                                <span class="status-dot <?= $color ?>"></span><?= $label_dias ?>
+                            </span>
+                        </td>
+                        <td style="min-width: 150px;">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="progress flex-grow-1" style="height: 6px;">
+                                    <div class="progress-bar <?= $color ?>" style="width: <?= $perc ?>%"></div>
+                                </div>
+                                <span class="small text-muted" style="font-size: 0.7rem;"><?= $perc ?>%</span>
+                            </div>
+                        </td>
+                        <td class="text-end pe-4">
+                            <button class="btn btn-sm btn-light border edit-btn" 
+                                data-id="<?= $c['id_cliente'] ?>"
+                                data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
+                                data-servidor="<?= htmlspecialchars($c['servidor']) ?>"
+                                data-vendedor="<?= htmlspecialchars($c['vendedor']) ?>"
+                                data-telefone="<?= htmlspecialchars($c['telefone_ddd']) ?>"
+                                data-data_inicio="<?= $c['data_inicio'] ?>"
+                                data-data_fim="<?= ($c['data_fim'] == '0000-00-00' ? '' : $c['data_fim']) ?>"
+                                data-obs="<?= htmlspecialchars($c['observacao']) ?>"
+                                data-bs-toggle="modal" data-bs-target="#modalCliente">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <a href="?delete=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-light border text-danger" onclick="return confirm('Excluir?')">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
                     <?php endforeach; ?>
                 </tbody>
             </table>
@@ -152,53 +210,41 @@ include 'header.php';
 </div>
 
 <div class="modal fade" id="modalCliente" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
             <form method="POST">
-                <div class="modal-header border-bottom-0 pb-0">
-                    <h5 class="fw-bold" id="modalTitle">Novo Cliente</h5>
+                <div class="modal-header border-0">
+                    <h5 class="fw-bold" id="modalTitle">Ficha do Cliente</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body px-4">
                     <input type="hidden" name="id_cliente" id="id_cliente">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold small">Nome Fantasia</label>
-                        <input type="text" name="fantasia" id="fantasia" class="form-control" required>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-semibold small">Servidor</label>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label small fw-bold text-muted">Nome Fantasia</label>
+                            <input type="text" name="fantasia" id="fantasia" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Servidor</label>
                             <input type="text" name="servidor" id="servidor" class="form-control">
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-semibold small">Vendedor</label>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Vendedor</label>
                             <input type="text" name="vendedor" id="vendedor" class="form-control">
                         </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-12 mb-3">
-                            <label class="form-label fw-semibold small">Telefone</label>
-                            <input type="text" name="telefone" id="telefone" class="form-control">
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-semibold small text-primary">Data Início</label>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Data de Início</label>
                             <input type="date" name="data_inicio" id="data_inicio" class="form-control" required>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-semibold small text-success">Data Fim (Conclusão)</label>
-                            <input type="date" name="data_fim" id="data_fim" class="form-control">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Data de Conclusão</label>
+                            <input type="date" name="data_fim" id="id_data_fim" class="form-control">
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold small">Observação</label>
-                        <textarea name="observacao" id="observacao" class="form-control" rows="3"></textarea>
-                    </div>
                 </div>
-                <div class="modal-footer border-top-0">
-                    <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary px-4 fw-bold">Salvar Cliente</button>
+                <div class="modal-footer border-0 p-4">
+                    <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">Guardar Alterações</button>
                 </div>
             </form>
         </div>
@@ -208,22 +254,14 @@ include 'header.php';
 <script>
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            document.getElementById('modalTitle').innerText = 'Editar Cliente';
+            document.getElementById('modalTitle').innerText = 'Editar Registro';
             document.getElementById('id_cliente').value = this.dataset.id;
             document.getElementById('fantasia').value = this.dataset.fantasia;
             document.getElementById('servidor').value = this.dataset.servidor;
             document.getElementById('vendedor').value = this.dataset.vendedor;
-            document.getElementById('telefone').value = this.dataset.telefone;
             document.getElementById('data_inicio').value = this.dataset.data_inicio;
-            document.getElementById('data_fim').value = this.dataset.data_fim || '';
-            document.getElementById('observacao').value = this.dataset.obs;
+            document.getElementById('id_data_fim').value = this.dataset.data_fim || '';
         });
-    });
-
-    document.getElementById('modalCliente').addEventListener('hidden.bs.modal', function() {
-        document.getElementById('modalTitle').innerText = 'Novo Cliente';
-        this.querySelector('form').reset();
-        document.getElementById('id_cliente').value = '';
     });
 </script>
 
