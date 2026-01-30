@@ -128,7 +128,7 @@ include 'header.php';
                 <?php endif; ?>
             </div>
         <?php else: ?>
-            <div class="table-responsive table-scroll-container">
+            <div class="table-responsive table-scroll-container" style="max-height: 500px;">
                 <table class="table table-hover align-middle mb-0">
                     <thead>
                         <tr>

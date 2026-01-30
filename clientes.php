@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $vendedor = $_POST['vendedor'];
     $telefone = $_POST['telefone'];
     $data_inicio = $_POST['data_inicio'];
-    $data_fim = (!empty($_POST['data_fim']) && $_POST['data_fim'] !== '0000-00-00') ? $_POST['data_fim'] : null; 
+    $data_fim = (!empty($_POST['data_fim']) && $_POST['data_fim'] !== '0000-00-00') ? $_POST['data_fim'] : null;
     $observacao = $_POST['observacao'];
 
     if (isset($_POST['id_cliente']) && !empty($_POST['id_cliente'])) {
@@ -47,31 +47,82 @@ $stmt->execute($params);
 $todos_clientes = $stmt->fetchAll();
 
 // 4. Lógica de Contagem e Estágios
-$integracao = 0; $operacional = 0; $finalizacao = 0; $critico = 0;
+$integracao = 0;
+$operacional = 0;
+$finalizacao = 0;
+$critico = 0;
 $clientes_filtrados = [];
 
 foreach ($todos_clientes as $cl) {
     $status_cl = "concluido";
     if (empty($cl['data_fim']) || $cl['data_fim'] === '0000-00-00') {
         $d = (new DateTime($cl['data_inicio']))->diff(new DateTime())->days;
-        if ($d <= 30) { $integracao++; $status_cl = "integracao"; }
-        elseif ($d <= 70) { $operacional++; $status_cl = "operacional"; }
-        elseif ($d <= 91) { $finalizacao++; $status_cl = "finalizacao"; }
-        else { $critico++; $status_cl = "critico"; }
+        if ($d <= 30) {
+            $integracao++;
+            $status_cl = "integracao";
+        } elseif ($d <= 70) {
+            $operacional++;
+            $status_cl = "operacional";
+        } elseif ($d <= 91) {
+            $finalizacao++;
+            $status_cl = "finalizacao";
+        } else {
+            $critico++;
+            $status_cl = "critico";
+        }
     }
-    if (empty($estagio) || $estagio == $status_cl) { $clientes_filtrados[] = $cl; }
+    if (empty($estagio) || $estagio == $status_cl) {
+        $clientes_filtrados[] = $cl;
+    }
 }
 
 include 'header.php';
 ?>
 
 <style>
-    .card-stat { transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; border: none !important; }
-    .card-stat:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
-    .card-stat.active { border-bottom: 4px solid #000 !important; }
-    .progress { background-color: #f0f0f0; border-radius: 10px; }
-    .table thead th { background-color: #f8f9fa; color: #6c757d; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.5px; border-top: none; }
-    .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+    .card-stat {
+        transition: transform 0.2s, box-shadow 0.2s;
+        cursor: pointer;
+        border: none !important;
+    }
+
+    .card-stat:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    .card-stat.active {
+        border-bottom: 4px solid #000 !important;
+    }
+
+    .progress {
+        background-color: #f0f0f0;
+        border-radius: 10px;
+    }
+
+    .table thead th {
+        background-color: #f8f9fa;
+        color: #6c757d;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+        border-top: none;
+    }
+
+    .status-dot {
+        height: 10px;
+        width: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 5px;
+    }
+
+    .table-scroll-container {
+        max-height: 65vh;
+        /* Ocupa 65% da altura da janela, mantendo o layout responsivo */
+        overflow-y: auto;
+    }
 </style>
 
 <div class="container-fluid py-4 bg-light min-vh-100">
@@ -88,31 +139,31 @@ include 'header.php';
     </div>
 
     <div class="row g-3 mb-4">
-        <?php 
+        <?php
         $cards = [
             ['id' => 'integracao', 'label' => 'Integração', 'val' => $integracao, 'color' => '#0dcaf0', 'days' => '0-30d'],
             ['id' => 'operacional', 'label' => 'Operacional', 'val' => $operacional, 'color' => '#0d6efd', 'days' => '31-70d'],
             ['id' => 'finalizacao', 'label' => 'Finalização', 'val' => $finalizacao, 'color' => '#ffc107', 'days' => '71-91d'],
             ['id' => 'critico', 'label' => 'Crítico', 'val' => $critico, 'color' => '#dc3545', 'days' => '> 91d']
         ];
-        foreach ($cards as $card): 
+        foreach ($cards as $card):
             $isActive = ($estagio == $card['id']);
         ?>
-        <div class="col-md-3">
-            <a href="?estagio=<?= $card['id'] ?>" class="text-decoration-none">
-                <div class="card card-stat shadow-sm h-100 <?= $isActive ? 'active' : '' ?>" style="border-left: 5px solid <?= $card['color'] ?> !important;">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <span class="text-muted small fw-bold text-uppercase"><?= $card['label'] ?></span>
-                                <h2 class="fw-bold my-1 text-dark"><?= $card['val'] ?></h2>
+            <div class="col-md-3">
+                <a href="?estagio=<?= $card['id'] ?>" class="text-decoration-none">
+                    <div class="card card-stat shadow-sm h-100 <?= $isActive ? 'active' : '' ?>" style="border-left: 5px solid <?= $card['color'] ?> !important;">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <span class="text-muted small fw-bold text-uppercase"><?= $card['label'] ?></span>
+                                    <h2 class="fw-bold my-1 text-dark"><?= $card['val'] ?></h2>
+                                </div>
+                                <span class="badge bg-light text-muted border"><?= $card['days'] ?></span>
                             </div>
-                            <span class="badge bg-light text-muted border"><?= $card['days'] ?></span>
                         </div>
                     </div>
-                </div>
-            </a>
-        </div>
+                </a>
+            </div>
         <?php endforeach; ?>
     </div>
 
@@ -127,19 +178,19 @@ include 'header.php';
                             <input type="text" name="filtro" class="form-control bg-light border-0" placeholder="Pesquisar cliente..." value="<?= htmlspecialchars($filtro) ?>">
                         </div>
                         <button type="submit" class="btn btn-dark btn-sm px-3">Filtrar</button>
-                        <?php if($estagio || $filtro): ?>
+                        <?php if ($estagio || $filtro): ?>
                             <a href="clientes.php" class="btn btn-outline-secondary btn-sm">Limpar</a>
                         <?php endif; ?>
                     </form>
                 </div>
             </div>
         </div>
-        
-        <div class="table-responsive">
+
+        <div class="table-responsive table-scroll-container" style="max-height: 500px;">
             <table class="table table-hover align-middle mb-0">
                 <thead>
                     <tr>
-                        <th class="ps-4">Cliente</th>
+                        <th class="ps-4">Cliente/Servidor</th>
                         <th>Vendedor</th>
                         <th>Início</th>
                         <th>Dias/Status</th>
@@ -148,12 +199,16 @@ include 'header.php';
                     </tr>
                 </thead>
                 <tbody class="border-top-0">
-                    <?php foreach ($clientes_filtrados as $c): 
+                    <?php foreach ($clientes_filtrados as $c):
                         $isConcluido = (!empty($c['data_fim']) && $c['data_fim'] !== '0000-00-00');
-                        $perc = 0; $color = "bg-secondary"; $label_dias = "---";
+                        $perc = 0;
+                        $color = "bg-secondary";
+                        $label_dias = "---";
 
                         if ($isConcluido) {
-                            $perc = 100; $color = "bg-success"; $label_dias = "Concluído";
+                            $perc = 100;
+                            $color = "bg-success";
+                            $label_dias = "Concluído";
                         } else {
                             $d = (new DateTime($c['data_inicio']))->diff(new DateTime())->days;
                             $perc = min(round(($d / 91) * 100), 100);
@@ -164,44 +219,44 @@ include 'header.php';
                             else $color = "bg-danger";
                         }
                     ?>
-                    <tr>
-                        <td class="ps-4">
-                            <div class="fw-bold text-dark"><?= htmlspecialchars($c['fantasia']) ?></div>
-                            <small class="text-muted text-uppercase" style="font-size: 0.65rem;">Servidor: <?= htmlspecialchars($c['servidor']) ?></small>
-                        </td>
-                        <td><span class="badge bg-light text-dark border fw-normal"><?= htmlspecialchars($c['vendedor']) ?></span></td>
-                        <td class="text-muted small"><?= date('d/m/Y', strtotime($c['data_inicio'])) ?></td>
-                        <td>
-                            <span class="small fw-bold <?= ($label_dias == 'Concluído') ? 'text-success' : 'text-dark' ?>">
-                                <span class="status-dot <?= $color ?>"></span><?= $label_dias ?>
-                            </span>
-                        </td>
-                        <td style="min-width: 150px;">
-                            <div class="d-flex align-items-center gap-2">
-                                <div class="progress flex-grow-1" style="height: 6px;">
-                                    <div class="progress-bar <?= $color ?>" style="width: <?= $perc ?>%"></div>
+                        <tr>
+                            <td class="ps-4">
+                                <div class="fw-bold text-dark"><?= htmlspecialchars($c['fantasia']) ?></div>
+                                <span class="text-muted">Servidor: <?= htmlspecialchars($c['servidor']) ?></small>
+                            </td>
+                            <td><span class="badge bg-light text-dark border fw-normal"><?= htmlspecialchars($c['vendedor']) ?></span></td>
+                            <td class="text-muted small"><?= date('d/m/Y', strtotime($c['data_inicio'])) ?></td>
+                            <td>
+                                <span class="small fw-bold <?= ($label_dias == 'Concluído') ? 'text-success' : 'text-dark' ?>">
+                                    <span class="status-dot <?= $color ?>"></span><?= $label_dias ?>
+                                </span>
+                            </td>
+                            <td style="min-width: 150px;">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="progress flex-grow-1" style="height: 6px;">
+                                        <div class="progress-bar <?= $color ?>" style="width: <?= $perc ?>%"></div>
+                                    </div>
+                                    <span class="small text-muted" style="font-size: 0.7rem;"><?= $perc ?>%</span>
                                 </div>
-                                <span class="small text-muted" style="font-size: 0.7rem;"><?= $perc ?>%</span>
-                            </div>
-                        </td>
-                        <td class="text-end pe-4">
-                            <button class="btn btn-sm btn-light border edit-btn" 
-                                data-id="<?= $c['id_cliente'] ?>"
-                                data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
-                                data-servidor="<?= htmlspecialchars($c['servidor']) ?>"
-                                data-vendedor="<?= htmlspecialchars($c['vendedor']) ?>"
-                                data-telefone="<?= htmlspecialchars($c['telefone_ddd']) ?>"
-                                data-data_inicio="<?= $c['data_inicio'] ?>"
-                                data-data_fim="<?= ($c['data_fim'] == '0000-00-00' ? '' : $c['data_fim']) ?>"
-                                data-obs="<?= htmlspecialchars($c['observacao']) ?>"
-                                data-bs-toggle="modal" data-bs-target="#modalCliente">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <a href="?delete=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-light border text-danger" onclick="return confirm('Excluir?')">
-                                <i class="bi bi-trash"></i>
-                            </a>
-                        </td>
-                    </tr>
+                            </td>
+                            <td class="text-end pe-4">
+                                <button class="btn btn-sm btn-light border edit-btn"
+                                    data-id="<?= $c['id_cliente'] ?>"
+                                    data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
+                                    data-servidor="<?= htmlspecialchars($c['servidor']) ?>"
+                                    data-vendedor="<?= htmlspecialchars($c['vendedor']) ?>"
+                                    data-telefone="<?= htmlspecialchars($c['telefone_ddd']) ?>"
+                                    data-data_inicio="<?= $c['data_inicio'] ?>"
+                                    data-data_fim="<?= ($c['data_fim'] == '0000-00-00' ? '' : $c['data_fim']) ?>"
+                                    data-obs="<?= htmlspecialchars($c['observacao']) ?>"
+                                    data-bs-toggle="modal" data-bs-target="#modalCliente">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <a href="?delete=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-light border text-danger" onclick="return confirm('Excluir?')">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
                     <?php endforeach; ?>
                 </tbody>
             </table>

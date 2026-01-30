@@ -84,6 +84,12 @@ include 'header.php';
         background: #fff3cd;
         color: #856404;
     }
+
+    .table-scroll-container {
+        max-height: 65vh;
+        /* Ocupa 65% da altura da janela, mantendo o layout responsivo */
+        overflow-y: auto;
+    }
 </style>
 
 <div class="container-fluid py-4 bg-light min-vh-100">
@@ -99,19 +105,7 @@ include 'header.php';
         </div>
     </div>
 
-    <?php if (!empty($clientes_sem_agenda)): ?>
-        <div class="alert alert-custom shadow-sm mb-4 d-flex align-items-center p-3">
-            <div class="bg-warning text-white rounded-circle p-2 me-3">
-                <i class="bi bi- megaphone-fill"></i>
-            </div>
-            <div>
-                <span class="fw-bold d-block">Atenção: Clientes sem agendamento nos próximos 3 dias</span>
-                <small>Os seguintes clientes precisam de contato urgente:
-                    <span class="fw-bold text-dark"><?= implode(', ', $clientes_sem_agenda) ?></span>
-                </small>
-            </div>
-        </div>
-    <?php endif; ?>
+
 
     <div class="row g-3 mb-4">
         <div class="col-md-4">
@@ -141,7 +135,7 @@ include 'header.php';
     </div>
 
     <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
-        <div class="table-responsive">
+        <div class="table-responsive table-scroll-container" style="max-height: 500px;">
             <table class="table table-hover align-middle mb-0">
                 <thead>
                     <tr>
@@ -159,7 +153,7 @@ include 'header.php';
                         <tr>
                             <td class="ps-4">
                                 <div class="fw-bold text-dark"><?= htmlspecialchars($t['cliente_nome']) ?></div>
-                                <span class="badge bg-info-subtle text-info small" style="font-size: 0.65rem;"><?= htmlspecialchars($t['tema']) ?></span>
+                                <small class="text-muted"><?= htmlspecialchars($t['tema']) ?></span>
                             </td>
                             <td>
                                 <div class="<?= $isVencido ? 'text-danger fw-bold' : 'text-dark' ?> small">
@@ -170,10 +164,22 @@ include 'header.php';
                             <td>
                                 <div class="small text-muted"><i class="bi bi-person me-1"></i><?= htmlspecialchars($t['contato_nome'] ?? '---') ?></div>
                             </td>
-                            <td>
-                                <span class="badge rounded-pill <?= ($t['status'] == 'RESOLVIDO') ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning' ?>">
-                                    <?= $t['status'] ?>
-                                </span>
+                            <td class="text-center">
+                                <?php if ($t['status'] == 'Resolvido'): ?>
+                                    <span class="badge bg-success-subtle text-success border border-success d-inline-flex align-items-center"
+                                        style="cursor: help;"
+                                        data-bs-toggle="popover"
+                                        data-bs-trigger="hover focus"
+                                        title="Observações do Encerramento"
+                                        data-bs-content="<?= htmlspecialchars($t['observacoes'] ?? 'Sem observações registradas.') ?>">
+                                        <?= $t['status'] ?>
+                                        <i class="bi bi-info-circle ms-1" style="font-size: 0.8rem;"></i>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge bg-warning-subtle text-warning border border-warning">
+                                        <?= $t['status'] ?>
+                                    </span>
+                                <?php endif; ?>
                             </td>
                             <td class="text-end pe-4">
                                 <div class="btn-group shadow-sm">
@@ -240,11 +246,19 @@ include 'header.php';
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted">Tema da Sessão</label>
                     <select name="tema" id="tema" class="form-select" required>
-                        <option value="INSTALAÇAO SISTEMA">INSTALAÇÃO SISTEMA</option>
+                        <option value="">ESCOLHA UM TEMA</option>
+                        <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
                         <option value="CADASTROS">CADASTROS</option>
-                        <option value="PDV">PDV</option>
+                        <option value="ORÇAMENTO DE VENDA">ORÇAMENTO DE VENDA</option>
+                        <option value="ENTRADA DE COMPRA">ENTRADA DE COMPRA</option>
+                        <option value="PDV">PDV</option>                        
                         <option value="NOTA FISCAL">NOTA FISCAL</option>
+                        <option value="NOTA FISCAL SERVIÇO">NOTA FISCAL SERVIÇO</option>
+                        <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
+                        <option value="GNRE">GNRE</option>
+                        <option value="MDF">MDF</option>
                         <option value="RELATÓRIOS">RELATÓRIOS</option>
+                        <option value="IMPRESSOES">IMPRESSÕES</option>
                         <option value="OUTROS">OUTROS</option>
                     </select>
                 </div>
@@ -362,6 +376,12 @@ include 'header.php';
         contatoSelect.innerHTML = '<option value="">Aguardando cliente...</option>';
         contatoSelect.disabled = true;
     });
+
+    // Ativa todos os popovers da página (Bootstrap 5)
+    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+    var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
+        return new bootstrap.Popover(popoverTriggerEl)
+    })
 </script>
 
 <?php include 'footer.php'; ?>

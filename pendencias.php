@@ -36,7 +36,7 @@ include 'header.php';
 <div class="container-fluid py-4 bg-light min-vh-100">
     <div class="row align-items-center mb-4">
         <div class="col">
-            <h4 class="fw-bold text-dark mb-1">Pendências de Agendamento</h4>
+            <h4 class="fw-bold text-dark mb-1">Pendências de Treinamentos</h4>
             <p class="text-muted small">Clientes com mais de 3 dias sem interação no treinamento</p>
         </div>
         <div class="col-auto">

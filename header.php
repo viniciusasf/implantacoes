@@ -4,8 +4,7 @@
 <?php
 require_once 'config.php'; // Garante a conexão para as consultas do header
 
-
-// --- LÓGICA DO CONTADOR DE PENDÊNCIAS CORRIGIDA ---
+// 1. LÓGICA DO CONTADOR DE PENDÊNCIAS (Clientes parados há > 3 dias)
 $sql_count_pendencias = "
     SELECT c.id_cliente
     FROM clientes c
@@ -15,9 +14,18 @@ $sql_count_pendencias = "
     GROUP BY c.id_cliente, c.data_inicio
     HAVING (MAX(t.data_treinamento) < DATE_SUB(CURDATE(), INTERVAL 3 DAY)) 
        OR (MAX(t.data_treinamento) IS NULL AND c.data_inicio < DATE_SUB(CURDATE(), INTERVAL 3 DAY))";
+$res_pendencias = $pdo->query($sql_count_pendencias);
+$total_pendencias = $res_pendencias ? $res_pendencias->rowCount() : 0;
 
-$res_count = $pdo->query($sql_count_pendencias);
-$total_atrasos = $res_count ? $res_count->rowCount() : 0;
+// 2. CONTADOR DE CLIENTES ATIVOS (Em implantação)
+$total_clientes = $pdo->query("SELECT COUNT(*) FROM clientes WHERE (data_fim IS NULL OR data_fim = '0000-00-00')")->fetchColumn();
+
+// 3. CONTADOR DE CONTATOS TOTAIS
+$total_contatos = $pdo->query("SELECT COUNT(*) FROM contatos")->fetchColumn();
+
+
+// 4. CONTADOR DE AGENDAMENTOS PARA HOJE (Apenas os que ainda estão PENDENTES)
+$total_hoje = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE DATE(data_treinamento) = CURDATE() AND status = 'PENDENTE'")->fetchColumn();
 ?>
 
 <head>
@@ -44,7 +52,6 @@ $total_atrasos = $res_count ? $res_count->rowCount() : 0;
             overflow-x: hidden;
         }
 
-        /* Sidebar Style */
         #sidebar {
             width: var(--sidebar-width);
             height: 100vh;
@@ -78,6 +85,7 @@ $total_atrasos = $res_count ? $res_count->rowCount() : 0;
             padding: 0.8rem 1.5rem;
             display: flex;
             align-items: center;
+            justify-content: space-between; /* Garante o badge à direita */
             color: rgba(255, 255, 255, 0.7);
             text-decoration: none;
             transition: 0.2s;
@@ -102,7 +110,6 @@ $total_atrasos = $res_count ? $res_count->rowCount() : 0;
             font-weight: 600;
         }
 
-        /* Content Style */
         #content {
             width: calc(100% - var(--sidebar-width));
             margin-left: var(--sidebar-width);
@@ -121,11 +128,11 @@ $total_atrasos = $res_count ? $res_count->rowCount() : 0;
             align-items: center;
         }
 
-        /* Notificação Badge */
         .badge-notify {
             font-size: 0.7rem;
             padding: 4px 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            min-width: 20px;
+            text-align: center;
         }
 
         @media (max-width: 768px) {
@@ -147,38 +154,53 @@ $total_atrasos = $res_count ? $res_count->rowCount() : 0;
                 <?php $current_page = basename($_SERVER['PHP_SELF']); ?>
                 
                 <li class="<?= $current_page == 'index.php' ? 'active' : '' ?>">
-                    <a href="index.php"><i class="bi bi-grid-1x2"></i> Dashboard</a>
+                    <a href="index.php">
+                        <span><i class="bi bi-grid-1x2"></i> Dashboard</span>
+                    </a>
                 </li>
                 
                 <li class="<?= $current_page == 'clientes.php' ? 'active' : '' ?>">
-                    <a href="clientes.php"><i class="bi bi-building"></i> Clientes</a>
+                    <a href="clientes.php">
+                        <span><i class="bi bi-building"></i> Clientes</span>
+                        <span class="badge rounded-pill bg-primary badge-notify"><?= $total_clientes ?></span>
+                    </a>
                 </li>
                 
                 <li class="<?= $current_page == 'contatos.php' ? 'active' : '' ?>">
-                    <a href="contatos.php"><i class="bi bi-person-badge"></i> Contatos</a>
+                    <a href="contatos.php">
+                        <span><i class="bi bi-person-badge"></i> Contatos</span>
+                        <span class="badge rounded-pill bg-secondary badge-notify"><?= $total_contatos ?></span>
+                    </a>
                 </li>
                 
                 <li class="<?= $current_page == 'treinamentos.php' ? 'active' : '' ?>">
-                    <a href="treinamentos.php"><i class="bi bi-mortarboard"></i> Treinamentos</a>
+                    <a href="treinamentos.php">
+                        <span><i class="bi bi-mortarboard"></i> Treinamentos</span>
+                        <?php if ($total_hoje > 0): ?>
+                            <span class="badge rounded-pill bg-info text-dark badge-notify" title="Para hoje"><?= $total_hoje ?></span>
+                        <?php endif; ?>
+                    </a>
                 </li>
 
                 <li class="<?= $current_page == 'pendencias.php' ? 'active' : '' ?>">
-                    <a href="pendencias.php" class="d-flex justify-content-between align-items-center">
+                    <a href="pendencias.php">
                         <span><i class="bi bi-exclamation-octagon"></i> Pendências</span>
-                        <?php if ($total_atrasos > 0): ?>
-                            <span class="badge rounded-pill bg-danger badge-notify">
-                                <?= $total_atrasos ?>
-                            </span>
+                        <?php if ($total_pendencias > 0): ?>
+                            <span class="badge rounded-pill bg-danger badge-notify"><?= $total_pendencias ?></span>
                         <?php endif; ?>
                     </a>
                 </li>
 
                 <li class="<?= $current_page == 'tarefas.php' ? 'active' : '' ?>">
-                    <a href="tarefas.php"><i class="bi bi-list-check"></i> Tarefas</a>
+                    <a href="tarefas.php">
+                        <span><i class="bi bi-list-check"></i> Tarefas</span>
+                    </a>
                 </li>
                 
                 <li class="<?= $current_page == 'orientacoes.php' ? 'active' : '' ?>">
-                    <a href="orientacoes.php"><i class="bi bi-question-circle"></i> Orientações</a>
+                    <a href="orientacoes.php">
+                        <span><i class="bi bi-question-circle"></i> Orientações</span>
+                    </a>
                 </li>
             </ul>
         </nav>
