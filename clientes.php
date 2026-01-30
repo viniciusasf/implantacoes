@@ -252,6 +252,11 @@ include 'header.php';
                                     data-bs-toggle="modal" data-bs-target="#modalCliente">
                                     <i class="bi bi-pencil"></i>
                                 </button>
+                                <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-light border text-primary" title="Ver Treinamentos">
+                                    <i class="bi bi-journal-check"></i>
+                                </a>
+
+                                
                                 <a href="?delete=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-light border text-danger" onclick="return confirm('Excluir?')">
                                     <i class="bi bi-trash"></i>
                                 </a>
