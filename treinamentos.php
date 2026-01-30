@@ -43,54 +43,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     exit;
 }
 
-// Consultas para a Tabela
+// Consulta principal
 $treinamentos = $pdo->query("
     SELECT t.*, c.fantasia as cliente_nome, co.nome as contato_nome 
     FROM treinamentos t
     LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
     LEFT JOIN contatos co ON t.id_contato = co.id_contato
-    ORDER BY t.status ASC, t.data_treinamento ASC
+    ORDER BY t.status ASC, t.data_treinamento DESC
 ")->fetchAll();
 
 $clientes_list = $pdo->query("SELECT id_cliente, fantasia FROM clientes ORDER BY fantasia ASC")->fetchAll();
 
 include 'header.php';
 ?>
-
-<style>
-    .card-stat {
-        border: none !important;
-        border-radius: 12px;
-    }
-
-    .table thead th {
-        background-color: #f8f9fa;
-        color: #6c757d;
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 0.5px;
-    }
-
-    .btn-action {
-        padding: 5px 10px;
-        border-radius: 8px;
-        transition: 0.2s;
-    }
-
-    .alert-custom {
-        border-radius: 12px;
-        border: none;
-        background: #fff3cd;
-        color: #856404;
-    }
-
-    .table-scroll-container {
-        max-height: 65vh;
-        /* Ocupa 65% da altura da janela, mantendo o layout responsivo */
-        overflow-y: auto;
-    }
-</style>
 
 <div class="container-fluid py-4 bg-light min-vh-100">
     <div class="row align-items-center mb-4">
@@ -100,16 +65,14 @@ include 'header.php';
         </div>
         <div class="col-auto">
             <button class="btn btn-primary px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
-                <i class="bi bi-calendar-plus me-2"></i>Novo Agendamento
+                <i class="bi bi-plus-lg me-2"></i>Novo Agendamento
             </button>
         </div>
     </div>
 
-
-
     <div class="row g-3 mb-4">
         <div class="col-md-4">
-            <div class="card card-stat shadow-sm border-start border-warning border-4">
+            <div class="card border-0 shadow-sm rounded-3 border-start border-warning border-4">
                 <div class="card-body">
                     <span class="text-muted small fw-bold text-uppercase">Pendentes</span>
                     <h2 class="fw-bold my-1 text-dark"><?= $total_pendentes ?></h2>
@@ -117,15 +80,15 @@ include 'header.php';
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card card-stat shadow-sm border-start border-primary border-4">
+            <div class="card border-0 shadow-sm rounded-3 border-start border-primary border-4">
                 <div class="card-body">
-                    <span class="text-muted small fw-bold text-uppercase">Agendados para Hoje</span>
+                    <span class="text-muted small fw-bold text-uppercase">Hoje</span>
                     <h2 class="fw-bold my-1 text-dark"><?= $total_hoje ?></h2>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card card-stat shadow-sm border-start border-danger border-4">
+            <div class="card border-0 shadow-sm rounded-3 border-start border-danger border-4">
                 <div class="card-body">
                     <span class="text-muted small fw-bold text-uppercase">Críticos s/ Agenda</span>
                     <h2 class="fw-bold my-1 text-dark"><?= count($clientes_sem_agenda) ?></h2>
@@ -135,60 +98,57 @@ include 'header.php';
     </div>
 
     <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
-        <div class="table-responsive table-scroll-container" style="max-height: 500px;">
+        <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead>
+                <thead class="bg-light">
                     <tr>
-                        <th class="ps-4">Cliente / Tema</th>
-                        <th>Data Agendada</th>
-                        <th>Contato Responsável</th>
-                        <th>Status</th>
-                        <th class="text-end pe-4">Ações</th>
+                        <th class="ps-4 border-0 text-muted small fw-bold text-uppercase">Cliente / Tema</th>
+                        <th class="border-0 text-muted small fw-bold text-uppercase">Data Agendada</th>
+                        <th class="border-0 text-muted small fw-bold text-uppercase">Contato</th>
+                        <th class="border-0 text-muted small fw-bold text-uppercase text-center">Status</th>
+                        <th class="border-0 text-muted small fw-bold text-uppercase text-end pe-4">Ações</th>
                     </tr>
                 </thead>
-                <tbody class="border-top-0">
-                    <?php foreach ($treinamentos as $t):
+                <tbody>
+                    <?php foreach ($treinamentos as $t): 
                         $isVencido = ($t['status'] == 'PENDENTE' && strtotime($t['data_treinamento']) < time());
                     ?>
                         <tr>
                             <td class="ps-4">
                                 <div class="fw-bold text-dark"><?= htmlspecialchars($t['cliente_nome']) ?></div>
-                                <small class="text-muted"><?= htmlspecialchars($t['tema']) ?></span>
+                                <span class="badge bg-light text-dark border fw-normal"><?= htmlspecialchars($t['tema']) ?></span>
                             </td>
                             <td>
-                                <div class="<?= $isVencido ? 'text-danger fw-bold' : 'text-dark' ?> small">
-                                    <i class="bi bi-clock me-1"></i>
-                                    <?= $t['data_treinamento'] ? date('d/m/Y H:i', strtotime($t['data_treinamento'])) : 'Não definido' ?>
+                                <div class="<?= $isVencido ? 'text-danger fw-bold' : 'text-muted' ?> small">
+                                    <i class="bi bi-calendar3 me-1"></i>
+                                    <?= $t['data_treinamento'] ? date('d/m/Y H:i', strtotime($t['data_treinamento'])) : '---' ?>
                                 </div>
                             </td>
                             <td>
-                                <div class="small text-muted"><i class="bi bi-person me-1"></i><?= htmlspecialchars($t['contato_nome'] ?? '---') ?></div>
+                                <span class="small text-muted"><?= htmlspecialchars($t['contato_nome'] ?? '---') ?></span>
                             </td>
                             <td class="text-center">
-                                <?php if ($t['status'] == 'Resolvido'): ?>
-                                    <span class="badge bg-success-subtle text-success border border-success d-inline-flex align-items-center"
-                                        style="cursor: help;"
-                                        data-bs-toggle="popover"
-                                        data-bs-trigger="hover focus"
-                                        title="Observações do Encerramento"
-                                        data-bs-content="<?= htmlspecialchars($t['observacoes'] ?? 'Sem observações registradas.') ?>">
-                                        <?= $t['status'] ?>
-                                        <i class="bi bi-info-circle ms-1" style="font-size: 0.8rem;"></i>
-                                    </span>
-                                <?php else: ?>
-                                    <span class="badge bg-warning-subtle text-warning border border-warning">
-                                        <?= $t['status'] ?>
-                                    </span>
-                                <?php endif; ?>
+                                <span class="badge <?= $t['status'] == 'Resolvido' ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning' ?> px-3">
+                                    <?= $t['status'] ?>
+                                </span>
                             </td>
                             <td class="text-end pe-4">
                                 <div class="btn-group shadow-sm">
+                                    <?php if (!empty($t['observacoes'])): ?>
+                                        <button class="btn btn-sm btn-light border text-info view-obs-btn" 
+                                                data-obs="<?= htmlspecialchars($t['observacoes']) ?>"
+                                                data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>"
+                                                title="Ver Observação">
+                                            <i class="bi bi-search"></i>
+                                        </button>
+                                    <?php endif; ?>
+
                                     <?php if (empty($t['google_event_id'])): ?>
-                                        <button class="btn btn-sm btn-outline-danger sync-google-btn" data-id="<?= $t['id_treinamento'] ?>" title="Sincronizar Google">
+                                        <button class="btn btn-sm btn-light border text-danger sync-google-btn" data-id="<?= $t['id_treinamento'] ?>" title="Sincronizar Google">
                                             <i class="bi bi-google"></i>
                                         </button>
                                     <?php else: ?>
-                                        <button class="btn btn-sm btn-outline-dark delete-google-btn" data-id="<?= $t['id_treinamento'] ?>" title="Remover da Agenda">
+                                        <button class="btn btn-sm btn-light border text-dark delete-google-btn" data-id="<?= $t['id_treinamento'] ?>" title="Remover da Agenda">
                                             <i class="bi bi-calendar-x"></i>
                                         </button>
                                     <?php endif; ?>
@@ -203,7 +163,7 @@ include 'header.php';
                                         <i class="bi bi-pencil"></i>
                                     </button>
 
-                                    <a href="?delete=<?= $t['id_treinamento'] ?>" class="btn btn-sm btn-light border text-danger" onclick="return confirm('Eliminar treinamento?')">
+                                    <a href="?delete=<?= $t['id_treinamento'] ?>" class="btn btn-sm btn-light border text-danger" onclick="return confirm('Deseja excluir?')">
                                         <i class="bi bi-trash"></i>
                                     </a>
                                 </div>
@@ -212,6 +172,23 @@ include 'header.php';
                     <?php endforeach; ?>
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalViewObs" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <div class="modal-header border-0 px-4 pt-4">
+                <h5 class="fw-bold text-dark"><i class="bi bi-chat-left-text me-2 text-info"></i>Observações</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4 pb-4">
+                <div class="p-3 bg-light rounded-3">
+                    <div class="small text-muted mb-2 text-uppercase fw-bold">Cliente: <span id="view_obs_cliente" class="text-primary"></span></div>
+                    <p id="view_obs_text" class="mb-0 text-dark" style="white-space: pre-wrap;"></p>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -225,11 +202,11 @@ include 'header.php';
             </div>
             <div class="modal-body px-4">
                 <input type="hidden" name="id_treinamento" id="id_treinamento">
-
+                
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted">Cliente</label>
                     <select name="id_cliente" id="id_cliente" class="form-select" required onchange="filterContatos(this.value)">
-                        <option value="">Selecione...</option>
+                        <option value="">Selecione o cliente...</option>
                         <?php foreach ($clientes_list as $c): ?>
                             <option value="<?= $c['id_cliente'] ?>"><?= htmlspecialchars($c['fantasia']) ?></option>
                         <?php endforeach; ?>
@@ -244,21 +221,13 @@ include 'header.php';
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted">Tema da Sessão</label>
+                    <label class="form-label small fw-bold text-muted">Tema</label>
                     <select name="tema" id="tema" class="form-select" required>
-                        <option value="">ESCOLHA UM TEMA</option>
                         <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
                         <option value="CADASTROS">CADASTROS</option>
-                        <option value="ORÇAMENTO DE VENDA">ORÇAMENTO DE VENDA</option>
-                        <option value="ENTRADA DE COMPRA">ENTRADA DE COMPRA</option>
-                        <option value="PDV">PDV</option>                        
+                        <option value="PDV">PDV</option>
                         <option value="NOTA FISCAL">NOTA FISCAL</option>
-                        <option value="NOTA FISCAL SERVIÇO">NOTA FISCAL SERVIÇO</option>
-                        <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
-                        <option value="GNRE">GNRE</option>
-                        <option value="MDF">MDF</option>
                         <option value="RELATÓRIOS">RELATÓRIOS</option>
-                        <option value="IMPRESSOES">IMPRESSÕES</option>
                         <option value="OUTROS">OUTROS</option>
                     </select>
                 </div>
@@ -272,21 +241,21 @@ include 'header.php';
                         <label class="form-label small fw-bold text-muted">Status</label>
                         <select name="status" id="status" class="form-select">
                             <option value="PENDENTE">PENDENTE</option>
-                            <option value="RESOLVIDO">RESOLVIDO</option>
+                            <option value="Resolvido">Resolvido</option>
                         </select>
                     </div>
                 </div>
             </div>
             <div class="modal-footer border-0 p-4">
                 <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Fechar</button>
-                <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">Salvar Agendamento</button>
+                <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">Salvar Alterações</button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
-    // 1. Função para carregar contatos via AJAX
+    // AJAX Contatos
     function filterContatos(id_cliente, selected_contato = null) {
         const contatoSelect = document.getElementById('id_contato');
         if (!id_cliente) {
@@ -294,7 +263,6 @@ include 'header.php';
             contatoSelect.disabled = true;
             return;
         }
-
         fetch('get_contatos_cliente.php?id_cliente=' + id_cliente)
             .then(r => r.json())
             .then(data => {
@@ -310,78 +278,43 @@ include 'header.php';
             });
     }
 
-    // 2. Lógica de Sincronização Google
+    // Modal Observação
+    document.querySelectorAll('.view-obs-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('view_obs_cliente').innerText = this.dataset.cliente;
+            document.getElementById('view_obs_text').innerText = this.dataset.obs;
+            new bootstrap.Modal(document.getElementById('modalViewObs')).show();
+        });
+    });
+
+    // Sincronização Google
     document.querySelectorAll('.sync-google-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const id = this.dataset.id;
             const icon = this.querySelector('i');
             icon.className = 'spinner-border spinner-border-sm';
-            this.disabled = true;
             fetch('google_calendar_sync.php?id_treinamento=' + id)
                 .then(r => r.json())
                 .then(data => {
                     if (data.auth_url) window.location.href = data.auth_url;
-                    else {
-                        alert(data.message);
-                        if (data.success) location.reload();
-                        else {
-                            icon.className = 'bi bi-google';
-                            this.disabled = false;
-                        }
-                    }
+                    else { alert(data.message); location.reload(); }
                 });
         });
     });
 
-    // 3. Remover do Google Agenda
-    document.querySelectorAll('.delete-google-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (!confirm('Remover agendamento do Google Agenda?')) return;
-            const id = this.dataset.id;
-            const icon = this.querySelector('i');
-            icon.className = 'spinner-border spinner-border-sm';
-            fetch('google_calendar_delete.php?id_treinamento=' + id)
-                .then(r => r.json())
-                .then(data => {
-                    alert(data.message);
-                    location.reload();
-                });
-        });
-    });
-
-    // 4. Lógica para EDITAR (Preencher Modal)
+    // Editar Agendamento
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function() {
-            document.getElementById('modalTitle').innerText = 'Editar Treinamento';
+            document.getElementById('modalTitle').innerText = 'Editar Registro';
             document.getElementById('id_treinamento').value = this.dataset.id;
             document.getElementById('id_cliente').value = this.dataset.cliente;
             document.getElementById('tema').value = this.dataset.tema;
             document.getElementById('status').value = this.dataset.status;
             document.getElementById('data_treinamento').value = this.dataset.data;
             filterContatos(this.dataset.cliente, this.dataset.contato);
-
-            var myModal = new bootstrap.Modal(document.getElementById('modalTreinamento'));
-            myModal.show();
+            new bootstrap.Modal(document.getElementById('modalTreinamento')).show();
         });
     });
-
-    // 5. LIMPEZA DO MODAL AO FECHAR
-    const modalElement = document.getElementById('modalTreinamento');
-    modalElement.addEventListener('hidden.bs.modal', function() {
-        document.getElementById('modalTitle').innerText = 'Agendar Treinamento';
-        const form = this.querySelector('form');
-        form.reset();
-        document.getElementById('id_treinamento').value = '';
-        const contatoSelect = document.getElementById('id_contato');
-        contatoSelect.innerHTML = '<option value="">Aguardando cliente...</option>';
-        contatoSelect.disabled = true;
-    });
-
-    // Ativa todos os popovers da página (Bootstrap 5)
-    var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
-    var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
-        return new bootstrap.Popover(popoverTriggerEl)
-    })
 </script>
 
 <?php include 'footer.php'; ?>
