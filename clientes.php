@@ -15,23 +15,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $fantasia = $_POST['fantasia'];
     $servidor = $_POST['servidor'];
     $vendedor = $_POST['vendedor'];
-    $telefone = $_POST['telefone'];
+    $telefone = $_POST['telefone'] ?? '';
     $data_inicio = $_POST['data_inicio'];
     $data_fim = (!empty($_POST['data_fim']) && $_POST['data_fim'] !== '0000-00-00') ? $_POST['data_fim'] : null;
-    $observacao = $_POST['observacao'];
+    $observacao = $_POST['observacao'] ?? '';
+    $emitir_nf = $_POST['emitir_nf'] ?? 'Não';
+    $configurado = $_POST['configurado'] ?? 'Não';
 
     if (isset($_POST['id_cliente']) && !empty($_POST['id_cliente'])) {
-        $stmt = $pdo->prepare("UPDATE clientes SET fantasia=?, servidor=?, vendedor=?, telefone_ddd=?, data_inicio=?, data_fim=?, observacao=? WHERE id_cliente=?");
-        $stmt->execute([$fantasia, $servidor, $vendedor, $telefone, $data_inicio, $data_fim, $observacao, $_POST['id_cliente']]);
+        $stmt = $pdo->prepare("UPDATE clientes SET fantasia=?, servidor=?, vendedor=?, telefone_ddd=?, data_inicio=?, data_fim=?, observacao=?, emitir_nf=?, configurado=? WHERE id_cliente=?");
+        $stmt->execute([$fantasia, $servidor, $vendedor, $telefone, $data_inicio, $data_fim, $observacao, $emitir_nf, $configurado, $_POST['id_cliente']]);
     } else {
-        $stmt = $pdo->prepare("INSERT INTO clientes (fantasia, servidor, vendedor, telefone_ddd, data_inicio, data_fim, observacao) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$fantasia, $servidor, $vendedor, $telefone, $data_inicio, $data_fim, $observacao]);
+        $stmt = $pdo->prepare("INSERT INTO clientes (fantasia, servidor, vendedor, telefone_ddd, data_inicio, data_fim, observacao, emitir_nf, configurado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$fantasia, $servidor, $vendedor, $telefone, $data_inicio, $data_fim, $observacao, $emitir_nf, $configurado]);
     }
-    header("Location: clientes.php?msg=Dados atualizados com sucesso");
+    header("Location: clientes.php?msg=Dados atualizados");
     exit;
 }
 
-// 3. Consulta e Filtros
+// 3. Consulta de Dados e Filtros
 $filtro = isset($_GET['filtro']) ? trim($_GET['filtro']) : '';
 $estagio = isset($_GET['estagio']) ? $_GET['estagio'] : '';
 
@@ -46,119 +48,75 @@ $stmt = $pdo->prepare($sql . " ORDER BY fantasia ASC");
 $stmt->execute($params);
 $todos_clientes = $stmt->fetchAll();
 
-// 4. Lógica de Contagem e Estágios
-$integracao = 0;
-$operacional = 0;
-$finalizacao = 0;
-$critico = 0;
+// 4. Lógica de Contagem para os CARDS
+$integracao = 0; $operacional = 0; $finalizacao = 0; $critico = 0;
 $clientes_filtrados = [];
 
 foreach ($todos_clientes as $cl) {
     $status_cl = "concluido";
     if (empty($cl['data_fim']) || $cl['data_fim'] === '0000-00-00') {
         $d = (new DateTime($cl['data_inicio']))->diff(new DateTime())->days;
-        if ($d <= 30) {
-            $integracao++;
-            $status_cl = "integracao";
-        } elseif ($d <= 70) {
-            $operacional++;
-            $status_cl = "operacional";
-        } elseif ($d <= 91) {
-            $finalizacao++;
-            $status_cl = "finalizacao";
-        } else {
-            $critico++;
-            $status_cl = "critico";
-        }
+        if ($d <= 30) { $integracao++; $status_cl = "integracao"; }
+        elseif ($d <= 70) { $operacional++; $status_cl = "operacional"; }
+        elseif ($d <= 91) { $finalizacao++; $status_cl = "finalizacao"; }
+        else { $critico++; $status_cl = "critico"; }
     }
-    if (empty($estagio) || $estagio == $status_cl) {
-        $clientes_filtrados[] = $cl;
-    }
+    if (empty($estagio) || $estagio == $status_cl) { $clientes_filtrados[] = $cl; }
 }
 
 include 'header.php';
 ?>
 
 <style>
-    .card-stat {
-        transition: transform 0.2s, box-shadow 0.2s;
-        cursor: pointer;
-        border: none !important;
+    .card-stat { transition: transform 0.2s; cursor: pointer; border: none !important; border-radius: 12px; }
+    .card-stat:hover { transform: translateY(-5px); box-shadow: 0 10px 15px rgba(0,0,0,0.1); }
+    .card-stat.active { border: 2px solid #000 !important; }
+    
+    /* Estilos para destaque visual no modal */
+    .border-warning { border-color: #FFA500 !important; }
+    .border-success { border-color: #C8E6C9 !important; }
+    
+    /* Estilos para as linhas da tabela */
+    .row-orange { 
+        background-color: #FFA500 !important; 
+        color: #333 !important;
     }
-
-    .card-stat:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+    .row-orange:hover { 
+        background-color: #FF9900 !important;
     }
-
-    .card-stat.active {
-        border-bottom: 4px solid #000 !important;
+    .row-green { 
+        background-color: #C8E6C9 !important;
     }
-
-    .progress {
-        background-color: #f0f0f0;
-        border-radius: 10px;
-    }
-
-    .table thead th {
-        background-color: #f8f9fa;
-        color: #6c757d;
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 0.5px;
-        border-top: none;
-    }
-
-    .status-dot {
-        height: 10px;
-        width: 10px;
-        border-radius: 50%;
-        display: inline-block;
-        margin-right: 5px;
-    }
-
-    .table-scroll-container {
-        max-height: 65vh;
-        /* Ocupa 65% da altura da janela, mantendo o layout responsivo */
-        overflow-y: auto;
+    .row-green:hover { 
+        background-color: #A5D6A7 !important;
     }
 </style>
 
 <div class="container-fluid py-4 bg-light min-vh-100">
-    <div class="row align-items-center mb-4">
-        <div class="col">
-            <h4 class="fw-bold text-dark mb-1">Painel de Implantação</h4>
-            <p class="text-muted small">Acompanhamento do ciclo de 91 dias por cliente</p>
-        </div>
-        <div class="col-auto">
-            <button class="btn btn-primary px-4 fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCliente">
-                <i class="bi bi-plus-lg me-2"></i>Novo Cliente
-            </button>
-        </div>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold mb-0">Painel de Implantação</h4>
+        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCliente">
+            <i class="bi bi-plus-lg me-2"></i>Novo Cliente
+        </button>
     </div>
 
     <div class="row g-3 mb-4">
         <?php
-        $cards = [
-            ['id' => 'integracao', 'label' => 'Integração', 'val' => $integracao, 'color' => '#0dcaf0', 'days' => '0-30d'],
-            ['id' => 'operacional', 'label' => 'Operacional', 'val' => $operacional, 'color' => '#0d6efd', 'days' => '31-70d'],
-            ['id' => 'finalizacao', 'label' => 'Finalização', 'val' => $finalizacao, 'color' => '#ffc107', 'days' => '71-91d'],
-            ['id' => 'critico', 'label' => 'Crítico', 'val' => $critico, 'color' => '#dc3545', 'days' => '> 91d']
+        $status_data = [
+            ['id' => 'integracao', 'label' => 'Integração', 'count' => $integracao, 'color' => '#0dcaf0', 'days' => '0-30d'],
+            ['id' => 'operacional', 'label' => 'Operacional', 'count' => $operacional, 'color' => '#0d6efd', 'days' => '31-70d'],
+            ['id' => 'finalizacao', 'label' => 'Finalização', 'count' => $finalizacao, 'color' => '#ffc107', 'days' => '71-91d'],
+            ['id' => 'critico', 'label' => 'Crítico', 'count' => $critico, 'color' => '#dc3545', 'days' => '> 91d']
         ];
-        foreach ($cards as $card):
-            $isActive = ($estagio == $card['id']);
-        ?>
+        foreach ($status_data as $s): ?>
             <div class="col-md-3">
-                <a href="?estagio=<?= $card['id'] ?>" class="text-decoration-none">
-                    <div class="card card-stat shadow-sm h-100 <?= $isActive ? 'active' : '' ?>" style="border-left: 5px solid <?= $card['color'] ?> !important;">
+                <a href="?estagio=<?= $s['id'] ?>" class="text-decoration-none">
+                    <div class="card card-stat shadow-sm <?= ($estagio == $s['id']) ? 'active' : '' ?>" style="border-left: 5px solid <?= $s['color'] ?> !important;">
                         <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <span class="text-muted small fw-bold text-uppercase"><?= $card['label'] ?></span>
-                                    <h2 class="fw-bold my-1 text-dark"><?= $card['val'] ?></h2>
-                                </div>
-                                <span class="badge bg-light text-muted border"><?= $card['days'] ?></span>
+                            <span class="text-muted small fw-bold text-uppercase"><?= $s['label'] ?></span>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h2 class="fw-bold mb-0"><?= $s['count'] ?></h2>
+                                <span class="badge bg-light text-muted border"><?= $s['days'] ?></span>
                             </div>
                         </div>
                     </div>
@@ -168,96 +126,70 @@ include 'header.php';
     </div>
 
     <div class="card shadow-sm border-0 rounded-3">
-        <div class="card-header bg-white py-3 border-0">
-            <div class="row g-2 align-items-center">
-                <div class="col">
-                    <form method="GET" class="d-flex gap-2">
-                        <input type="hidden" name="estagio" value="<?= $estagio ?>">
-                        <div class="input-group input-group-sm" style="max-width: 300px;">
-                            <span class="input-group-text bg-light border-0"><i class="bi bi-search"></i></span>
-                            <input type="text" name="filtro" class="form-control bg-light border-0" placeholder="Pesquisar cliente..." value="<?= htmlspecialchars($filtro) ?>">
-                        </div>
-                        <button type="submit" class="btn btn-dark btn-sm px-3">Filtrar</button>
-                        <?php if ($estagio || $filtro): ?>
-                            <a href="clientes.php" class="btn btn-outline-secondary btn-sm">Limpar</a>
-                        <?php endif; ?>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <div class="table-responsive table-scroll-container" style="max-height: 500px;">
+        <div class="table-responsive" style="max-height: 65vh;">
             <table class="table table-hover align-middle mb-0">
-                <thead>
+                <thead class="bg-light">
                     <tr>
-                        <th class="ps-4">Cliente/Servidor</th>
+                        <th class="ps-4">Cliente / Servidor</th>
                         <th>Vendedor</th>
                         <th>Início</th>
-                        <th>Dias/Status</th>
-                        <th>Progresso da Jornada</th>
+                        <th>Dias</th>
                         <th class="text-end pe-4">Ações</th>
                     </tr>
                 </thead>
-                <tbody class="border-top-0">
-                    <?php foreach ($clientes_filtrados as $c):
-                        $isConcluido = (!empty($c['data_fim']) && $c['data_fim'] !== '0000-00-00');
-                        $perc = 0;
-                        $color = "bg-secondary";
-                        $label_dias = "---";
-
-                        if ($isConcluido) {
-                            $perc = 100;
-                            $color = "bg-success";
-                            $label_dias = "Concluído";
-                        } else {
-                            $d = (new DateTime($c['data_inicio']))->diff(new DateTime())->days;
-                            $perc = min(round(($d / 91) * 100), 100);
-                            $label_dias = $d . " dias";
-                            if ($d <= 30) $color = "bg-info";
-                            elseif ($d <= 70) $color = "bg-primary";
-                            elseif ($d <= 91) $color = "bg-warning";
-                            else $color = "bg-danger";
+                <tbody>
+                    <?php foreach ($clientes_filtrados as $c): 
+                        // Obter valores do banco
+                        $emitir_nf = isset($c['emitir_nf']) ? $c['emitir_nf'] : 'Não';
+                        $configurado = isset($c['configurado']) ? $c['configurado'] : 'Não';
+                        
+                        // Normalizar para comparação
+                        $emitir_clean = strtolower(trim($emitir_nf));
+                        $config_clean = strtolower(trim($configurado));
+                        
+                        // Converter 'não' com acento para 'nao' sem acento
+                        $config_clean = str_replace('não', 'nao', $config_clean);
+                        
+                        // Determinar classe CSS baseada nas condições
+                        $row_class = '';
+                        
+                        if ($emitir_clean === 'sim') {
+                            if ($config_clean === 'nao') {
+                                $row_class = 'row-orange';
+                            } elseif ($config_clean === 'sim') {
+                                $row_class = 'row-green';
+                            }
                         }
+                        
+                        $d = (new DateTime($c['data_inicio']))->diff(new DateTime())->days;
                     ?>
-                        <tr>
+                        <tr class="<?= $row_class ?>">
                             <td class="ps-4">
-                                <div class="fw-bold text-dark"><?= htmlspecialchars($c['fantasia']) ?></div>
-                                <span class="text-muted">Servidor: <?= htmlspecialchars($c['servidor']) ?></small>
+                                <div class="fw-bold"><?= htmlspecialchars($c['fantasia']) ?></div>
+                                <small class="text-muted"><?= htmlspecialchars($c['servidor']) ?></small>
                             </td>
-                            <td><span class="badge bg-light text-dark border fw-normal"><?= htmlspecialchars($c['vendedor']) ?></span></td>
-                            <td class="text-muted small"><?= date('d/m/Y', strtotime($c['data_inicio'])) ?></td>
-                            <td>
-                                <span class="small fw-bold <?= ($label_dias == 'Concluído') ? 'text-success' : 'text-dark' ?>">
-                                    <span class="status-dot <?= $color ?>"></span><?= $label_dias ?>
-                                </span>
-                            </td>
-                            <td style="min-width: 150px;">
-                                <div class="d-flex align-items-center gap-2">
-                                    <div class="progress flex-grow-1" style="height: 6px;">
-                                        <div class="progress-bar <?= $color ?>" style="width: <?= $perc ?>%"></div>
-                                    </div>
-                                    <span class="small text-muted" style="font-size: 0.7rem;"><?= $perc ?>%</span>
-                                </div>
-                            </td>
+                            <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($c['vendedor']) ?></span></td>
+                            <td><?= date('d/m/Y', strtotime($c['data_inicio'])) ?></td>
+                            <td><span class="fw-bold"><?= $d ?> dias</span></td>
                             <td class="text-end pe-4">
                                 <button class="btn btn-sm btn-light border edit-btn"
                                     data-id="<?= $c['id_cliente'] ?>"
                                     data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
                                     data-servidor="<?= htmlspecialchars($c['servidor']) ?>"
                                     data-vendedor="<?= htmlspecialchars($c['vendedor']) ?>"
-                                    data-telefone="<?= htmlspecialchars($c['telefone_ddd']) ?>"
                                     data-data_inicio="<?= $c['data_inicio'] ?>"
-                                    data-data_fim="<?= ($c['data_fim'] == '0000-00-00' ? '' : $c['data_fim']) ?>"
-                                    data-obs="<?= htmlspecialchars($c['observacao']) ?>"
+                                    data-data_fim="<?= $c['data_fim'] ?>"
+                                    data-emitir_nf="<?= htmlspecialchars($c['emitir_nf']) ?>"
+                                    data-configurado="<?= htmlspecialchars($c['configurado']) ?>"
                                     data-bs-toggle="modal" data-bs-target="#modalCliente">
                                     <i class="bi bi-pencil"></i>
                                 </button>
+                                
                                 <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-light border text-primary" title="Ver Treinamentos">
                                     <i class="bi bi-journal-check"></i>
                                 </a>
 
-                                
-                                <a href="?delete=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-light border text-danger" onclick="return confirm('Excluir?')">
+                                <a href="?delete=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-light border text-danger" onclick="return confirm('Excluir este cliente?')">
                                     <i class="bi bi-trash"></i>
                                 </a>
                             </td>
@@ -270,48 +202,98 @@ include 'header.php';
 </div>
 
 <div class="modal fade" id="modalCliente" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
-            <form method="POST">
-                <div class="modal-header border-0">
-                    <h5 class="fw-bold" id="modalTitle">Ficha do Cliente</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body px-4">
-                    <input type="hidden" name="id_cliente" id="id_cliente">
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <label class="form-label small fw-bold text-muted">Nome Fantasia</label>
-                            <input type="text" name="fantasia" id="fantasia" class="form-control" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted">Servidor</label>
-                            <input type="text" name="servidor" id="servidor" class="form-control">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted">Vendedor</label>
-                            <input type="text" name="vendedor" id="vendedor" class="form-control">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted">Data de Início</label>
-                            <input type="date" name="data_inicio" id="data_inicio" class="form-control" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted">Data de Conclusão</label>
-                            <input type="date" name="data_fim" id="id_data_fim" class="form-control">
-                        </div>
+    <div class="modal-dialog modal-lg">
+        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:15px;">
+            <div class="modal-header border-0 px-4 pt-4">
+                <h5 class="fw-bold" id="modalTitle">Ficha do Cliente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4">
+                <input type="hidden" name="id_cliente" id="id_cliente">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">Nome Fantasia</label>
+                        <input type="text" name="fantasia" id="fantasia" class="form-control" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Servidor</label>
+                        <input type="text" name="servidor" id="servidor" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Vendedor</label>
+                        <input type="text" name="vendedor" id="vendedor" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Data Início</label>
+                        <input type="date" name="data_inicio" id="data_inicio" class="form-control" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">Data Conclusão</label>
+                        <input type="date" name="data_fim" id="id_data_fim" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold" id="label_emitir_nf">Emitir nota fiscal</label>
+                        <select name="emitir_nf" id="emitir_nf" class="form-select" onchange="toggleConfigurado(this.value)">
+                            <option value="Não">Não</option>
+                            <option value="Sim">Sim</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6" id="div_configurado" style="display: none;">
+                        <label class="form-label small fw-bold text-muted" id="label_configurado">Configurado</label>
+                        <select name="configurado" id="configurado" class="form-select">
+                            <option value="Não">Não</option>
+                            <option value="Sim">Sim</option>
+                        </select>
                     </div>
                 </div>
-                <div class="modal-footer border-0 p-4">
-                    <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">Guardar Alterações</button>
-                </div>
-            </form>
-        </div>
+            </div>
+            <div class="modal-footer border-0 p-4">
+                <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary fw-bold shadow-sm px-4">Salvar</button>
+            </div>
+        </form>
     </div>
 </div>
 
 <script>
+    function toggleConfigurado(valor) {
+        const div = document.getElementById('div_configurado');
+        div.style.display = (valor === 'Sim') ? 'block' : 'none';
+    }
+    
+    function updateModalVisual() {
+        const emitirNf = document.getElementById('emitir_nf').value;
+        const configurado = document.getElementById('configurado').value;
+        const emitirSelect = document.getElementById('emitir_nf');
+        const configSelect = document.getElementById('configurado');
+        const configLabel = document.getElementById('label_configurado');
+        const emitirLabel = document.getElementById('label_emitir_nf');
+        
+        emitirSelect.classList.remove('border-warning', 'border-success', 'border-2');
+        configSelect.classList.remove('border-warning', 'border-success', 'border-2');
+        emitirLabel.classList.remove('text-warning', 'text-success', 'fw-bold');
+        configLabel.classList.remove('text-warning', 'text-success', 'fw-bold', 'text-muted');
+        
+        if (emitirNf === 'Sim') {
+            emitirSelect.classList.add('border-2');
+            emitirLabel.classList.add('fw-bold');
+            
+            if (configurado === 'Não') {
+                emitirSelect.classList.add('border-warning');
+                configSelect.classList.add('border-warning', 'border-2');
+                emitirLabel.classList.add('text-warning');
+                configLabel.classList.add('text-warning', 'fw-bold');
+            } else if (configurado === 'Sim') {
+                emitirSelect.classList.add('border-success');
+                configSelect.classList.add('border-success', 'border-2');
+                emitirLabel.classList.add('text-success');
+                configLabel.classList.add('text-success', 'fw-bold');
+            }
+        } else {
+            configLabel.classList.add('text-muted');
+        }
+    }
+
     document.querySelectorAll('.edit-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             document.getElementById('modalTitle').innerText = 'Editar Registro';
@@ -321,7 +303,49 @@ include 'header.php';
             document.getElementById('vendedor').value = this.dataset.vendedor;
             document.getElementById('data_inicio').value = this.dataset.data_inicio;
             document.getElementById('id_data_fim').value = this.dataset.data_fim || '';
+            
+            const nf = this.dataset.emitir_nf || 'Não';
+            const conf = this.dataset.configurado || 'Não';
+            
+            document.getElementById('emitir_nf').value = nf;
+            document.getElementById('configurado').value = conf;
+            
+            toggleConfigurado(nf);
+            updateModalVisual();
         });
+    });
+
+    document.getElementById('emitir_nf').addEventListener('change', function() {
+        toggleConfigurado(this.value);
+        updateModalVisual();
+    });
+    
+    document.getElementById('configurado').addEventListener('change', updateModalVisual);
+
+    document.getElementById('modalCliente').addEventListener('hidden.bs.modal', function() {
+        this.querySelector('form').reset();
+        document.getElementById('id_cliente').value = '';
+        document.getElementById('modalTitle').innerText = 'Ficha do Cliente';
+        
+        document.getElementById('emitir_nf').value = 'Não';
+        document.getElementById('configurado').value = 'Não';
+        
+        const emitirSelect = document.getElementById('emitir_nf');
+        const configSelect = document.getElementById('configurado');
+        const configLabel = document.getElementById('label_configurado');
+        const emitirLabel = document.getElementById('label_emitir_nf');
+        
+        emitirSelect.classList.remove('border-warning', 'border-success', 'border-2');
+        configSelect.classList.remove('border-warning', 'border-success', 'border-2');
+        emitirLabel.classList.remove('text-warning', 'text-success', 'fw-bold');
+        configLabel.classList.remove('text-warning', 'text-success', 'fw-bold');
+        configLabel.classList.add('text-muted');
+        
+        toggleConfigurado('Não');
+    });
+    
+    document.getElementById('modalCliente').addEventListener('show.bs.modal', function() {
+        setTimeout(updateModalVisual, 100);
     });
 </script>
 

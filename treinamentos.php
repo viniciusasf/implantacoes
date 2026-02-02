@@ -225,6 +225,9 @@ include 'header.php';
                     <select name="tema" id="tema" class="form-select" required>
                         <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
                         <option value="CADASTROS">CADASTROS</option>
+                        <option value="ORÇAMENTO DE VENDA">ORÇAMENTO DE VENDA</option>
+                        <option value="ENTRADA DE COMPRA">ENTRADA DE COMPRAS</option>
+                        <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
                         <option value="PDV">PDV</option>
                         <option value="NOTA FISCAL">NOTA FISCAL</option>
                         <option value="RELATÓRIOS">RELATÓRIOS</option>
