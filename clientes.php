@@ -48,7 +48,29 @@ $stmt = $pdo->prepare($sql . " ORDER BY fantasia ASC");
 $stmt->execute($params);
 $todos_clientes = $stmt->fetchAll();
 
-// 4. Lógica de Contagem para os CARDS
+// 4. Obter contagem de treinamentos para cada cliente
+$treinamentos_por_cliente = [];
+if ($todos_clientes) {
+    // Obter IDs dos clientes
+    $ids_clientes = array_column($todos_clientes, 'id_cliente');
+    $placeholders = str_repeat('?,', count($ids_clientes) - 1) . '?';
+    
+    // Consultar quantidade de treinamentos agendados para cada cliente
+    $sql_treinamentos = "SELECT id_cliente, COUNT(*) as total_treinamentos 
+                         FROM treinamentos 
+                         WHERE id_cliente IN ($placeholders) 
+                         GROUP BY id_cliente";
+    $stmt_treinamentos = $pdo->prepare($sql_treinamentos);
+    $stmt_treinamentos->execute($ids_clientes);
+    $resultados_treinamentos = $stmt_treinamentos->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Criar array associativo: id_cliente => quantidade de treinamentos
+    foreach ($resultados_treinamentos as $treinamento) {
+        $treinamentos_por_cliente[$treinamento['id_cliente']] = $treinamento['total_treinamentos'];
+    }
+}
+
+// 5. Lógica de Contagem para os CARDS
 $integracao = 0; $operacional = 0; $finalizacao = 0; $critico = 0;
 $clientes_filtrados = [];
 
@@ -68,6 +90,43 @@ include 'header.php';
 ?>
 
 <style>
+    /* Remover barra de rolagem da página inteira */
+    body, html {
+        overflow-y: hidden !important;
+        height: 100vh;
+    }
+    
+    /* Container principal sem barra de rolagem */
+    .container-fluid.py-4 {
+        overflow-y: hidden !important;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    /* Card da tabela com altura fixa e barra de rolagem interna */
+    .card.shadow-sm.border-0.rounded-3 {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0; /* Importante para o flex funcionar corretamente */
+    }
+    
+    /* Table-responsive com altura fixa e barra de rolagem */
+    .table-responsive {
+        flex: 1;
+        overflow-y: auto !important;
+        max-height: none !important;
+    }
+    
+    /* Ajuste para o cabeçalho da tabela ficar fixo */
+    .table thead {
+        position: sticky;
+        top: 0;
+        background-color: #f8f9fa;
+        z-index: 10;
+    }
+    
     .card-stat { transition: transform 0.2s; cursor: pointer; border: none !important; border-radius: 12px; }
     .card-stat:hover { transform: translateY(-5px); box-shadow: 0 10px 15px rgba(0,0,0,0.1); }
     .card-stat.active { border: 2px solid #000 !important; }
@@ -90,9 +149,27 @@ include 'header.php';
     .row-green:hover { 
         background-color: #A5D6A7 !important;
     }
+    
+    /* Estilo para o badge de treinamentos */
+    .badge-treinamentos {
+        background-color: #6c757d;
+        color: white;
+        font-size: 0.7em;
+        margin-left: 5px;
+    }
+    
+    /* Ajuste para os cards de status não ultrapassarem a largura */
+    .row.g-3.mb-4 {
+        flex-shrink: 0;
+    }
+    
+    /* Ajuste para o header não ultrapassar a largura */
+    .d-flex.justify-content-between.align-items-center.mb-4 {
+        flex-shrink: 0;
+    }
 </style>
 
-<div class="container-fluid py-4 bg-light min-vh-100">
+<div class="container-fluid py-4 bg-light">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="fw-bold mb-0">Painel de Implantação</h4>
         <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCliente">
@@ -125,8 +202,8 @@ include 'header.php';
         <?php endforeach; ?>
     </div>
 
-    <div class="card shadow-sm border-0 rounded-3">
-        <div class="table-responsive" style="max-height: 65vh;">
+    <div class="card shadow-sm border-0 rounded-3 flex-grow-1">
+        <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light">
                     <tr>
@@ -161,12 +238,23 @@ include 'header.php';
                             }
                         }
                         
+                        // Obter quantidade de treinamentos para este cliente
+                        $id_cliente = $c['id_cliente'];
+                        $quantidade_treinamentos = $treinamentos_por_cliente[$id_cliente] ?? 0;
+                        
                         $d = (new DateTime($c['data_inicio']))->diff(new DateTime())->days;
                     ?>
                         <tr class="<?= $row_class ?>">
                             <td class="ps-4">
                                 <div class="fw-bold"><?= htmlspecialchars($c['fantasia']) ?></div>
-                                <small class="text-muted"><?= htmlspecialchars($c['servidor']) ?></small>
+                                <div class="d-flex align-items-center">
+                                    <small class="text-muted"><?= htmlspecialchars($c['servidor']) ?></small>
+                                    <?php if ($quantidade_treinamentos > 0): ?>
+                                        <span class="badge badge-treinamentos ms-2" title="Treinamentos agendados">
+                                            <i class="bi bi-journal-check me-1"></i><?= $quantidade_treinamentos ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                             <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($c['vendedor']) ?></span></td>
                             <td><?= date('d/m/Y', strtotime($c['data_inicio'])) ?></td>
