@@ -1,236 +1,634 @@
 <?php
 require_once 'config.php';
 
-// 1. LÓGICA DE PROCESSAMENTO: Encerrar treinamento com Observação
-// Deve vir antes de qualquer saída HTML
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirmar_encerramento'])) {
-    $id = $_POST['id_treinamento'];
-    $obs = $_POST['observacoes'];
-    $data_hoje = date('Y-m-d H:i:s');
-    
-    // Esta query requer que a coluna 'observacoes' exista na tabela 'treinamentos'
-    $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', data_treinamento_encerrado = ?, observacoes = ? WHERE id_treinamento = ?");
-    $stmt->execute([$data_hoje, $obs, $id]);
-    
-    header("Location: index.php?msg=Treinamento encerrado com sucesso");
-    exit;
-}
+// 1. Relatório por Vendedor
+$sql_vendedores = "SELECT 
+                    vendedor,
+                    COUNT(*) as total_clientes,
+                    SUM(CASE WHEN (data_fim IS NULL OR data_fim = '0000-00-00') THEN 1 ELSE 0 END) as clientes_ativos,
+                    SUM(CASE WHEN (data_fim IS NOT NULL AND data_fim != '0000-00-00') THEN 1 ELSE 0 END) as clientes_concluidos
+                   FROM clientes 
+                   WHERE vendedor IS NOT NULL AND vendedor != ''
+                   GROUP BY vendedor 
+                   ORDER BY total_clientes DESC";
 
-// Consulta para clientes sem interação há mais de 3 dias
-$sql_inatividade = "
-    SELECT c.id_cliente, c.fantasia, MAX(t.data_treinamento) as última_data, c.data_inicio
-    FROM clientes c
-    LEFT JOIN treinamentos t ON c.id_cliente = t.id_cliente
-    WHERE (c.data_fim IS NULL OR c.data_fim = '0000-00-00')
-    AND c.id_cliente NOT IN (
-        SELECT DISTINCT id_cliente FROM treinamentos WHERE status = 'PENDENTE'
-    )
-    GROUP BY c.id_cliente, c.data_inicio
-    HAVING 
-        (MAX(t.data_treinamento) < DATE_SUB(CURDATE(), INTERVAL 3 DAY)) OR 
-        (MAX(t.data_treinamento) IS NULL AND c.data_inicio < DATE_SUB(CURDATE(), INTERVAL 3 DAY))
-    ORDER BY última_data ASC";
+$stmt_vendedores = $pdo->query($sql_vendedores);
+$vendedores = $stmt_vendedores->fetchAll(PDO::FETCH_ASSOC);
 
-$clientes_inativos = $pdo->query($sql_inatividade)->fetchAll();
+// 2. Relatório por Servidor
+$sql_servidores = "SELECT 
+                    servidor,
+                    COUNT(*) as total_clientes,
+                    SUM(CASE WHEN (data_fim IS NULL OR data_fim = '0000-00-00') THEN 1 ELSE 0 END) as clientes_ativos,
+                    SUM(CASE WHEN (data_fim IS NOT NULL AND data_fim != '0000-00-00') THEN 1 ELSE 0 END) as clientes_concluidos,
+                    GROUP_CONCAT(DISTINCT vendedor SEPARATOR ', ') as vendedores
+                   FROM clientes 
+                   WHERE servidor IS NOT NULL AND servidor != ''
+                   GROUP BY servidor 
+                   ORDER BY total_clientes DESC";
+
+$stmt_servidores = $pdo->query($sql_servidores);
+$servidores = $stmt_servidores->fetchAll(PDO::FETCH_ASSOC);
+
+// 3. Totais gerais
+$total_clientes = $pdo->query("SELECT COUNT(*) FROM clientes")->fetchColumn();
+$total_vendedores = $pdo->query("SELECT COUNT(DISTINCT vendedor) FROM clientes WHERE vendedor IS NOT NULL AND vendedor != ''")->fetchColumn();
+$total_servidores = $pdo->query("SELECT COUNT(DISTINCT servidor) FROM clientes WHERE servidor IS NOT NULL AND servidor != ''")->fetchColumn();
 
 include 'header.php';
-
-// 2. Buscar estatísticas para os cards
-$total_clientes = $pdo->query("SELECT COUNT(*) FROM clientes WHERE (data_fim IS NULL OR data_fim = '0000-00-00')")->fetchColumn();
-$total_treinamentos = $pdo->query("SELECT COUNT(*) FROM treinamentos")->fetchColumn();
-$treinamentos_pendentes = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE status = 'PENDENTE'")->fetchColumn();
-$treinamentos_resolvidos = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE status = 'Resolvido'")->fetchColumn();
-
-// 3. Consulta de treinamentos pendentes
-$sql = "SELECT t.*, c.fantasia as cliente_nome, c.servidor, c.vendedor 
-        FROM treinamentos t 
-        JOIN clientes c ON t.id_cliente = c.id_cliente 
-        WHERE t.status = 'PENDENTE'
-        ORDER BY t.data_treinamento ASC 
-        LIMIT 10";
-
-$proximos_atendimentos = $pdo->query($sql)->fetchAll();
-$hoje_data = date('Y-m-d');
 ?>
 
-<div class="mb-4">
-    <h2 class="fw-bold">Dashboard</h2>
-    <p class="text-muted">Bem-vindo ao sistema de gestão de implantações.</p>
-</div>
+<style>
+    :root {
+        --primary-color: #4361ee;
+        --secondary-color: #3f37c9;
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --danger-color: #ef4444;
+        --info-color: #3b82f6;
+    }
+    
+    .stat-card {
+        border-radius: 12px;
+        border: none;
+        transition: transform 0.2s, box-shadow 0.2s;
+        height: 100%;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    
+    .stat-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+    }
+    
+    .progress-thin {
+        height: 6px;
+        border-radius: 3px;
+    }
+    
+    .table-card {
+        border-radius: 12px;
+        border: none;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    
+    .badge-pill {
+        border-radius: 10px;
+        padding: 4px 10px;
+        font-size: 0.75rem;
+    }
+    
+    .avatar-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 16px;
+        color: white;
+    }
+    
+    .avatar-vendedor { background-color: var(--primary-color); }
+    .avatar-servidor { background-color: var(--secondary-color); }
+    
+    .chart-container {
+        height: 300px;
+        position: relative;
+    }
+    
+    /* Estilo para tabelas */
+    .table-hover tbody tr:hover {
+        background-color: rgba(67, 97, 238, 0.05);
+    }
+    
+    .table > :not(caption) > * > * {
+        padding: 1rem 1.25rem;
+    }
+    
+    /* Custom scrollbar */
+    .table-responsive::-webkit-scrollbar {
+        height: 6px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 10px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+</style>
 
-<?php if (isset($_GET['msg'])): ?>
-    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-4" role="alert">
-        <i class="bi bi-check-circle me-2"></i> <?= htmlspecialchars($_GET['msg']) ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+<div class="container-fluid py-4">
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-0">Relatórios Analíticos</h4>
+            <p class="text-muted mb-0">Análise detalhada por vendedor e servidor</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" onclick="window.print()">
+                <i class="bi bi-printer me-2"></i>Imprimir
+            </button>
+            <button class="btn btn-primary" onclick="exportToExcel()">
+                <i class="bi bi-download me-2"></i>Exportar
+            </button>
+        </div>
     </div>
-<?php endif; ?>
 
-<div class="row g-4 mb-5">
-    <div class="col-md-3">
-        <div class="card h-100 p-3 border-0 shadow-sm border-start border-primary border-4">
-            <div class="d-flex align-items-center">
-                <div class="bg-primary bg-opacity-10 p-3 rounded-3 me-3">
-                    <i class="bi bi-building text-primary fs-3"></i>
+    <!-- Cards de Estatísticas -->
+    <div class="row g-4 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card border-left-primary border-start-4 border-start-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase small fw-bold">Total Clientes</h6>
+                            <h2 class="fw-bold mb-0"><?= $total_clientes ?></h2>
+                            <span class="text-muted small">Cadastrados no sistema</span>
+                        </div>
+                        <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+                            <i class="bi bi-people"></i>
+                        </div>
+                    </div>
                 </div>
-                <div>
-                    <h6 class="text-muted mb-1 small fw-bold">CLIENTES</h6>
-                    <h3 class="mb-0 fw-bold"><?php echo $total_clientes; ?></h3>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card border-left-success border-start-4 border-start-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase small fw-bold">Vendedores</h6>
+                            <h2 class="fw-bold mb-0"><?= $total_vendedores ?></h2>
+                            <span class="text-muted small">Com clientes ativos</span>
+                        </div>
+                        <div class="stat-icon bg-success bg-opacity-10 text-success">
+                            <i class="bi bi-person-badge"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card border-left-warning border-start-4 border-start-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase small fw-bold">Servidores</h6>
+                            <h2 class="fw-bold mb-0"><?= $total_servidores ?></h2>
+                            <span class="text-muted small">Distribuição de carga</span>
+                        </div>
+                        <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                            <i class="bi bi-server"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card stat-card border-left-info border-start-4 border-start-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase small fw-bold">Taxa Ativos</h6>
+                            <h2 class="fw-bold mb-0">
+                                <?= $total_clientes > 0 ? round((array_sum(array_column($vendedores, 'clientes_ativos')) / $total_clientes) * 100) : 0 ?>%
+                            </h2>
+                            <span class="text-muted small">Clientes em implantação</span>
+                        </div>
+                        <div class="stat-icon bg-info bg-opacity-10 text-info">
+                            <i class="bi bi-graph-up"></i>
+                        </div>
+                    </div>
+                    <div class="progress progress-thin mt-3">
+                        <div class="progress-bar bg-info" style="width: <?= $total_clientes > 0 ? (array_sum(array_column($vendedores, 'clientes_ativos')) / $total_clientes) * 100 : 0 ?>%"></div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card h-100 p-3 border-0 shadow-sm border-start border-info border-4">
-            <div class="d-flex align-items-center">
-                <div class="bg-info bg-opacity-10 p-3 rounded-3 me-3">
-                    <i class="bi bi-mortarboard text-info fs-3"></i>
-                </div>
-                <div>
-                    <h6 class="text-muted mb-1 small fw-bold">TREINAMENTOS</h6>
-                    <h3 class="mb-0 fw-bold"><?php echo $total_treinamentos; ?></h3>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card h-100 p-3 border-0 shadow-sm border-start border-warning border-4">
-            <div class="d-flex align-items-center">
-                <div class="bg-warning bg-opacity-10 p-3 rounded-3 me-3">
-                    <i class="bi bi-clock-history text-warning fs-3"></i>
-                </div>
-                <div>
-                    <h6 class="text-muted mb-1 small fw-bold">PENDENTES</h6>
-                    <h3 class="mb-0 fw-bold"><?php echo $treinamentos_pendentes; ?></h3>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card h-100 p-3 border-0 shadow-sm border-start border-success border-4">
-            <div class="d-flex align-items-center">
-                <div class="bg-success bg-opacity-10 p-3 rounded-3 me-3">
-                    <i class="bi bi-check2-circle text-success fs-3"></i>
-                </div>
-                <div>
-                    <h6 class="text-muted mb-1 small fw-bold">RESOLVIDOS</h6>
-                    <h3 class="mb-0 fw-bold"><?php echo $treinamentos_resolvidos; ?></h3>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div class="row">
-    <div class="col-lg-12">
-        <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
-            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
-                <h5 class="mb-0 fw-bold text-dark">Próximos Atendimentos (Pendentes)</h5>
-                <a href="treinamentos.php" class="btn btn-sm btn-light text-primary fw-bold">Ver todos</a>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead>
-                            <tr>
-                                <th class="ps-4">Data Agendada</th>
-                                <th>Cliente</th>
-                                <th>Servidor</th>
-                                <th>Vendedor</th>
-                                <th>Tema</th>
-                                <th class="text-center">Status</th>
-                                <th class="text-end pe-4">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (empty($proximos_atendimentos)): ?>
+    <!-- Conteúdo Principal -->
+    <div class="row g-4">
+        <!-- Relatório por Vendedor -->
+        <div class="col-lg-6">
+            <div class="card table-card">
+                <div class="card-header bg-white border-0 py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="fw-bold mb-0">
+                            <i class="bi bi-person-badge text-primary me-2"></i>
+                            Por Vendedor
+                        </h5>
+                        <span class="badge bg-primary rounded-pill"><?= count($vendedores) ?> vendedores</span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="bg-light">
                                 <tr>
-                                    <td colspan="7" class="text-center py-4 text-muted">Nenhum treinamento pendente.</td>
+                                    <th class="ps-4">Vendedor</th>
+                                    <th class="text-center">Total</th>
+                                    <th class="text-center">Ativos</th>
+                                    <th class="text-center">Concluídos</th>
+                                    <th class="text-end pe-4">Distribuição</th>
                                 </tr>
-                            <?php else: ?>
-                                <?php foreach ($proximos_atendimentos as $t): 
-                                    $data_treino = date('Y-m-d', strtotime($t['data_treinamento']));
-                                    $e_hoje = ($data_treino == $hoje_data);
-                                    $bg_class = $e_hoje ? 'table-info' : '';
-                                ?>
-                                <tr class="<?= $bg_class ?>">
-                                    <td class="ps-4">
-                                        <div class="small fw-bold">
-                                            <?= date('d/m/Y H:i', strtotime($t['data_treinamento'])) ?>
-                                            <?php if($e_hoje): ?>
-                                                <span class="badge bg-primary text-white ms-1">HOJE</span>
-                                            <?php endif; ?>
-                                        </div>
-                                    </td>
-                                    <td class="fw-bold"><?= htmlspecialchars($t['cliente_nome']) ?></td>
-                                    <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($t['servidor'] ?? '---') ?></span></td>
-                                    <td><span class="small text-muted"><?= htmlspecialchars($t['vendedor'] ?? '---') ?></span></td>
-                                    <td><span class="small text-muted"><?= htmlspecialchars($t['tema']) ?></span></td>
-                                    <td class="text-center">
-                                        <span class="badge bg-warning-subtle text-warning border border-warning">
-                                            <?= $t['status'] ?>
-                                        </span>
-                                    </td>
-                                    <td class="text-end pe-4">
-                                        <button type="button" 
-                                                class="btn btn-sm btn-outline-success open-finish-modal"
-                                                data-id="<?= $t['id_treinamento'] ?>"
-                                                data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>"
-                                                data-tema="<?= htmlspecialchars($t['tema']) ?>">
-                                            <i class="bi bi-check-lg"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($vendedores)): ?>
+                                    <tr>
+                                        <td colspan="5" class="text-center py-4 text-muted">
+                                            <i class="bi bi-emoji-frown display-6 d-block mb-2"></i>
+                                            Nenhum vendedor com clientes cadastrados
+                                        </td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($vendedores as $v): 
+                                        $percentage = $total_clientes > 0 ? ($v['total_clientes'] / $total_clientes) * 100 : 0;
+                                    ?>
+                                        <tr>
+                                            <td class="ps-4">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="avatar-circle avatar-vendedor me-3">
+                                                        <?= substr($v['vendedor'], 0, 1) ?>
+                                                    </div>
+                                                    <div>
+                                                        <div class="fw-bold"><?= htmlspecialchars($v['vendedor']) ?></div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="fw-bold"><?= $v['total_clientes'] ?></span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 badge-pill">
+                                                    <?= $v['clientes_ativos'] ?>
+                                                </span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 badge-pill">
+                                                    <?= $v['clientes_concluidos'] ?>
+                                                </span>
+                                            </td>
+                                            <td class="pe-4">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="progress progress-thin flex-grow-1 me-2">
+                                                        <div class="progress-bar bg-primary" style="width: <?= $percentage ?>%"></div>
+                                                    </div>
+                                                    <span class="text-muted small"><?= round($percentage) ?>%</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
+                <?php if (!empty($vendedores)): ?>
+                <div class="card-footer bg-white border-0 py-3">
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Total de clientes: <?= array_sum(array_column($vendedores, 'total_clientes')) ?>
+                            </small>
+                        </div>
+                        <div class="col-6 text-end">
+                            <small class="text-muted">
+                                <i class="bi bi-clock me-1"></i>
+                                Atualizado em <?= date('d/m/Y H:i') ?>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Relatório por Servidor -->
+        <div class="col-lg-6">
+            <div class="card table-card">
+                <div class="card-header bg-white border-0 py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="fw-bold mb-0">
+                            <i class="bi bi-server text-success me-2"></i>
+                            Por Servidor
+                        </h5>
+                        <span class="badge bg-success rounded-pill"><?= count($servidores) ?> servidores</span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="ps-4">Servidor</th>
+                                    <th class="text-center">Total</th>
+                                    <th class="text-center">Ativos</th>
+                                    <th class="text-center">Concluídos</th>
+                                    <th class="text-end pe-4">Vendedores</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($servidores)): ?>
+                                    <tr>
+                                        <td colspan="5" class="text-center py-4 text-muted">
+                                            <i class="bi bi-hdd-stack display-6 d-block mb-2"></i>
+                                            Nenhum servidor com clientes cadastrados
+                                        </td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($servidores as $s): ?>
+                                        <tr>
+                                            <td class="ps-4">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="avatar-circle avatar-servidor me-3">
+                                                        <i class="bi bi-server"></i>
+                                                    </div>
+                                                    <div>
+                                                        <div class="fw-bold"><?= htmlspecialchars($s['servidor']) ?></div>
+                                                        <small class="text-muted"><?= $s['vendedores'] ?></small>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="fw-bold"><?= $s['total_clientes'] ?></span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 badge-pill">
+                                                    <?= $s['clientes_ativos'] ?>
+                                                </span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 badge-pill">
+                                                    <?= $s['clientes_concluidos'] ?>
+                                                </span>
+                                            </td>
+                                            <td class="pe-4">
+                                                <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25">
+                                                    <?= count(explode(', ', $s['vendedores'])) ?> vendedor(es)
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <?php if (!empty($servidores)): ?>
+                <div class="card-footer bg-white border-0 py-3">
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Média: <?= round(array_sum(array_column($servidores, 'total_clientes')) / count($servidores), 1) ?> clientes/servidor
+                            </small>
+                        </div>
+                        <div class="col-6 text-end">
+                            <small class="text-muted">
+                                <i class="bi bi-clock me-1"></i>
+                                Atualizado em <?= date('d/m/Y H:i') ?>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
-</div>
 
-<div class="modal fade" id="modalEncerrar" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
-            <div class="modal-header border-0 px-4 pt-4">
-                <h5 class="fw-bold text-dark"><i class="bi bi-journal-check me-2 text-success"></i>Finalizar Atendimento</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body px-4">
-                <input type="hidden" name="id_treinamento" id="modal_id_treinamento">
-                <input type="hidden" name="confirmar_encerramento" value="1">
-                
-                <div class="mb-3 p-3 bg-light rounded-3">
-                    <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">Informações:</div>
-                    <div class="fw-bold text-primary" id="modal_cliente_info"></div>
+    <!-- Gráficos e Estatísticas Avançadas -->
+    <div class="row g-4 mt-4">
+        <!-- Distribuição Percentual -->
+        <div class="col-lg-6">
+            <div class="card table-card">
+                <div class="card-header bg-white border-0 py-3">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-pie-chart text-warning me-2"></i>
+                        Distribuição Percentual
+                    </h5>
                 </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Vendedores Top 5 -->
+                        <div class="col-md-6">
+                            <h6 class="fw-bold mb-3">Top 5 Vendedores</h6>
+                            <?php 
+                            $top_vendedores = array_slice($vendedores, 0, 5);
+                            foreach ($top_vendedores as $index => $v): 
+                                $percentage = $total_clientes > 0 ? ($v['total_clientes'] / $total_clientes) * 100 : 0;
+                            ?>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="small"><?= htmlspecialchars($v['vendedor']) ?></span>
+                                        <span class="small fw-bold"><?= round($percentage) ?>%</span>
+                                    </div>
+                                    <div class="progress progress-thin">
+                                        <div class="progress-bar" style="width: <?= $percentage ?>%; background-color: var(--primary-color); opacity: <?= 1 - ($index * 0.15) ?>;"></div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        
+                        <!-- Servidores Top 5 -->
+                        <div class="col-md-6">
+                            <h6 class="fw-bold mb-3">Top 5 Servidores</h6>
+                            <?php 
+                            $top_servidores = array_slice($servidores, 0, 5);
+                            foreach ($top_servidores as $index => $s): 
+                                $percentage = $total_clientes > 0 ? ($s['total_clientes'] / $total_clientes) * 100 : 0;
+                            ?>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="small"><?= htmlspecialchars($s['servidor']) ?></span>
+                                        <span class="small fw-bold"><?= round($percentage) ?>%</span>
+                                    </div>
+                                    <div class="progress progress-thin">
+                                        <div class="progress-bar" style="width: <?= $percentage ?>%; background-color: var(--success-color); opacity: <?= 1 - ($index * 0.15) ?>;"></div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">O que ficou acordado com o cliente?</label>
-                    <textarea name="observacoes" class="form-control" rows="4" placeholder="Descreva os detalhes da sessão..." required></textarea>
+        <!-- Estatísticas Rápidas -->
+        <div class="col-lg-6">
+            <div class="card table-card">
+                <div class="card-header bg-white border-0 py-3">
+                    <h5 class="fw-bold mb-0">
+                        <i class="bi bi-speedometer2 text-danger me-2"></i>
+                        Estatísticas Rápidas
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex align-items-center">
+                                <div class="bg-primary bg-opacity-10 rounded p-2 me-3">
+                                    <i class="bi bi-trophy text-primary"></i>
+                                </div>
+                                <div>
+                                    <div class="small text-muted">Vendedor Top</div>
+                                    <div class="fw-bold">
+                                        <?= !empty($vendedores) ? htmlspecialchars($vendedores[0]['vendedor']) : 'N/A' ?>
+                                        <span class="text-muted small">(<?= !empty($vendedores) ? $vendedores[0]['total_clientes'] : '0' ?> clientes)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex align-items-center">
+                                <div class="bg-success bg-opacity-10 rounded p-2 me-3">
+                                    <i class="bi bi-hdd-rack text-success"></i>
+                                </div>
+                                <div>
+                                    <div class="small text-muted">Servidor Top</div>
+                                    <div class="fw-bold">
+                                        <?= !empty($servidores) ? htmlspecialchars($servidores[0]['servidor']) : 'N/A' ?>
+                                        <span class="text-muted small">(<?= !empty($servidores) ? $servidores[0]['total_clientes'] : '0' ?> clientes)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex align-items-center">
+                                <div class="bg-info bg-opacity-10 rounded p-2 me-3">
+                                    <i class="bi bi-lightning-charge text-info"></i>
+                                </div>
+                                <div>
+                                    <div class="small text-muted">Maior Taxa Ativos</div>
+                                    <div class="fw-bold">
+                                        <?php 
+                                        $maior_taxa = 0;
+                                        $vendedor_maior_taxa = '';
+                                        foreach ($vendedores as $v) {
+                                            $taxa = $v['total_clientes'] > 0 ? ($v['clientes_ativos'] / $v['total_clientes']) * 100 : 0;
+                                            if ($taxa > $maior_taxa) {
+                                                $maior_taxa = $taxa;
+                                                $vendedor_maior_taxa = $v['vendedor'];
+                                            }
+                                        }
+                                        echo htmlspecialchars($vendedor_maior_taxa ?: 'N/A');
+                                        ?>
+                                        <span class="text-muted small">(<?= round($maior_taxa) ?>%)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex align-items-center">
+                                <div class="bg-warning bg-opacity-10 rounded p-2 me-3">
+                                    <i class="bi bi-check-circle text-warning"></i>
+                                </div>
+                                <div>
+                                    <div class="small text-muted">Maior Taxa Concluídos</div>
+                                    <div class="fw-bold">
+                                        <?php 
+                                        $maior_concluidos = 0;
+                                        $vendedor_maior_concluidos = '';
+                                        foreach ($vendedores as $v) {
+                                            $taxa = $v['total_clientes'] > 0 ? ($v['clientes_concluidos'] / $v['total_clientes']) * 100 : 0;
+                                            if ($taxa > $maior_concluidos) {
+                                                $maior_concluidos = $taxa;
+                                                $vendedor_maior_concluidos = $v['vendedor'];
+                                            }
+                                        }
+                                        echo htmlspecialchars($vendedor_maior_concluidos ?: 'N/A');
+                                        ?>
+                                        <span class="text-muted small">(<?= round($maior_concluidos) ?>%)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="modal-footer border-0 p-4">
-                <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-success px-4 fw-bold shadow-sm">Encerrar e Salvar</button>
-            </div>
-        </form>
+        </div>
     </div>
 </div>
 
 <script>
-    document.querySelectorAll('.open-finish-modal').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const id = this.dataset.id;
-            const cliente = this.dataset.cliente;
-            const tema = this.dataset.tema;
-            
-            document.getElementById('modal_id_treinamento').value = id;
-            document.getElementById('modal_cliente_info').innerText = cliente + " | " + tema;
-            
-            const myModal = new bootstrap.Modal(document.getElementById('modalEncerrar'));
-            myModal.show();
+    // Função para exportar para Excel (simplificada)
+    function exportToExcel() {
+        // Cria uma tabela temporária com os dados
+        let html = '<table border="1">';
+        
+        // Adiciona dados dos vendedores
+        html += '<tr><th colspan="5">RELATÓRIO POR VENDEDOR</th></tr>';
+        html += '<tr><th>Vendedor</th><th>Total Clientes</th><th>Ativos</th><th>Concluídos</th><th>%</th></tr>';
+        
+        <?php foreach ($vendedores as $v): ?>
+            html += '<tr>';
+            html += '<td><?= addslashes($v['vendedor']) ?></td>';
+            html += '<td><?= $v['total_clientes'] ?></td>';
+            html += '<td><?= $v['clientes_ativos'] ?></td>';
+            html += '<td><?= $v['clientes_concluidos'] ?></td>';
+            html += '<td><?= $total_clientes > 0 ? round(($v['total_clientes'] / $total_clientes) * 100) : 0 ?>%</td>';
+            html += '</tr>';
+        <?php endforeach; ?>
+        
+        // Adiciona dados dos servidores
+        html += '<tr><th colspan="5"><br>RELATÓRIO POR SERVIDOR</th></tr>';
+        html += '<tr><th>Servidor</th><th>Total Clientes</th><th>Ativos</th><th>Concluídos</th><th>Vendedores</th></tr>';
+        
+        <?php foreach ($servidores as $s): ?>
+            html += '<tr>';
+            html += '<td><?= addslashes($s['servidor']) ?></td>';
+            html += '<td><?= $s['total_clientes'] ?></td>';
+            html += '<td><?= $s['clientes_ativos'] ?></td>';
+            html += '<td><?= $s['clientes_concluidos'] ?></td>';
+            html += '<td><?= $s['vendedores'] ?></td>';
+            html += '</tr>';
+        <?php endforeach; ?>
+        
+        html += '</table>';
+        
+        // Cria um blob e faz download
+        const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'relatorio_clientes_<?= date('Y-m-d') ?>.xls';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+    
+    // Tooltips
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
         });
     });
 </script>

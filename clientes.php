@@ -36,12 +36,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 // 3. Consulta de Dados e Filtros
 $filtro = isset($_GET['filtro']) ? trim($_GET['filtro']) : '';
 $estagio = isset($_GET['estagio']) ? $_GET['estagio'] : '';
+$busca = isset($_GET['busca']) ? trim($_GET['busca']) : '';
 
 $sql = "SELECT * FROM clientes WHERE 1=1";
 $params = [];
+
+// Filtro por estágio (mantido)
 if (!empty($filtro)) {
     $sql .= " AND (fantasia LIKE ? OR vendedor LIKE ? OR servidor LIKE ?)";
-    $params = ["%$filtro%", "%$filtro%", "%$filtro%"];
+    $params = array_merge($params, ["%$filtro%", "%$filtro%", "%$filtro%"]);
+}
+
+// Busca por nome do cliente (novo campo)
+if (!empty($busca)) {
+    $sql .= " AND fantasia LIKE ?";
+    $params[] = "%$busca%";
 }
 
 $stmt = $pdo->prepare($sql . " ORDER BY fantasia ASC");
@@ -53,20 +62,22 @@ $treinamentos_por_cliente = [];
 if ($todos_clientes) {
     // Obter IDs dos clientes
     $ids_clientes = array_column($todos_clientes, 'id_cliente');
-    $placeholders = str_repeat('?,', count($ids_clientes) - 1) . '?';
-    
-    // Consultar quantidade de treinamentos agendados para cada cliente
-    $sql_treinamentos = "SELECT id_cliente, COUNT(*) as total_treinamentos 
-                         FROM treinamentos 
-                         WHERE id_cliente IN ($placeholders) 
-                         GROUP BY id_cliente";
-    $stmt_treinamentos = $pdo->prepare($sql_treinamentos);
-    $stmt_treinamentos->execute($ids_clientes);
-    $resultados_treinamentos = $stmt_treinamentos->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Criar array associativo: id_cliente => quantidade de treinamentos
-    foreach ($resultados_treinamentos as $treinamento) {
-        $treinamentos_por_cliente[$treinamento['id_cliente']] = $treinamento['total_treinamentos'];
+    if (!empty($ids_clientes)) {
+        $placeholders = str_repeat('?,', count($ids_clientes) - 1) . '?';
+        
+        // Consultar quantidade de treinamentos agendados para cada cliente
+        $sql_treinamentos = "SELECT id_cliente, COUNT(*) as total_treinamentos 
+                             FROM treinamentos 
+                             WHERE id_cliente IN ($placeholders) 
+                             GROUP BY id_cliente";
+        $stmt_treinamentos = $pdo->prepare($sql_treinamentos);
+        $stmt_treinamentos->execute($ids_clientes);
+        $resultados_treinamentos = $stmt_treinamentos->fetchAll(PDO::FETCH_ASSOC);
+        
+        // Criar array associativo: id_cliente => quantidade de treinamentos
+        foreach ($resultados_treinamentos as $treinamento) {
+            $treinamentos_por_cliente[$treinamento['id_cliente']] = $treinamento['total_treinamentos'];
+        }
     }
 }
 
@@ -167,14 +178,78 @@ include 'header.php';
     .d-flex.justify-content-between.align-items-center.mb-4 {
         flex-shrink: 0;
     }
+    
+    /* Estilo para o campo de busca */
+    .search-container {
+        position: relative;
+        flex: 1;
+        max-width: 400px;
+    }
+    
+    .search-container .form-control {
+        padding-left: 40px;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
+    
+    .search-container .search-icon {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+        z-index: 10;
+    }
+    
+    /* Botão de limpar busca */
+    .btn-clear-search {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: #6c757d;
+        z-index: 10;
+    }
+    
+    .btn-clear-search:hover {
+        color: #dc3545;
+    }
 </style>
 
 <div class="container-fluid py-4 bg-light">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="fw-bold mb-0">Painel de Implantação</h4>
-        <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCliente">
-            <i class="bi bi-plus-lg me-2"></i>Novo Cliente
-        </button>
+        <div class="d-flex align-items-center gap-3">
+            <!-- Campo de busca por nome do cliente -->
+            <div class="search-container">
+                <i class="bi bi-search search-icon"></i>
+                <form method="GET" action="clientes.php" class="d-inline">
+                    <input type="text" 
+                           name="busca" 
+                           class="form-control" 
+                           placeholder="Buscar cliente pelo nome..." 
+                           value="<?= htmlspecialchars($busca) ?>"
+                           autocomplete="off">
+                    <?php if (!empty($estagio)): ?>
+                        <input type="hidden" name="estagio" value="<?= htmlspecialchars($estagio) ?>">
+                    <?php endif; ?>
+                    <?php if (!empty($filtro)): ?>
+                        <input type="hidden" name="filtro" value="<?= htmlspecialchars($filtro) ?>">
+                    <?php endif; ?>
+                    <?php if (!empty($busca)): ?>
+                        <button type="button" class="btn-clear-search" onclick="clearSearch()" title="Limpar busca">
+                            <i class="bi bi-x-circle"></i>
+                        </button>
+                    <?php endif; ?>
+                </form>
+            </div>
+            
+            <button class="btn btn-primary fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCliente">
+                <i class="bi bi-plus-lg me-2"></i>Novo Cliente
+            </button>
+        </div>
     </div>
 
     <div class="row g-3 mb-4">
@@ -187,7 +262,7 @@ include 'header.php';
         ];
         foreach ($status_data as $s): ?>
             <div class="col-md-3">
-                <a href="?estagio=<?= $s['id'] ?>" class="text-decoration-none">
+                <a href="?estagio=<?= $s['id'] ?>&busca=<?= urlencode($busca) ?>&filtro=<?= urlencode($filtro) ?>" class="text-decoration-none">
                     <div class="card card-stat shadow-sm <?= ($estagio == $s['id']) ? 'active' : '' ?>" style="border-left: 5px solid <?= $s['color'] ?> !important;">
                         <div class="card-body">
                             <span class="text-muted small fw-bold text-uppercase"><?= $s['label'] ?></span>
@@ -215,74 +290,97 @@ include 'header.php';
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($clientes_filtrados as $c): 
-                        // Obter valores do banco
-                        $emitir_nf = isset($c['emitir_nf']) ? $c['emitir_nf'] : 'Não';
-                        $configurado = isset($c['configurado']) ? $c['configurado'] : 'Não';
-                        
-                        // Normalizar para comparação
-                        $emitir_clean = strtolower(trim($emitir_nf));
-                        $config_clean = strtolower(trim($configurado));
-                        
-                        // Converter 'não' com acento para 'nao' sem acento
-                        $config_clean = str_replace('não', 'nao', $config_clean);
-                        
-                        // Determinar classe CSS baseada nas condições
-                        $row_class = '';
-                        
-                        if ($emitir_clean === 'sim') {
-                            if ($config_clean === 'nao') {
-                                $row_class = 'row-orange';
-                            } elseif ($config_clean === 'sim') {
-                                $row_class = 'row-green';
-                            }
-                        }
-                        
-                        // Obter quantidade de treinamentos para este cliente
-                        $id_cliente = $c['id_cliente'];
-                        $quantidade_treinamentos = $treinamentos_por_cliente[$id_cliente] ?? 0;
-                        
-                        $d = (new DateTime($c['data_inicio']))->diff(new DateTime())->days;
-                    ?>
-                        <tr class="<?= $row_class ?>">
-                            <td class="ps-4">
-                                <div class="fw-bold"><?= htmlspecialchars($c['fantasia']) ?></div>
-                                <div class="d-flex align-items-center">
-                                    <small class="text-muted"><?= htmlspecialchars($c['servidor']) ?></small>
-                                    <?php if ($quantidade_treinamentos > 0): ?>
-                                        <span class="badge badge-treinamentos ms-2" title="Treinamentos agendados">
-                                            <i class="bi bi-journal-check me-1"></i><?= $quantidade_treinamentos ?>
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
-                            </td>
-                            <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($c['vendedor']) ?></span></td>
-                            <td><?= date('d/m/Y', strtotime($c['data_inicio'])) ?></td>
-                            <td><span class="fw-bold"><?= $d ?> dias</span></td>
-                            <td class="text-end pe-4">
-                                <button class="btn btn-sm btn-light border edit-btn"
-                                    data-id="<?= $c['id_cliente'] ?>"
-                                    data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
-                                    data-servidor="<?= htmlspecialchars($c['servidor']) ?>"
-                                    data-vendedor="<?= htmlspecialchars($c['vendedor']) ?>"
-                                    data-data_inicio="<?= $c['data_inicio'] ?>"
-                                    data-data_fim="<?= $c['data_fim'] ?>"
-                                    data-emitir_nf="<?= htmlspecialchars($c['emitir_nf']) ?>"
-                                    data-configurado="<?= htmlspecialchars($c['configurado']) ?>"
-                                    data-bs-toggle="modal" data-bs-target="#modalCliente">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                                
-                                <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-light border text-primary" title="Ver Treinamentos">
-                                    <i class="bi bi-journal-check"></i>
-                                </a>
-
-                                <a href="?delete=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-light border text-danger" onclick="return confirm('Excluir este cliente?')">
-                                    <i class="bi bi-trash"></i>
-                                </a>
+                    <?php if (empty($clientes_filtrados)): ?>
+                        <tr>
+                            <td colspan="5" class="text-center py-4">
+                                <?php if (!empty($busca)): ?>
+                                    <div class="text-muted">
+                                        <i class="bi bi-search display-6 mb-3"></i>
+                                        <h5 class="fw-bold mb-2">Nenhum cliente encontrado</h5>
+                                        <p class="mb-0">Não foram encontrados clientes com "<?= htmlspecialchars($busca) ?>"</p>
+                                        <a href="clientes.php" class="btn btn-sm btn-outline-primary mt-3">
+                                            <i class="bi bi-arrow-counterclockwise me-1"></i>Limpar busca
+                                        </a>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="text-muted">
+                                        <i class="bi bi-people display-6 mb-3"></i>
+                                        <h5 class="fw-bold mb-2">Nenhum cliente cadastrado</h5>
+                                        <p class="mb-0">Clique em "Novo Cliente" para começar</p>
+                                    </div>
+                                <?php endif; ?>
                             </td>
                         </tr>
-                    <?php endforeach; ?>
+                    <?php else: ?>
+                        <?php foreach ($clientes_filtrados as $c): 
+                            // Obter valores do banco
+                            $emitir_nf = isset($c['emitir_nf']) ? $c['emitir_nf'] : 'Não';
+                            $configurado = isset($c['configurado']) ? $c['configurado'] : 'Não';
+                            
+                            // Normalizar para comparação
+                            $emitir_clean = strtolower(trim($emitir_nf));
+                            $config_clean = strtolower(trim($configurado));
+                            
+                            // Converter 'não' com acento para 'nao' sem acento
+                            $config_clean = str_replace('não', 'nao', $config_clean);
+                            
+                            // Determinar classe CSS baseada nas condições
+                            $row_class = '';
+                            
+                            if ($emitir_clean === 'sim') {
+                                if ($config_clean === 'nao') {
+                                    $row_class = 'row-orange';
+                                } elseif ($config_clean === 'sim') {
+                                    $row_class = 'row-green';
+                                }
+                            }
+                            
+                            // Obter quantidade de treinamentos para este cliente
+                            $id_cliente = $c['id_cliente'];
+                            $quantidade_treinamentos = $treinamentos_por_cliente[$id_cliente] ?? 0;
+                            
+                            $d = (new DateTime($c['data_inicio']))->diff(new DateTime())->days;
+                        ?>
+                            <tr class="<?= $row_class ?>">
+                                <td class="ps-4">
+                                    <div class="fw-bold"><?= htmlspecialchars($c['fantasia']) ?></div>
+                                    <div class="d-flex align-items-center">
+                                        <small class="text-muted"><?= htmlspecialchars($c['servidor']) ?></small>
+                                        <?php if ($quantidade_treinamentos > 0): ?>
+                                            <span class="badge badge-treinamentos ms-2" title="Treinamentos agendados">
+                                                <i class="bi bi-journal-check me-1"></i><?= $quantidade_treinamentos ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                                <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($c['vendedor']) ?></span></td>
+                                <td><?= date('d/m/Y', strtotime($c['data_inicio'])) ?></td>
+                                <td><span class="fw-bold"><?= $d ?> dias</span></td>
+                                <td class="text-end pe-4">
+                                    <button class="btn btn-sm btn-light border edit-btn"
+                                        data-id="<?= $c['id_cliente'] ?>"
+                                        data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
+                                        data-servidor="<?= htmlspecialchars($c['servidor']) ?>"
+                                        data-vendedor="<?= htmlspecialchars($c['vendedor']) ?>"
+                                        data-data_inicio="<?= $c['data_inicio'] ?>"
+                                        data-data_fim="<?= $c['data_fim'] ?>"
+                                        data-emitir_nf="<?= htmlspecialchars($c['emitir_nf']) ?>"
+                                        data-configurado="<?= htmlspecialchars($c['configurado']) ?>"
+                                        data-bs-toggle="modal" data-bs-target="#modalCliente">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    
+                                    <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-light border text-primary" title="Ver Treinamentos">
+                                        <i class="bi bi-journal-check"></i>
+                                    </a>
+
+                                    <a href="?delete=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-light border text-danger" onclick="return confirm('Excluir este cliente?')">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -434,6 +532,29 @@ include 'header.php';
     
     document.getElementById('modalCliente').addEventListener('show.bs.modal', function() {
         setTimeout(updateModalVisual, 100);
+    });
+    
+    // Função para limpar a busca
+    function clearSearch() {
+        window.location.href = 'clientes.php';
+    }
+    
+    // Submeter o formulário de busca automaticamente ao digitar (com debounce)
+    let searchTimeout;
+    document.querySelector('input[name="busca"]').addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            this.form.submit();
+        }, 500); // Aguarda 500ms após a última tecla
+    });
+    
+    // Focar no campo de busca ao carregar a página se houver busca
+    document.addEventListener('DOMContentLoaded', function() {
+        const buscaInput = document.querySelector('input[name="busca"]');
+        if (buscaInput.value) {
+            buscaInput.focus();
+            buscaInput.select();
+        }
     });
 </script>
 
