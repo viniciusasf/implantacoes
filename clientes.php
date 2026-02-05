@@ -28,6 +28,20 @@ if (isset($_GET['encerrar'])) {
     exit;
 }
 
+// 3. NOVA LÓGICA: Cancelar Implantação
+if (isset($_GET['cancelar'])) {
+    $id = $_GET['cancelar'];
+    $data_cancelamento = date('Y-m-d');
+    $motivo_cancelamento = isset($_GET['motivo']) ? $_GET['motivo'] : 'Cliente desistiu';
+
+    // Atualizar data_fim e adicionar motivo no campo observacao
+    $stmt = $pdo->prepare("UPDATE clientes SET data_fim = ?, observacao = CONCAT(IFNULL(observacao, ''), ' | CANCELADO: ', ?) WHERE id_cliente = ?");
+    $stmt->execute([$data_cancelamento, $motivo_cancelamento, $id]);
+
+    header("Location: clientes.php?msg=Implantacao cancelada com sucesso");
+    exit;
+}
+
 // 2. Lógica para Adicionar/Editar
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $fantasia = $_POST['fantasia'];
@@ -747,6 +761,18 @@ include 'header.php';
                                         </a>
                                     <?php endif; ?>
 
+
+                                    <!-- NOVO BOTÃO: Cancelar Implantação -->
+                                    <button class="btn btn-sm btn-outline-danger btn-action cancel-btn"
+                                        data-bs-toggle="tooltip"
+                                        data-bs-title="Cancelar Implantação"
+                                        data-id="<?= $c['id_cliente'] ?>"
+                                        data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
+                                        onclick="openCancelModal(this)">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>
+
+
                                     <!-- Botão Excluir (existente) -->
                                     <a href="?delete=<?= $c['id_cliente'] ?>"
                                         class="btn btn-sm btn-outline-danger btn-action"
@@ -897,6 +923,17 @@ include 'header.php';
                                             </a>
                                         <?php endif; ?>
 
+                                        <!-- NOVO BOTÃO: Cancelar Implantação -->
+                                        <button class="btn btn-sm btn-outline-danger btn-action cancel-btn"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Cancelar Implantação"
+                                            data-id="<?= $c['id_cliente'] ?>"
+                                            data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
+                                            onclick="openCancelModal(this)">
+                                            <i class="bi bi-x-circle"></i>
+                                        </button>
+
+
                                         <!-- Botão Excluir (existente) -->
                                         <a href="?delete=<?= $c['id_cliente'] ?>"
                                             class="btn btn-sm btn-outline-danger btn-action"
@@ -915,6 +952,88 @@ include 'header.php';
         </div>
     <?php endif; ?>
 </div>
+
+
+<!-- MODAL DE CANCELAMENTO -->
+<div class="modal fade" id="modalCancelar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-header border-0 px-4 pt-4">
+                <h5 class="fw-bold text-danger">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Cancelar Implantação
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4">
+                <div class="alert alert-warning border-warning">
+                    <div class="d-flex">
+                        <i class="bi bi-exclamation-octagon-fill me-3" style="font-size: 1.5rem;"></i>
+                        <div>
+                            <h6 class="alert-heading fw-bold">Atenção!</h6>
+                            Esta ação marcará a implantação como <strong>cancelada</strong>. O cliente permanecerá no sistema mas será movido para a lista de cancelados.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="mb-2">
+                        <span class="text-muted small">Cliente:</span>
+                        <div class="fw-bold" id="cancelClienteNome"></div>
+                    </div>
+                </div>
+
+                <form method="GET" action="clientes.php" id="cancelForm">
+                    <input type="hidden" name="cancelar" id="cancelClienteId">
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">
+                            <i class="bi bi-chat-left-text me-1"></i>Motivo do Cancelamento
+                            <span class="text-danger">*</span>
+                        </label>
+                        <select name="motivo" id="motivoCancelamento" class="form-select" required>
+                            <option value="">Selecione um motivo...</option>
+                            <option value="Desistência do cliente">Desistência do cliente</option>
+                            <option value="Problemas financeiros">Problemas financeiros</option>
+                            <option value="Incompatibilidade técnica">Incompatibilidade técnica</option>
+                            <option value="Mudança de fornecedor">Mudança de fornecedor</option>
+                            <option value="Problemas de comunicação">Problemas de comunicação</option>
+                            <option value="Outros">Outros (especificar abaixo)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3" id="outrosMotivoDiv" style="display: none;">
+                        <label class="form-label small fw-bold text-muted">Especificar motivo:</label>
+                        <input type="text"
+                            name="motivo_outros"
+                            id="motivo_outros"
+                            class="form-control"
+                            placeholder="Descreva o motivo do cancelamento...">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">
+                            <i class="bi bi-calendar me-1"></i>Data do Cancelamento
+                        </label>
+                        <input type="date"
+                            name="data_cancelamento"
+                            class="form-control"
+                            value="<?= date('Y-m-d') ?>"
+                            readonly>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-0 p-4">
+                <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">
+                    <i class="bi bi-arrow-left me-2"></i>Voltar
+                </button>
+                <button type="button" class="btn btn-danger px-4 fw-bold shadow-sm" onclick="confirmarCancelamento()">
+                    <i class="bi bi-x-circle me-2"></i>Confirmar Cancelamento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 
 <!-- MODAL DE CLIENTE -->
 <div class="modal fade" id="modalCliente" tabindex="-1">
@@ -1109,6 +1228,65 @@ include 'header.php';
     });
 
     document.getElementById('configurado').addEventListener('change', updateModalVisual);
+
+    // Função para abrir modal de cancelamento
+    function openCancelModal(button) {
+        document.getElementById('cancelClienteId').value = button.dataset.id;
+        document.getElementById('cancelClienteNome').textContent = button.dataset.fantasia;
+
+        // Resetar formulário
+        document.getElementById('motivoCancelamento').value = '';
+        document.getElementById('outrosMotivoDiv').style.display = 'none';
+        document.getElementById('motivo_outros').value = '';
+
+        // Mostrar modal
+        const modal = new bootstrap.Modal(document.getElementById('modalCancelar'));
+        modal.show();
+    }
+
+    // Mostrar/ocultar campo "outros" conforme seleção
+    document.getElementById('motivoCancelamento').addEventListener('change', function() {
+        const outrosDiv = document.getElementById('outrosMotivoDiv');
+        outrosDiv.style.display = (this.value === 'Outros') ? 'block' : 'none';
+        if (this.value !== 'Outros') {
+            document.getElementById('motivo_outros').value = '';
+        }
+    });
+
+    // Função para confirmar cancelamento
+    function confirmarCancelamento() {
+        const motivoSelect = document.getElementById('motivoCancelamento');
+        const motivoOutros = document.getElementById('motivo_outros');
+
+        if (!motivoSelect.value) {
+            alert('Por favor, selecione um motivo para o cancelamento.');
+            motivoSelect.focus();
+            return;
+        }
+
+        if (motivoSelect.value === 'Outros' && !motivoOutros.value.trim()) {
+            alert('Por favor, especifique o motivo do cancelamento.');
+            motivoOutros.focus();
+            return;
+        }
+
+        // Montar parâmetro do motivo
+        let motivoFinal = motivoSelect.value;
+        if (motivoSelect.value === 'Outros' && motivoOutros.value.trim()) {
+            motivoFinal = motivoOutros.value.trim();
+        }
+
+        // Adicionar motivo à URL
+        const form = document.getElementById('cancelForm');
+        const motivoInput = document.createElement('input');
+        motivoInput.type = 'hidden';
+        motivoInput.name = 'motivo';
+        motivoInput.value = encodeURIComponent(motivoFinal);
+        form.appendChild(motivoInput);
+
+        // Enviar formulário
+        form.submit();
+    }
 </script>
 
 <?php include 'footer.php'; ?>

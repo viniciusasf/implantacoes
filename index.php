@@ -1,12 +1,13 @@
 <?php
 require_once 'config.php';
 
-// 1. Relatório por Vendedor
+// 1. Relatório por Vendedor - MODIFICADO PARA INCLUIR CANCELADOS
 $sql_vendedores = "SELECT 
                     vendedor,
                     COUNT(*) as total_clientes,
                     SUM(CASE WHEN (data_fim IS NULL OR data_fim = '0000-00-00') THEN 1 ELSE 0 END) as clientes_ativos,
-                    SUM(CASE WHEN (data_fim IS NOT NULL AND data_fim != '0000-00-00') THEN 1 ELSE 0 END) as clientes_concluidos
+                    SUM(CASE WHEN (data_fim IS NOT NULL AND data_fim != '0000-00-00' AND observacao NOT LIKE '%CANCELADO%') THEN 1 ELSE 0 END) as clientes_concluidos,
+                    SUM(CASE WHEN (data_fim IS NOT NULL AND data_fim != '0000-00-00' AND observacao LIKE '%CANCELADO%') THEN 1 ELSE 0 END) as clientes_cancelados
                    FROM clientes 
                    WHERE vendedor IS NOT NULL AND vendedor != ''
                    GROUP BY vendedor 
@@ -15,12 +16,13 @@ $sql_vendedores = "SELECT
 $stmt_vendedores = $pdo->query($sql_vendedores);
 $vendedores = $stmt_vendedores->fetchAll(PDO::FETCH_ASSOC);
 
-// 2. Relatório por Servidor
+// 2. Relatório por Servidor - MODIFICADO PARA INCLUIR CANCELADOS
 $sql_servidores = "SELECT 
                     servidor,
                     COUNT(*) as total_clientes,
                     SUM(CASE WHEN (data_fim IS NULL OR data_fim = '0000-00-00') THEN 1 ELSE 0 END) as clientes_ativos,
-                    SUM(CASE WHEN (data_fim IS NOT NULL AND data_fim != '0000-00-00') THEN 1 ELSE 0 END) as clientes_concluidos,
+                    SUM(CASE WHEN (data_fim IS NOT NULL AND data_fim != '0000-00-00' AND observacao NOT LIKE '%CANCELADO%') THEN 1 ELSE 0 END) as clientes_concluidos,
+                    SUM(CASE WHEN (data_fim IS NOT NULL AND data_fim != '0000-00-00' AND observacao LIKE '%CANCELADO%') THEN 1 ELSE 0 END) as clientes_cancelados,
                     GROUP_CONCAT(DISTINCT vendedor SEPARATOR ', ') as vendedores
                    FROM clientes 
                    WHERE servidor IS NOT NULL AND servidor != ''
@@ -30,10 +32,14 @@ $sql_servidores = "SELECT
 $stmt_servidores = $pdo->query($sql_servidores);
 $servidores = $stmt_servidores->fetchAll(PDO::FETCH_ASSOC);
 
-// 3. Totais gerais
+// 3. Totais gerais - MODIFICADO PARA INCLUIR CANCELADOS
 $total_clientes = $pdo->query("SELECT COUNT(*) FROM clientes")->fetchColumn();
 $total_vendedores = $pdo->query("SELECT COUNT(DISTINCT vendedor) FROM clientes WHERE vendedor IS NOT NULL AND vendedor != ''")->fetchColumn();
 $total_servidores = $pdo->query("SELECT COUNT(DISTINCT servidor) FROM clientes WHERE servidor IS NOT NULL AND servidor != ''")->fetchColumn();
+
+// NOVO: Contagem de cancelados geral
+$total_cancelados = $pdo->query("SELECT COUNT(*) FROM clientes WHERE data_fim IS NOT NULL AND data_fim != '0000-00-00' AND observacao LIKE '%CANCELADO%'")->fetchColumn();
+$total_concluidos = $pdo->query("SELECT COUNT(*) FROM clientes WHERE data_fim IS NOT NULL AND data_fim != '0000-00-00' AND observacao NOT LIKE '%CANCELADO%'")->fetchColumn();
 
 include 'header.php';
 ?>
@@ -47,19 +53,19 @@ include 'header.php';
         --danger-color: #ef4444;
         --info-color: #3b82f6;
     }
-    
+
     .stat-card {
         border-radius: 12px;
         border: none;
         transition: transform 0.2s, box-shadow 0.2s;
         height: 100%;
     }
-    
+
     .stat-card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
     }
-    
+
     .stat-icon {
         width: 60px;
         height: 60px;
@@ -69,24 +75,24 @@ include 'header.php';
         justify-content: center;
         font-size: 24px;
     }
-    
+
     .progress-thin {
         height: 6px;
         border-radius: 3px;
     }
-    
+
     .table-card {
         border-radius: 12px;
         border: none;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
     }
-    
+
     .badge-pill {
         border-radius: 10px;
         padding: 4px 10px;
         font-size: 0.75rem;
     }
-    
+
     .avatar-circle {
         width: 40px;
         height: 40px;
@@ -98,39 +104,44 @@ include 'header.php';
         font-size: 16px;
         color: white;
     }
-    
-    .avatar-vendedor { background-color: var(--primary-color); }
-    .avatar-servidor { background-color: var(--secondary-color); }
-    
+
+    .avatar-vendedor {
+        background-color: var(--primary-color);
+    }
+
+    .avatar-servidor {
+        background-color: var(--secondary-color);
+    }
+
     .chart-container {
         height: 300px;
         position: relative;
     }
-    
+
     /* Estilo para tabelas */
     .table-hover tbody tr:hover {
         background-color: rgba(67, 97, 238, 0.05);
     }
-    
-    .table > :not(caption) > * > * {
+
+    .table> :not(caption)>*>* {
         padding: 1rem 1.25rem;
     }
-    
+
     /* Custom scrollbar */
     .table-responsive::-webkit-scrollbar {
         height: 6px;
     }
-    
+
     .table-responsive::-webkit-scrollbar-track {
         background: #f1f1f1;
         border-radius: 10px;
     }
-    
+
     .table-responsive::-webkit-scrollbar-thumb {
         background: #c1c1c1;
         border-radius: 10px;
     }
-    
+
     .table-responsive::-webkit-scrollbar-thumb:hover {
         background: #a8a8a8;
     }
@@ -171,7 +182,7 @@ include 'header.php';
                 </div>
             </div>
         </div>
-        
+
         <div class="col-xl-3 col-md-6">
             <div class="card stat-card border-left-success border-start-4 border-start-success">
                 <div class="card-body">
@@ -188,7 +199,7 @@ include 'header.php';
                 </div>
             </div>
         </div>
-        
+
         <div class="col-xl-3 col-md-6">
             <div class="card stat-card border-left-warning border-start-4 border-start-warning">
                 <div class="card-body">
@@ -205,7 +216,7 @@ include 'header.php';
                 </div>
             </div>
         </div>
-        
+
         <div class="col-xl-3 col-md-6">
             <div class="card stat-card border-left-info border-start-4 border-start-info">
                 <div class="card-body">
@@ -264,7 +275,7 @@ include 'header.php';
                                         </td>
                                     </tr>
                                 <?php else: ?>
-                                    <?php foreach ($vendedores as $v): 
+                                    <?php foreach ($vendedores as $v):
                                         $percentage = $total_clientes > 0 ? ($v['total_clientes'] / $total_clientes) * 100 : 0;
                                     ?>
                                         <tr>
@@ -307,22 +318,22 @@ include 'header.php';
                     </div>
                 </div>
                 <?php if (!empty($vendedores)): ?>
-                <div class="card-footer bg-white border-0 py-3">
-                    <div class="row">
-                        <div class="col-6">
-                            <small class="text-muted">
-                                <i class="bi bi-info-circle me-1"></i>
-                                Total de clientes: <?= array_sum(array_column($vendedores, 'total_clientes')) ?>
-                            </small>
-                        </div>
-                        <div class="col-6 text-end">
-                            <small class="text-muted">
-                                <i class="bi bi-clock me-1"></i>
-                                Atualizado em <?= date('d/m/Y H:i') ?>
-                            </small>
+                    <div class="card-footer bg-white border-0 py-3">
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Total de clientes: <?= array_sum(array_column($vendedores, 'total_clientes')) ?>
+                                </small>
+                            </div>
+                            <div class="col-6 text-end">
+                                <small class="text-muted">
+                                    <i class="bi bi-clock me-1"></i>
+                                    Atualizado em <?= date('d/m/Y H:i') ?>
+                                </small>
+                            </div>
                         </div>
                     </div>
-                </div>
                 <?php endif; ?>
             </div>
         </div>
@@ -399,22 +410,22 @@ include 'header.php';
                     </div>
                 </div>
                 <?php if (!empty($servidores)): ?>
-                <div class="card-footer bg-white border-0 py-3">
-                    <div class="row">
-                        <div class="col-6">
-                            <small class="text-muted">
-                                <i class="bi bi-info-circle me-1"></i>
-                                Média: <?= round(array_sum(array_column($servidores, 'total_clientes')) / count($servidores), 1) ?> clientes/servidor
-                            </small>
-                        </div>
-                        <div class="col-6 text-end">
-                            <small class="text-muted">
-                                <i class="bi bi-clock me-1"></i>
-                                Atualizado em <?= date('d/m/Y H:i') ?>
-                            </small>
+                    <div class="card-footer bg-white border-0 py-3">
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Média: <?= round(array_sum(array_column($servidores, 'total_clientes')) / count($servidores), 1) ?> clientes/servidor
+                                </small>
+                            </div>
+                            <div class="col-6 text-end">
+                                <small class="text-muted">
+                                    <i class="bi bi-clock me-1"></i>
+                                    Atualizado em <?= date('d/m/Y H:i') ?>
+                                </small>
+                            </div>
                         </div>
                     </div>
-                </div>
                 <?php endif; ?>
             </div>
         </div>
@@ -436,9 +447,9 @@ include 'header.php';
                         <!-- Vendedores Top 5 -->
                         <div class="col-md-6">
                             <h6 class="fw-bold mb-3">Top 5 Vendedores</h6>
-                            <?php 
+                            <?php
                             $top_vendedores = array_slice($vendedores, 0, 5);
-                            foreach ($top_vendedores as $index => $v): 
+                            foreach ($top_vendedores as $index => $v):
                                 $percentage = $total_clientes > 0 ? ($v['total_clientes'] / $total_clientes) * 100 : 0;
                             ?>
                                 <div class="mb-3">
@@ -452,13 +463,13 @@ include 'header.php';
                                 </div>
                             <?php endforeach; ?>
                         </div>
-                        
+
                         <!-- Servidores Top 5 -->
                         <div class="col-md-6">
                             <h6 class="fw-bold mb-3">Top 5 Servidores</h6>
-                            <?php 
+                            <?php
                             $top_servidores = array_slice($servidores, 0, 5);
-                            foreach ($top_servidores as $index => $s): 
+                            foreach ($top_servidores as $index => $s):
                                 $percentage = $total_clientes > 0 ? ($s['total_clientes'] / $total_clientes) * 100 : 0;
                             ?>
                                 <div class="mb-3">
@@ -502,7 +513,7 @@ include 'header.php';
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6 mb-3">
                             <div class="d-flex align-items-center">
                                 <div class="bg-success bg-opacity-10 rounded p-2 me-3">
@@ -517,7 +528,7 @@ include 'header.php';
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6 mb-3">
                             <div class="d-flex align-items-center">
                                 <div class="bg-info bg-opacity-10 rounded p-2 me-3">
@@ -526,7 +537,7 @@ include 'header.php';
                                 <div>
                                     <div class="small text-muted">Maior Taxa Ativos</div>
                                     <div class="fw-bold">
-                                        <?php 
+                                        <?php
                                         $maior_taxa = 0;
                                         $vendedor_maior_taxa = '';
                                         foreach ($vendedores as $v) {
@@ -543,7 +554,7 @@ include 'header.php';
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6 mb-3">
                             <div class="d-flex align-items-center">
                                 <div class="bg-warning bg-opacity-10 rounded p-2 me-3">
@@ -552,7 +563,7 @@ include 'header.php';
                                 <div>
                                     <div class="small text-muted">Maior Taxa Concluídos</div>
                                     <div class="fw-bold">
-                                        <?php 
+                                        <?php
                                         $maior_concluidos = 0;
                                         $vendedor_maior_concluidos = '';
                                         foreach ($vendedores as $v) {
@@ -581,11 +592,11 @@ include 'header.php';
     function exportToExcel() {
         // Cria uma tabela temporária com os dados
         let html = '<table border="1">';
-        
+
         // Adiciona dados dos vendedores
         html += '<tr><th colspan="5">RELATÓRIO POR VENDEDOR</th></tr>';
         html += '<tr><th>Vendedor</th><th>Total Clientes</th><th>Ativos</th><th>Concluídos</th><th>%</th></tr>';
-        
+
         <?php foreach ($vendedores as $v): ?>
             html += '<tr>';
             html += '<td><?= addslashes($v['vendedor']) ?></td>';
@@ -595,11 +606,11 @@ include 'header.php';
             html += '<td><?= $total_clientes > 0 ? round(($v['total_clientes'] / $total_clientes) * 100) : 0 ?>%</td>';
             html += '</tr>';
         <?php endforeach; ?>
-        
+
         // Adiciona dados dos servidores
         html += '<tr><th colspan="5"><br>RELATÓRIO POR SERVIDOR</th></tr>';
         html += '<tr><th>Servidor</th><th>Total Clientes</th><th>Ativos</th><th>Concluídos</th><th>Vendedores</th></tr>';
-        
+
         <?php foreach ($servidores as $s): ?>
             html += '<tr>';
             html += '<td><?= addslashes($s['servidor']) ?></td>';
@@ -609,11 +620,13 @@ include 'header.php';
             html += '<td><?= $s['vendedores'] ?></td>';
             html += '</tr>';
         <?php endforeach; ?>
-        
+
         html += '</table>';
-        
+
         // Cria um blob e faz download
-        const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+        const blob = new Blob([html], {
+            type: 'application/vnd.ms-excel'
+        });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -623,11 +636,11 @@ include 'header.php';
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }
-    
+
     // Tooltips
     document.addEventListener('DOMContentLoaded', function() {
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
     });
