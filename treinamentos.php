@@ -46,19 +46,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $tema = $_POST['tema'];
     $status = $_POST['status'];
     $data_treinamento = !empty($_POST['data_treinamento']) ? $_POST['data_treinamento'] : null;
+    // NOVO: Google Agenda Link
+    $google_event_link = !empty($_POST['google_event_link']) ? $_POST['google_event_link'] : null;
 
     if (isset($_POST['id_treinamento']) && !empty($_POST['id_treinamento'])) {
-        $stmt = $pdo->prepare("UPDATE treinamentos SET id_cliente=?, id_contato=?, tema=?, status=?, data_treinamento=? WHERE id_treinamento=?");
-        $stmt->execute([$id_cliente, $id_contato, $tema, $status, $data_treinamento, $_POST['id_treinamento']]);
+        $stmt = $pdo->prepare("UPDATE treinamentos SET id_cliente=?, id_contato=?, tema=?, status=?, data_treinamento=?, google_event_link=? WHERE id_treinamento=?");
+        $stmt->execute([$id_cliente, $id_contato, $tema, $status, $data_treinamento, $google_event_link, $_POST['id_treinamento']]);
     } else {
-        $stmt = $pdo->prepare("INSERT INTO treinamentos (id_cliente, id_contato, tema, status, data_treinamento) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$id_cliente, $id_contato, $tema, $status, $data_treinamento]);
+        $stmt = $pdo->prepare("INSERT INTO treinamentos (id_cliente, id_contato, tema, status, data_treinamento, google_event_link) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$id_cliente, $id_contato, $tema, $status, $data_treinamento, $google_event_link]);
     }
     header("Location: treinamentos.php?msg=Sucesso");
     exit;
 }
 
-// Consulta principal com filtro
+// Consulta principal com filtro - ADICIONADO google_event_link
 $sql_treinamentos = "
     SELECT t.*, c.fantasia as cliente_nome, co.nome as contato_nome 
     FROM treinamentos t
@@ -78,6 +80,35 @@ $clientes_list = $pdo->query("SELECT id_cliente, fantasia FROM clientes ORDER BY
 
 include 'header.php';
 ?>
+
+<style>
+    /* Estilos adicionais para os botões do Google Agenda */
+    .btn-google-link {
+        min-width: 40px;
+    }
+    
+    .copy-link-btn:hover {
+        background-color: #198754 !important;
+        color: white !important;
+    }
+    
+    .open-link-btn:hover {
+        background-color: #0d6efd !important;
+        color: white !important;
+    }
+    
+    /* Toast de confirmação */
+    .toast-success {
+        background-color: #198754 !important;
+        color: white !important;
+    }
+    
+    /* Campo de link no modal */
+    .link-input-group .form-control:read-only {
+        background-color: #f8f9fa;
+        cursor: default;
+    }
+</style>
 
 <div class="container-fluid py-4 bg-light min-vh-100">
     <div class="row align-items-center mb-4">
@@ -239,6 +270,7 @@ include 'header.php';
                         <th class="ps-4 border-0 text-muted small fw-bold text-uppercase">Cliente / Tema</th>
                         <th class="border-0 text-muted small fw-bold text-uppercase">Data Agendada</th>
                         <th class="border-0 text-muted small fw-bold text-uppercase">Contato</th>
+                        <th class="border-0 text-muted small fw-bold text-uppercase">Link Google Agenda</th>
                         <th class="border-0 text-muted small fw-bold text-uppercase text-center">Status</th>
                         <th class="border-0 text-muted small fw-bold text-uppercase text-end pe-4">Ações</th>
                     </tr>
@@ -285,6 +317,33 @@ include 'header.php';
                                         <i class="bi bi-person me-1"></i>
                                         <?= htmlspecialchars($t['contato_nome'] ?? '---') ?>
                                     </span>
+                                </td>
+                                <td>
+                                    <?php if(!empty($t['google_event_link'])): ?>
+                                        <div class="d-flex gap-1">
+                                            <!-- Botão para abrir link -->
+                                            <a href="<?= htmlspecialchars($t['google_event_link']) ?>" 
+                                               target="_blank"
+                                               class="btn btn-sm btn-outline-primary open-link-btn btn-google-link"
+                                               data-bs-toggle="tooltip"
+                                               data-bs-title="Abrir no Google Agenda">
+                                                <i class="bi bi-calendar-check"></i>
+                                            </a>
+                                            
+                                            <!-- Botão para copiar link -->
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-outline-success copy-link-btn btn-google-link"
+                                                    data-bs-toggle="tooltip"
+                                                    data-bs-title="Copiar link do Google Agenda"
+                                                    onclick="copiarLinkAgenda('<?= htmlspecialchars($t['google_event_link']) ?>', '<?= htmlspecialchars($t['cliente_nome']) ?>')">
+                                                <i class="bi bi-clipboard"></i>
+                                            </button>
+                                        </div>
+                                    <?php else: ?>
+                                        <span class="badge bg-light text-muted border">
+                                            <i class="bi bi-calendar-x me-1"></i>Sem link
+                                        </span>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="text-center">
                                     <span class="badge <?= $t['status'] == 'Resolvido' ? 'bg-success-subtle text-success border border-success' : 'bg-warning-subtle text-warning border border-warning' ?> px-3 py-2">
@@ -338,7 +397,8 @@ include 'header.php';
                                                 data-contato="<?= $t['id_contato'] ?>"
                                                 data-tema="<?= htmlspecialchars($t['tema']) ?>"
                                                 data-status="<?= $t['status'] ?>"
-                                                data-data="<?= $t['data_treinamento'] ? date('Y-m-d\TH:i', strtotime($t['data_treinamento'])) : '' ?>">
+                                                data-data="<?= $t['data_treinamento'] ? date('Y-m-d\TH:i', strtotime($t['data_treinamento'])) : '' ?>"
+                                                data-google-link="<?= !empty($t['google_event_link']) ? htmlspecialchars($t['google_event_link']) : '' ?>">
                                             <i class="bi bi-pencil"></i>
                                         </button>
 
@@ -356,7 +416,7 @@ include 'header.php';
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="5" class="text-center py-5">
+                            <td colspan="6" class="text-center py-5">
                                 <div class="mb-3">
                                     <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
                                 </div>
@@ -381,6 +441,20 @@ include 'header.php';
                     <?php endif; ?>
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<!-- TOAST PARA CONFIRMAÇÃO DE CÓPIA -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="copyToast" class="toast toast-success border-0" role="alert">
+        <div class="toast-header bg-success text-white border-0">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            <strong class="me-auto">Sucesso!</strong>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body bg-white text-dark">
+            <span id="toastMessage">Link copiado para a área de transferência!</span>
         </div>
     </div>
 </div>
@@ -466,6 +540,34 @@ include 'header.php';
                         </select>
                     </div>
                 </div>
+
+                <!-- NOVO CAMPO: LINK DO GOOGLE AGENDA -->
+                <div class="mb-3 mt-3">
+                    <label class="form-label small fw-bold text-muted">
+                        <i class="bi bi-google me-1"></i>Link do Google Agenda
+                    </label>
+                    <div class="input-group link-input-group">
+                        <input type="url" 
+                               name="google_event_link" 
+                               id="google_event_link" 
+                               class="form-control" 
+                               placeholder="https://calendar.google.com/calendar/u/0/r/event/..."
+                               pattern="https?://.*">
+                        <button type="button" 
+                                class="btn btn-outline-secondary" 
+                                onclick="copiarLinkModal()"
+                                data-bs-toggle="tooltip"
+                                data-bs-title="Copiar link">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                    <div class="form-text">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i> 
+                            Cole o link do evento criado no Google Agenda para compartilhar com o cliente
+                        </small>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer border-0 p-4">
                 <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Fechar</button>
@@ -487,6 +589,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchField = document.querySelector('input[name="filtro_cliente"]');
     if (searchField && !searchField.value) {
         searchField.focus();
+    }
+    
+    // Configurar data/hora atual no modal para novo agendamento
+    const dataTreinamentoInput = document.getElementById('data_treinamento');
+    if (dataTreinamentoInput && !dataTreinamentoInput.value) {
+        const now = new Date();
+        // Ajustar para o timezone do Brasil
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        dataTreinamentoInput.value = now.toISOString().slice(0, 16);
     }
 });
 
@@ -511,6 +622,48 @@ function filterContatos(id_cliente, selected_contato = null) {
             });
             contatoSelect.disabled = false;
         });
+}
+
+// Função para copiar link do Google Agenda (na tabela)
+function copiarLinkAgenda(link, clienteNome = '') {
+    navigator.clipboard.writeText(link).then(() => {
+        // Atualizar mensagem do toast
+        let message = 'Link copiado para a área de transferência!';
+        if (clienteNome) {
+            message = `Link do treinamento (${clienteNome}) copiado!`;
+        }
+        document.getElementById('toastMessage').textContent = message;
+        
+        // Mostrar toast
+        const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+        toast.show();
+    }).catch(err => {
+        console.error('Erro ao copiar: ', err);
+        // Fallback para navegadores mais antigos
+        const textArea = document.createElement('textarea');
+        textArea.value = link;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            document.getElementById('toastMessage').textContent = 'Link copiado!';
+            const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+            toast.show();
+        } catch (err) {
+            alert('Não foi possível copiar o link. Por favor, copie manualmente.');
+        }
+        document.body.removeChild(textArea);
+    });
+}
+
+// Função para copiar link do modal
+function copiarLinkModal() {
+    const linkInput = document.getElementById('google_event_link');
+    if (linkInput && linkInput.value) {
+        copiarLinkAgenda(linkInput.value);
+    } else {
+        alert('Não há link para copiar. Cole primeiro o link do Google Agenda.');
+    }
 }
 
 // 1. Modal Observação
@@ -584,18 +737,37 @@ document.querySelectorAll('.delete-google-btn').forEach(btn => {
     });
 });
 
-// 4. Editar Agendamento
+// 4. Editar Agendamento - ATUALIZADO COM GOOGLE LINK
 document.querySelectorAll('.edit-btn').forEach(btn => {
     btn.addEventListener('click', function() {
-        document.getElementById('modalTitle').innerText = 'Editar Registro';
+        document.getElementById('modalTitle').innerText = 'Editar Treinamento';
         document.getElementById('id_treinamento').value = this.dataset.id;
         document.getElementById('id_cliente').value = this.dataset.cliente;
         document.getElementById('tema').value = this.dataset.tema;
         document.getElementById('status').value = this.dataset.status;
         document.getElementById('data_treinamento').value = this.dataset.data;
+        document.getElementById('google_event_link').value = this.dataset.googleLink || '';
+        
         filterContatos(this.dataset.cliente, this.dataset.contato);
         new bootstrap.Modal(document.getElementById('modalTreinamento')).show();
     });
+});
+
+// Reset modal quando fechado
+document.getElementById('modalTreinamento').addEventListener('hidden.bs.modal', function() {
+    document.getElementById('modalTitle').innerText = 'Agendar Treinamento';
+    document.getElementById('id_treinamento').value = '';
+    this.querySelector('form').reset();
+    
+    // Resetar contatos
+    const contatoSelect = document.getElementById('id_contato');
+    contatoSelect.innerHTML = '<option value="">Aguardando cliente...</option>';
+    contatoSelect.disabled = true;
+    
+    // Resetar data/hora para agora
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('data_treinamento').value = now.toISOString().slice(0, 16);
 });
 </script>
 
