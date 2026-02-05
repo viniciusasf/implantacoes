@@ -41,6 +41,9 @@ $total_servidores = $pdo->query("SELECT COUNT(DISTINCT servidor) FROM clientes W
 $total_cancelados = $pdo->query("SELECT COUNT(*) FROM clientes WHERE data_fim IS NOT NULL AND data_fim != '0000-00-00' AND observacao LIKE '%CANCELADO%'")->fetchColumn();
 $total_concluidos = $pdo->query("SELECT COUNT(*) FROM clientes WHERE data_fim IS NOT NULL AND data_fim != '0000-00-00' AND observacao NOT LIKE '%CANCELADO%'")->fetchColumn();
 
+// Calcular total ativos
+$total_ativos = $total_clientes - $total_concluidos - $total_cancelados;
+
 include 'header.php';
 ?>
 
@@ -52,6 +55,7 @@ include 'header.php';
         --warning-color: #f59e0b;
         --danger-color: #ef4444;
         --info-color: #3b82f6;
+        --dark-color: #495057;
     }
 
     .stat-card {
@@ -145,6 +149,25 @@ include 'header.php';
     .table-responsive::-webkit-scrollbar-thumb:hover {
         background: #a8a8a8;
     }
+    
+    /* Estilos para badges de status */
+    .badge-ativos {
+        background-color: rgba(25, 135, 84, 0.1) !important;
+        color: #198754 !important;
+        border: 1px solid rgba(25, 135, 84, 0.2) !important;
+    }
+    
+    .badge-concluidos {
+        background-color: rgba(13, 110, 253, 0.1) !important;
+        color: #0d6efd !important;
+        border: 1px solid rgba(13, 110, 253, 0.2) !important;
+    }
+    
+    .badge-cancelados {
+        background-color: rgba(220, 53, 69, 0.1) !important;
+        color: #dc3545 !important;
+        border: 1px solid rgba(220, 53, 69, 0.2) !important;
+    }
 </style>
 
 <div class="container-fluid py-4">
@@ -164,16 +187,17 @@ include 'header.php';
         </div>
     </div>
 
-    <!-- Cards de Estatísticas -->
+    <!-- Cards de Estatísticas - ATUALIZADO COM 6 CARDS -->
     <div class="row g-4 mb-4">
-        <div class="col-xl-3 col-md-6">
+        <!-- Card Total Clientes -->
+        <div class="col-xl-2 col-md-4">
             <div class="card stat-card border-left-primary border-start-4 border-start-primary">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="text-muted text-uppercase small fw-bold">Total Clientes</h6>
                             <h2 class="fw-bold mb-0"><?= $total_clientes ?></h2>
-                            <span class="text-muted small">Cadastrados no sistema</span>
+                            <span class="text-muted small">Cadastrados</span>
                         </div>
                         <div class="stat-icon bg-primary bg-opacity-10 text-primary">
                             <i class="bi bi-people"></i>
@@ -182,15 +206,16 @@ include 'header.php';
                 </div>
             </div>
         </div>
-
-        <div class="col-xl-3 col-md-6">
+        
+        <!-- Card Vendedores -->
+        <div class="col-xl-2 col-md-4">
             <div class="card stat-card border-left-success border-start-4 border-start-success">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="text-muted text-uppercase small fw-bold">Vendedores</h6>
                             <h2 class="fw-bold mb-0"><?= $total_vendedores ?></h2>
-                            <span class="text-muted small">Com clientes ativos</span>
+                            <span class="text-muted small">Ativos</span>
                         </div>
                         <div class="stat-icon bg-success bg-opacity-10 text-success">
                             <i class="bi bi-person-badge"></i>
@@ -199,15 +224,16 @@ include 'header.php';
                 </div>
             </div>
         </div>
-
-        <div class="col-xl-3 col-md-6">
+        
+        <!-- Card Servidores -->
+        <div class="col-xl-2 col-md-4">
             <div class="card stat-card border-left-warning border-start-4 border-start-warning">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="text-muted text-uppercase small fw-bold">Servidores</h6>
                             <h2 class="fw-bold mb-0"><?= $total_servidores ?></h2>
-                            <span class="text-muted small">Distribuição de carga</span>
+                            <span class="text-muted small">Ativos</span>
                         </div>
                         <div class="stat-icon bg-warning bg-opacity-10 text-warning">
                             <i class="bi bi-server"></i>
@@ -216,24 +242,61 @@ include 'header.php';
                 </div>
             </div>
         </div>
-
-        <div class="col-xl-3 col-md-6">
+        
+        <!-- NOVO CARD: Clientes Concluídos -->
+        <div class="col-xl-2 col-md-4">
             <div class="card stat-card border-left-info border-start-4 border-start-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase small fw-bold">Concluídos</h6>
+                            <h2 class="fw-bold mb-0"><?= $total_concluidos ?></h2>
+                            <span class="text-muted small">Implantação finalizada</span>
+                        </div>
+                        <div class="stat-icon bg-info bg-opacity-10 text-info">
+                            <i class="bi bi-check-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- NOVO CARD: Clientes Cancelados -->
+        <div class="col-xl-2 col-md-4">
+            <div class="card stat-card border-left-danger border-start-4 border-start-danger">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase small fw-bold">Cancelados</h6>
+                            <h2 class="fw-bold mb-0"><?= $total_cancelados ?></h2>
+                            <span class="text-muted small">Implantação cancelada</span>
+                        </div>
+                        <div class="stat-icon bg-danger bg-opacity-10 text-danger">
+                            <i class="bi bi-x-circle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Card Taxa Ativos -->
+        <div class="col-xl-2 col-md-4">
+            <div class="card stat-card border-left-secondary border-start-4 border-start-secondary">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="text-muted text-uppercase small fw-bold">Taxa Ativos</h6>
                             <h2 class="fw-bold mb-0">
-                                <?= $total_clientes > 0 ? round((array_sum(array_column($vendedores, 'clientes_ativos')) / $total_clientes) * 100) : 0 ?>%
+                                <?= $total_clientes > 0 ? round(($total_ativos / $total_clientes) * 100) : 0 ?>%
                             </h2>
-                            <span class="text-muted small">Clientes em implantação</span>
+                            <span class="text-muted small">Em implantação</span>
                         </div>
-                        <div class="stat-icon bg-info bg-opacity-10 text-info">
+                        <div class="stat-icon bg-secondary bg-opacity-10 text-secondary">
                             <i class="bi bi-graph-up"></i>
                         </div>
                     </div>
                     <div class="progress progress-thin mt-3">
-                        <div class="progress-bar bg-info" style="width: <?= $total_clientes > 0 ? (array_sum(array_column($vendedores, 'clientes_ativos')) / $total_clientes) * 100 : 0 ?>%"></div>
+                        <div class="progress-bar bg-secondary" style="width: <?= $total_clientes > 0 ? ($total_ativos / $total_clientes) * 100 : 0 ?>%"></div>
                     </div>
                 </div>
             </div>
@@ -263,13 +326,14 @@ include 'header.php';
                                     <th class="text-center">Total</th>
                                     <th class="text-center">Ativos</th>
                                     <th class="text-center">Concluídos</th>
+                                    <th class="text-center">Cancelados</th>
                                     <th class="text-end pe-4">Distribuição</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($vendedores)): ?>
                                     <tr>
-                                        <td colspan="5" class="text-center py-4 text-muted">
+                                        <td colspan="6" class="text-center py-4 text-muted">
                                             <i class="bi bi-emoji-frown display-6 d-block mb-2"></i>
                                             Nenhum vendedor com clientes cadastrados
                                         </td>
@@ -293,13 +357,18 @@ include 'header.php';
                                                 <span class="fw-bold"><?= $v['total_clientes'] ?></span>
                                             </td>
                                             <td class="text-center">
-                                                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 badge-pill">
+                                                <span class="badge badge-ativos badge-pill">
                                                     <?= $v['clientes_ativos'] ?>
                                                 </span>
                                             </td>
                                             <td class="text-center">
-                                                <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 badge-pill">
+                                                <span class="badge badge-concluidos badge-pill">
                                                     <?= $v['clientes_concluidos'] ?>
+                                                </span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-cancelados badge-pill">
+                                                    <?= $v['clientes_cancelados'] ?>
                                                 </span>
                                             </td>
                                             <td class="pe-4">
@@ -359,13 +428,14 @@ include 'header.php';
                                     <th class="text-center">Total</th>
                                     <th class="text-center">Ativos</th>
                                     <th class="text-center">Concluídos</th>
+                                    <th class="text-center">Cancelados</th>
                                     <th class="text-end pe-4">Vendedores</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($servidores)): ?>
                                     <tr>
-                                        <td colspan="5" class="text-center py-4 text-muted">
+                                        <td colspan="6" class="text-center py-4 text-muted">
                                             <i class="bi bi-hdd-stack display-6 d-block mb-2"></i>
                                             Nenhum servidor com clientes cadastrados
                                         </td>
@@ -388,13 +458,18 @@ include 'header.php';
                                                 <span class="fw-bold"><?= $s['total_clientes'] ?></span>
                                             </td>
                                             <td class="text-center">
-                                                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 badge-pill">
+                                                <span class="badge badge-ativos badge-pill">
                                                     <?= $s['clientes_ativos'] ?>
                                                 </span>
                                             </td>
                                             <td class="text-center">
-                                                <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 badge-pill">
+                                                <span class="badge badge-concluidos badge-pill">
                                                     <?= $s['clientes_concluidos'] ?>
+                                                </span>
+                                            </td>
+                                            <td class="text-center">
+                                                <span class="badge badge-cancelados badge-pill">
+                                                    <?= $s['clientes_cancelados'] ?>
                                                 </span>
                                             </td>
                                             <td class="pe-4">
@@ -482,6 +557,30 @@ include 'header.php';
                                     </div>
                                 </div>
                             <?php endforeach; ?>
+                        </div>
+                    </div>
+                    
+                    <!-- NOVO: Gráfico de distribuição por status -->
+                    <div class="mt-4">
+                        <h6 class="fw-bold mb-3">Distribuição por Status</h6>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="d-flex align-items-center">
+                                <div class="bg-success me-2" style="width: 12px; height: 12px; border-radius: 2px;"></div>
+                                <span class="small">Ativos: <?= $total_ativos ?> (<?= $total_clientes > 0 ? round(($total_ativos / $total_clientes) * 100) : 0 ?>%)</span>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <div class="bg-info me-2" style="width: 12px; height: 12px; border-radius: 2px;"></div>
+                                <span class="small">Concluídos: <?= $total_concluidos ?> (<?= $total_clientes > 0 ? round(($total_concluidos / $total_clientes) * 100) : 0 ?>%)</span>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <div class="bg-danger me-2" style="width: 12px; height: 12px; border-radius: 2px;"></div>
+                                <span class="small">Cancelados: <?= $total_cancelados ?> (<?= $total_clientes > 0 ? round(($total_cancelados / $total_clientes) * 100) : 0 ?>%)</span>
+                            </div>
+                        </div>
+                        <div class="progress" style="height: 20px; border-radius: 10px;">
+                            <div class="progress-bar bg-success" style="width: <?= $total_clientes > 0 ? ($total_ativos / $total_clientes) * 100 : 0 ?>%"></div>
+                            <div class="progress-bar bg-info" style="width: <?= $total_clientes > 0 ? ($total_concluidos / $total_clientes) * 100 : 0 ?>%"></div>
+                            <div class="progress-bar bg-danger" style="width: <?= $total_clientes > 0 ? ($total_cancelados / $total_clientes) * 100 : 0 ?>%"></div>
                         </div>
                     </div>
                 </div>
@@ -580,6 +679,55 @@ include 'header.php';
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- NOVO: Estatística para maior taxa de cancelados -->
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex align-items-center">
+                                <div class="bg-danger bg-opacity-10 rounded p-2 me-3">
+                                    <i class="bi bi-exclamation-octagon text-danger"></i>
+                                </div>
+                                <div>
+                                    <div class="small text-muted">Maior Taxa Cancelados</div>
+                                    <div class="fw-bold">
+                                        <?php
+                                        $maior_cancelados = 0;
+                                        $vendedor_maior_cancelados = '';
+                                        foreach ($vendedores as $v) {
+                                            $taxa = $v['total_clientes'] > 0 ? ($v['clientes_cancelados'] / $v['total_clientes']) * 100 : 0;
+                                            if ($taxa > $maior_cancelados) {
+                                                $maior_cancelados = $taxa;
+                                                $vendedor_maior_cancelados = $v['vendedor'];
+                                            }
+                                        }
+                                        echo htmlspecialchars($vendedor_maior_cancelados ?: 'N/A');
+                                        ?>
+                                        <span class="text-muted small">(<?= round($maior_cancelados) ?>%)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- NOVO: Taxa de sucesso (concluídos vs cancelados) -->
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex align-items-center">
+                                <div class="bg-success bg-opacity-10 rounded p-2 me-3">
+                                    <i class="bi bi-graph-up-arrow text-success"></i>
+                                </div>
+                                <div>
+                                    <div class="small text-muted">Taxa de Sucesso</div>
+                                    <div class="fw-bold">
+                                        <?php
+                                        $total_finalizados = $total_concluidos + $total_cancelados;
+                                        $taxa_sucesso = $total_finalizados > 0 ? ($total_concluidos / $total_finalizados) * 100 : 0;
+                                        echo round($taxa_sucesso) . '%';
+                                        ?>
+                                    </div>
+                                    <span class="text-muted small">
+                                        <?= $total_concluidos ?> de <?= $total_finalizados ?> finalizados
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -588,14 +736,14 @@ include 'header.php';
 </div>
 
 <script>
-    // Função para exportar para Excel (simplificada)
+    // Função para exportar para Excel - ATUALIZADA COM CANCELADOS
     function exportToExcel() {
         // Cria uma tabela temporária com os dados
         let html = '<table border="1">';
 
         // Adiciona dados dos vendedores
-        html += '<tr><th colspan="5">RELATÓRIO POR VENDEDOR</th></tr>';
-        html += '<tr><th>Vendedor</th><th>Total Clientes</th><th>Ativos</th><th>Concluídos</th><th>%</th></tr>';
+        html += '<tr><th colspan="6">RELATÓRIO POR VENDEDOR</th></tr>';
+        html += '<tr><th>Vendedor</th><th>Total Clientes</th><th>Ativos</th><th>Concluídos</th><th>Cancelados</th><th>%</th></tr>';
 
         <?php foreach ($vendedores as $v): ?>
             html += '<tr>';
@@ -603,13 +751,14 @@ include 'header.php';
             html += '<td><?= $v['total_clientes'] ?></td>';
             html += '<td><?= $v['clientes_ativos'] ?></td>';
             html += '<td><?= $v['clientes_concluidos'] ?></td>';
+            html += '<td><?= $v['clientes_cancelados'] ?></td>';
             html += '<td><?= $total_clientes > 0 ? round(($v['total_clientes'] / $total_clientes) * 100) : 0 ?>%</td>';
             html += '</tr>';
         <?php endforeach; ?>
 
         // Adiciona dados dos servidores
-        html += '<tr><th colspan="5"><br>RELATÓRIO POR SERVIDOR</th></tr>';
-        html += '<tr><th>Servidor</th><th>Total Clientes</th><th>Ativos</th><th>Concluídos</th><th>Vendedores</th></tr>';
+        html += '<tr><th colspan="6"><br>RELATÓRIO POR SERVIDOR</th></tr>';
+        html += '<tr><th>Servidor</th><th>Total Clientes</th><th>Ativos</th><th>Concluídos</th><th>Cancelados</th><th>Vendedores</th></tr>';
 
         <?php foreach ($servidores as $s): ?>
             html += '<tr>';
@@ -617,9 +766,22 @@ include 'header.php';
             html += '<td><?= $s['total_clientes'] ?></td>';
             html += '<td><?= $s['clientes_ativos'] ?></td>';
             html += '<td><?= $s['clientes_concluidos'] ?></td>';
+            html += '<td><?= $s['clientes_cancelados'] ?></td>';
             html += '<td><?= $s['vendedores'] ?></td>';
             html += '</tr>';
         <?php endforeach; ?>
+
+        // Adiciona resumo geral
+        html += '<tr><th colspan="6"><br>RESUMO GERAL</th></tr>';
+        html += '<tr><th>Total Clientes</th><th>Ativos</th><th>Concluídos</th><th>Cancelados</th><th>Taxa Ativos</th><th>Taxa Sucesso</th></tr>';
+        html += '<tr>';
+        html += '<td><?= $total_clientes ?></td>';
+        html += '<td><?= $total_ativos ?></td>';
+        html += '<td><?= $total_concluidos ?></td>';
+        html += '<td><?= $total_cancelados ?></td>';
+        html += '<td><?= $total_clientes > 0 ? round(($total_ativos / $total_clientes) * 100) : 0 ?>%</td>';
+        html += '<td><?= ($total_concluidos + $total_cancelados) > 0 ? round(($total_concluidos / ($total_concluidos + $total_cancelados)) * 100) : 0 ?>%</td>';
+        html += '</tr>';
 
         html += '</table>';
 
