@@ -289,14 +289,82 @@ include 'header.php';
     }
 
     /* CLIENT CARDS VIEW - CORREÇÕES ESPECÍFICAS */
-    .client-cards-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 1rem;
-        padding: 1rem 0;
-        overflow-y: auto;
-        flex: 1;
+.client-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    padding: 1rem;
+    overflow-y: auto;
+    flex: 1;
+    max-height: calc(100vh - 350px);
+    
+    /* Responsividade */
+    @media (max-width: 1200px) {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     }
+    
+    @media (max-width: 992px) {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    }
+    
+    @media (max-width: 768px) {
+        grid-template-columns: 1fr; /* Uma coluna em mobile */
+    }
+}
+
+/* Estilizar a barra de scroll */
+.client-cards-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.client-cards-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+.client-cards-container::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 10px;
+}
+
+.client-cards-container::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Para Firefox */
+.client-cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    padding: 1rem;
+    overflow-y: auto;
+    flex: 1;
+    
+    /* Calcula altura automaticamente baseada no espaço disponível */
+    height: calc(100vh - var(--header-height) - var(--controls-height) - var(--status-cards-height));
+    min-height: 300px;
+}
+
+/* Defina essas variáveis no início do CSS */
+:root {
+    --header-height: 140px;
+    --controls-height: 100px;
+    --status-cards-height: 150px;
+}
+
+.client-card {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 280px; /* Altura mínima do card */
+}
+
+/* ... resto do CSS permanece igual ... */
 
     .client-card {
         background: white;
