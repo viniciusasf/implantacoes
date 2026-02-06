@@ -54,8 +54,8 @@ $hoje_data = date('Y-m-d');
 ?>
 
 <div class="mb-4">
-    <h2 class="fw-bold">Dashboard</h2>
-    <p class="text-muted">Bem-vindo ao sistema de gestão de implantações.</p>
+    <h2 class="fw-bold">Agendamentos</h2>
+    <p class="text-muted">Gestão de Agendamentos.</p>
 </div>
 
 <?php if (isset($_GET['msg'])): ?>

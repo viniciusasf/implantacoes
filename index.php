@@ -149,20 +149,20 @@ include 'header.php';
     .table-responsive::-webkit-scrollbar-thumb:hover {
         background: #a8a8a8;
     }
-    
+
     /* Estilos para badges de status */
     .badge-ativos {
         background-color: rgba(25, 135, 84, 0.1) !important;
         color: #198754 !important;
         border: 1px solid rgba(25, 135, 84, 0.2) !important;
     }
-    
+
     .badge-concluidos {
         background-color: rgba(13, 110, 253, 0.1) !important;
         color: #0d6efd !important;
         border: 1px solid rgba(13, 110, 253, 0.2) !important;
     }
-    
+
     .badge-cancelados {
         background-color: rgba(220, 53, 69, 0.1) !important;
         color: #dc3545 !important;
@@ -173,9 +173,9 @@ include 'header.php';
 <div class="container-fluid py-4">
     <!-- Cabeçalho -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h4 class="fw-bold mb-0">Relatórios Analíticos</h4>
-            <p class="text-muted mb-0">Análise detalhada por vendedor e servidor</p>
+        <div class="mb-4">
+            <h2 class="fw-bold">Dashboard</h2>
+            <p class="text-muted">Análise detalhada por vendedor e servidor.</p>
         </div>
         <div class="d-flex gap-2">
             <button class="btn btn-outline-primary" onclick="window.print()">
@@ -206,7 +206,7 @@ include 'header.php';
                 </div>
             </div>
         </div>
-        
+
         <!-- Card Vendedores -->
         <div class="col-xl-2 col-md-4">
             <div class="card stat-card border-left-success border-start-4 border-start-success">
@@ -224,7 +224,7 @@ include 'header.php';
                 </div>
             </div>
         </div>
-        
+
         <!-- Card Servidores -->
         <div class="col-xl-2 col-md-4">
             <div class="card stat-card border-left-warning border-start-4 border-start-warning">
@@ -242,7 +242,7 @@ include 'header.php';
                 </div>
             </div>
         </div>
-        
+
         <!-- NOVO CARD: Clientes Concluídos -->
         <div class="col-xl-2 col-md-4">
             <div class="card stat-card border-left-info border-start-4 border-start-info">
@@ -260,7 +260,7 @@ include 'header.php';
                 </div>
             </div>
         </div>
-        
+
         <!-- NOVO CARD: Clientes Cancelados -->
         <div class="col-xl-2 col-md-4">
             <div class="card stat-card border-left-danger border-start-4 border-start-danger">
@@ -278,7 +278,7 @@ include 'header.php';
                 </div>
             </div>
         </div>
-        
+
         <!-- Card Taxa Ativos -->
         <div class="col-xl-2 col-md-4">
             <div class="card stat-card border-left-secondary border-start-4 border-start-secondary">
@@ -559,7 +559,7 @@ include 'header.php';
                             <?php endforeach; ?>
                         </div>
                     </div>
-                    
+
                     <!-- NOVO: Gráfico de distribuição por status -->
                     <div class="mt-4">
                         <h6 class="fw-bold mb-3">Distribuição por Status</h6>
@@ -679,7 +679,7 @@ include 'header.php';
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- NOVO: Estatística para maior taxa de cancelados -->
                         <div class="col-md-6 mb-3">
                             <div class="d-flex align-items-center">
@@ -706,7 +706,7 @@ include 'header.php';
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- NOVO: Taxa de sucesso (concluídos vs cancelados) -->
                         <div class="col-md-6 mb-3">
                             <div class="d-flex align-items-center">
