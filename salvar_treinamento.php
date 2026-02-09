@@ -4,49 +4,51 @@ require_once 'config.php';
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $id_cliente = $_POST['id_cliente'];
     $id_treinamento = $_POST['id_treinamento'] ?? null;
-    $data_treinamento = $_POST['data_treinamento'];
+    $id_contato = $_POST['id_contato'] ?? null;
     $tema = $_POST['tema'];
+    $data_treinamento = $_POST['data_treinamento'];
+    $status = $_POST['status'] ?? 'PENDENTE';
+    $google_event_link = $_POST['google_event_link'] ?? '';
     $observacoes = $_POST['observacoes'] ?? '';
-    $instrutor = $_POST['instrutor'] ?? '';
-    $duracao = $_POST['duracao'] ?? '';
-    $status = $_POST['status'] ?? 'REALIZADO';
-    $tipo = $_POST['tipo'] ?? 'INICIAL';
-    $participantes = $_POST['participantes'] ?? 0;
-    $satisfacao = $_POST['satisfacao'] ?? null;
-    $material = $_POST['material'] ?? 'NÃO';
+
+    // Validar dados obrigatórios
+    if (empty($id_cliente) || empty($tema) || empty($data_treinamento)) {
+        header("Location: treinamentos_cliente.php?id_cliente=" . $id_cliente . "&error=Dados incompletos");
+        exit;
+    }
 
     if (!empty($id_treinamento)) {
         // Atualizar treinamento existente
         $stmt = $pdo->prepare("UPDATE treinamentos SET 
-            data_treinamento = ?, 
+            id_contato = ?, 
             tema = ?, 
-            observacoes = ?, 
-            instrutor = ?, 
-            duracao = ?, 
-            status = ?,
-            tipo = ?,
-            participantes = ?,
-            satisfacao = ?,
-            material = ?
+            data_treinamento = ?, 
+            status = ?, 
+            google_event_link = ?,
+            observacoes = ?
             WHERE id_treinamento = ?");
         $stmt->execute([
-            $data_treinamento, $tema, $observacoes, $instrutor, $duracao, $status,
-            $tipo, $participantes, $satisfacao, $material, $id_treinamento
+            $id_contato, $tema, $data_treinamento, $status, 
+            $google_event_link, $observacoes, $id_treinamento
         ]);
+        $msg = "Treinamento atualizado com sucesso";
     } else {
         // Inserir novo treinamento
         $stmt = $pdo->prepare("INSERT INTO treinamentos 
-            (id_cliente, data_treinamento, tema, observacoes, instrutor, duracao, status, tipo, participantes, satisfacao, material) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            (id_cliente, id_contato, tema, data_treinamento, status, google_event_link, observacoes) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
-            $id_cliente, $data_treinamento, $tema, $observacoes, $instrutor, $duracao, $status,
-            $tipo, $participantes, $satisfacao, $material
+            $id_cliente, $id_contato, $tema, $data_treinamento, $status, 
+            $google_event_link, $observacoes
         ]);
+        $msg = "Treinamento agendado com sucesso";
     }
 
-    header("Location: treinamentos_cliente.php?id_cliente=" . $id_cliente . "&msg=Treinamento salvo com sucesso");
+    header("Location: treinamentos_cliente.php?id_cliente=" . $id_cliente . "&msg=" . urlencode($msg));
     exit;
 }
 
+// Se não for POST, redirecionar
 header("Location: clientes.php");
 exit;
+?>

@@ -18,12 +18,43 @@ if (!$cliente) {
     exit;
 }
 
-// 2. Busca todos os treinamentos
+// 2. Buscar contatos deste cliente específico
+// PRIMEIRO: Verificar a estrutura da tabela contatos
+try {
+    // Tentar buscar colunas disponíveis na tabela contatos
+    $stmtTest = $pdo->prepare("SHOW COLUMNS FROM contatos");
+    $stmtTest->execute();
+    $colunas = $stmtTest->fetchAll(PDO::FETCH_COLUMN);
+
+    // Montar query baseada nas colunas disponíveis
+    $colunas_disponiveis = [];
+    if (in_array('nome', $colunas)) $colunas_disponiveis[] = 'nome';
+    if (in_array('telefone', $colunas)) $colunas_disponiveis[] = 'telefone';
+    if (in_array('celular', $colunas)) $colunas_disponiveis[] = 'celular';
+    if (in_array('email', $colunas)) $colunas_disponiveis[] = 'email';
+    if (in_array('telefone_ddd', $colunas)) $colunas_disponiveis[] = 'telefone_ddd';
+
+    if (empty($colunas_disponiveis)) {
+        $colunas_disponiveis[] = 'nome'; // Mínimo necessário
+    }
+
+    $query_contatos = "SELECT id_contato, " . implode(', ', $colunas_disponiveis) . " FROM contatos WHERE id_cliente = ? ORDER BY nome ASC";
+    $stmtContatos = $pdo->prepare($query_contatos);
+    $stmtContatos->execute([$id_cliente]);
+    $contatos = $stmtContatos->fetchAll();
+} catch (PDOException $e) {
+    // Se falhar, usar query mais simples
+    $stmtContatos = $pdo->prepare("SELECT id_contato, nome FROM contatos WHERE id_cliente = ? ORDER BY nome ASC");
+    $stmtContatos->execute([$id_cliente]);
+    $contatos = $stmtContatos->fetchAll();
+}
+
+// 3. Busca todos os treinamentos
 $stmt = $pdo->prepare("SELECT * FROM treinamentos WHERE id_cliente = ? ORDER BY data_treinamento DESC, id_treinamento DESC");
 $stmt->execute([$id_cliente]);
 $treinamentos = $stmt->fetchAll();
 
-// 3. Estatísticas
+// 4. Estatísticas
 $total_treinamentos = count($treinamentos);
 $treinamentos_realizados = 0;
 $treinamentos_pendentes = 0;
@@ -32,15 +63,16 @@ $primeiro_treinamento = null;
 
 if ($total_treinamentos > 0) {
     foreach ($treinamentos as $t) {
-        if ($t['status'] == 'REALIZADO' || empty($t['status'])) {
+        $status = strtoupper($t['status'] ?? '');
+        if ($status == 'REALIZADO' || $status == 'RESOLVIDO') {
             $treinamentos_realizados++;
-        } elseif ($t['status'] == 'PENDENTE') {
+        } elseif ($status == 'PENDENTE') {
             $treinamentos_pendentes++;
         }
     }
 
     $ultimo_treinamento = $treinamentos[0]['data_treinamento'] ?? null;
-    $primeiro_treinamento = $treinamentos[$total_treinamentos - 1]['data_treinamento'] ?? null;
+    $primeiro_treinamento = end($treinamentos)['data_treinamento'] ?? null;
 }
 
 include 'header.php';
@@ -69,29 +101,68 @@ include 'header.php';
         box-shadow: 0 4px 20px rgba(67, 97, 238, 0.15);
     }
 
+    /* GRID DE INFORMAÇÕES COM ÍCONES */
     .client-info-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        display: flex;
+        flex-wrap: wrap;
         gap: 1rem;
         margin-top: 1rem;
     }
 
     .info-item {
         background: rgba(255, 255, 255, 0.1);
-        padding: 0.75rem;
-        border-radius: 8px;
+        padding: 1rem 1.25rem;
+        border-radius: 10px;
         backdrop-filter: blur(10px);
+        flex: 1;
+        min-width: 200px;
+        transition: all 0.3s;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .info-item:hover {
+        background: rgba(255, 255, 255, 0.15);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .info-icon {
+        font-size: 1.5rem;
+        opacity: 0.9;
+        color: white;
+    }
+
+    .info-content {
+        flex: 1;
     }
 
     .info-label {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         opacity: 0.8;
         margin-bottom: 0.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
     .info-value {
         font-size: 1rem;
         font-weight: 600;
+        line-height: 1.3;
+    }
+
+    @media (max-width: 768px) {
+        .info-item {
+            min-width: calc(50% - 0.5rem);
+        }
+    }
+
+    @media (max-width: 576px) {
+        .info-item {
+            min-width: 100%;
+        }
     }
 
     /* STATS CARDS */
@@ -224,6 +295,12 @@ include 'header.php';
         margin-bottom: 1rem;
     }
 
+    .timeline-details {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px dashed #e9ecef;
+    }
+
     .timeline-footer {
         padding: 0.75rem 1.25rem;
         background: #f8f9fa;
@@ -334,6 +411,27 @@ include 'header.php';
             width: 16px;
             height: 16px;
         }
+
+        .timeline-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+    }
+
+    /* MODAL STYLES */
+    .link-input-group .btn-outline-secondary:hover {
+        background-color: #e9ecef;
+    }
+
+    .form-text a {
+        color: #4361ee;
+        transition: color 0.2s;
+    }
+
+    .form-text a:hover {
+        color: #3a56d4;
+        text-decoration: underline;
     }
 </style>
 
@@ -353,362 +451,507 @@ include 'header.php';
 
                 <div class="client-info-grid">
                     <div class="info-item">
-                        <div class="info-label">Servidor</div>
-                        <div class="info-value"><?= htmlspecialchars($cliente['servidor'] ?? 'Não informado') ?></div>
+                        <div class="info-icon">
+                            <i class="bi bi-hdd"></i>
+                        </div>
+                        <div class="info-content">
+                            <div class="info-label">Servidor</div>
+                            <div class="info-value"><?= htmlspecialchars($cliente['servidor'] ?? 'Não informado') ?></div>
+                        </div>
                     </div>
                     <div class="info-item">
-                        <div class="info-label">Vendedor</div>
-                        <div class="info-value"><?= htmlspecialchars($cliente['vendedor'] ?? 'Não informado') ?></div>
+                        <div class="info-icon">
+                            <i class="bi bi-person-badge"></i>
+                        </div>
+                        <div class="info-content">
+                            <div class="info-label">Vendedor</div>
+                            <div class="info-value"><?= htmlspecialchars($cliente['vendedor'] ?? 'Não informado') ?></div>
+                        </div>
                     </div>
                     <div class="info-item">
-                        <div class="info-label">ID Cliente</div>
-                        <div class="info-value">#<?= $id_cliente ?></div>
+                        <div class="info-icon">
+                            <i class="bi bi-person-vcard"></i>
+                        </div>
+                        <div class="info-content">
+                            <div class="info-label">ID Cliente</div>
+                            <div class="info-value">#<?= $id_cliente ?></div>
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-icon">
+                            <i class="bi bi-people"></i>
+                        </div>
+                        <div class="info-content">
+                            <div class="info-label">Contatos</div>
+                            <div class="info-value"><?= count($contatos) ?> cadastrado(s)</div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="text-end">
-                <button class="btn-add-training" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
-                    <i class="bi bi-plus-circle"></i>
-                    Novo Treinamento
-                </button>
+                <div class="text-end">
+                    <button class="btn-add-training" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
+                        <i class="bi bi-plus-circle"></i>
+                        Novo Treinamento
+                    </button>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- ESTATÍSTICAS -->
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-icon text-primary">
-                <i class="bi bi-journal-check"></i>
+        <!-- ESTATÍSTICAS -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon text-primary">
+                    <i class="bi bi-journal-check"></i>
+                </div>
+                <div class="stat-value"><?= $total_treinamentos ?></div>
+                <div class="stat-label">Total de Treinamentos</div>
             </div>
-            <div class="stat-value"><?= $total_treinamentos ?></div>
-            <div class="stat-label">Total de Treinamentos</div>
+
+            <div class="stat-card">
+                <div class="stat-icon text-success">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+                <div class="stat-value"><?= $treinamentos_realizados ?></div>
+                <div class="stat-label">Realizados</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon text-warning">
+                    <i class="bi bi-clock"></i>
+                </div>
+                <div class="stat-value"><?= $treinamentos_pendentes ?></div>
+                <div class="stat-label">Pendentes</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon text-info">
+                    <i class="bi bi-calendar-event"></i>
+                </div>
+                <div class="stat-value">
+                    <?php if ($ultimo_treinamento): ?>
+                        <?= date('d/m/Y', strtotime($ultimo_treinamento)) ?>
+                    <?php else: ?>
+                        --
+                    <?php endif; ?>
+                </div>
+                <div class="stat-label">Último Treinamento</div>
+            </div>
         </div>
 
-        <div class="stat-card">
-            <div class="stat-icon text-success">
-                <i class="bi bi-check-circle"></i>
+        <!-- TIMELINE DE TREINAMENTOS -->
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white border-0 py-3">
+                <h5 class="fw-bold mb-0">
+                    <i class="bi bi-clock-history me-2"></i>
+                    Linha do Tempo dos Treinamentos
+                </h5>
             </div>
-            <div class="stat-value"><?= $treinamentos_realizados ?></div>
-            <div class="stat-label">Realizados</div>
-        </div>
+            <div class="card-body">
+                <?php if ($total_treinamentos > 0): ?>
+                    <div class="timeline-container">
+                        <div class="timeline-line"></div>
 
-        <div class="stat-card">
-            <div class="stat-icon text-warning">
-                <i class="bi bi-clock"></i>
-            </div>
-            <div class="stat-value"><?= $treinamentos_pendentes ?></div>
-            <div class="stat-label">Pendentes</div>
-        </div>
+                        <?php foreach ($treinamentos as $index => $t):
+                            $status = strtoupper($t['status'] ?? 'PENDENTE');
+                            $status_color = ($status == 'REALIZADO' || $status == 'RESOLVIDO') ? '#06d6a0' : ($status == 'PENDENTE' ? '#ffc107' : ($status == 'CANCELADO' ? '#dc3545' : '#4361ee'));
+                            $status_text = ($status == 'REALIZADO' || $status == 'RESOLVIDO') ? 'Realizado' : ($status == 'PENDENTE' ? 'Pendente' : ($status == 'CANCELADO' ? 'Cancelado' : 'Agendado'));
 
-        <div class="stat-card">
-            <div class="stat-icon text-info">
-                <i class="bi bi-calendar-event"></i>
-            </div>
-            <div class="stat-value">
-                <?php if ($ultimo_treinamento): ?>
-                    <?= date('d/m/Y', strtotime($ultimo_treinamento)) ?>
-                <?php else: ?>
-                    --
-                <?php endif; ?>
-            </div>
-            <div class="stat-label">Último Treinamento</div>
-        </div>
-    </div>
+                            // Formatar data
+                            $data_br = date('d/m/Y', strtotime($t['data_treinamento']));
+                            $data_full = date('d/m/Y H:i', strtotime($t['data_treinamento']));
 
-    <!-- TIMELINE DE TREINAMENTOS -->
-    <div class="card shadow-sm border-0 mb-4">
-        <div class="card-header bg-white border-0 py-3">
-            <h5 class="fw-bold mb-0">
-                <i class="bi bi-clock-history me-2"></i>
-                Linha do Tempo dos Treinamentos
-            </h5>
-        </div>
-        <div class="card-body">
-            <?php if ($total_treinamentos > 0): ?>
-                <div class="timeline-container">
-                    <div class="timeline-line"></div>
+                            // Buscar nome do contato se existir
+                            $nome_contato = '';
+                            if (!empty($t['id_contato'])) {
+                                $stmtContatoNome = $pdo->prepare("SELECT nome FROM contatos WHERE id_contato = ?");
+                                $stmtContatoNome->execute([$t['id_contato']]);
+                                $contato_nome = $stmtContatoNome->fetch();
+                                $nome_contato = $contato_nome['nome'] ?? '';
+                            }
+                        ?>
+                            <div class="timeline-item fade-in" style="animation-delay: <?= $index * 0.1 ?>s;">
+                                <div class="timeline-dot" style="border-color: <?= $status_color ?>;"></div>
 
-                    <?php foreach ($treinamentos as $index => $t):
-                        $status = $t['status'] ?? 'REALIZADO';
-                        $status_color = ($status == 'REALIZADO') ? '#06d6a0' : (($status == 'PENDENTE') ? '#ffc107' : '#4361ee');
-                        $status_text = ($status == 'REALIZADO') ? 'Realizado' : (($status == 'PENDENTE') ? 'Pendente' : 'Agendado');
-
-                        // Determinar se é o primeiro ou último
-                        $is_first = ($index == $total_treinamentos - 1);
-                        $is_last = ($index == 0);
-
-                        // Formatar data
-                        $data_br = date('d/m/Y', strtotime($t['data_treinamento']));
-                        $data_full = date('d/m/Y H:i', strtotime($t['data_treinamento']));
-                    ?>
-                        <div class="timeline-item fade-in" style="animation-delay: <?= $index * 0.1 ?>s;">
-                            <div class="timeline-dot" style="border-color: <?= $status_color ?>;"></div>
-
-                            <div class="timeline-card">
-                                <div class="timeline-header">
-                                    <div class="d-flex align-items-center gap-3">
-                                        <div class="timeline-date">
-                                            <i class="bi bi-calendar3 me-1"></i>
-                                            <?= $data_br ?>
+                                <div class="timeline-card">
+                                    <div class="timeline-header">
+                                        <div class="d-flex align-items-center gap-3">
+                                            <div class="timeline-date">
+                                                <i class="bi bi-calendar3 me-1"></i>
+                                                <?= $data_br ?>
+                                            </div>
+                                            <span class="timeline-badge" style="background-color: <?= $status_color ?>20; color: <?= $status_color ?>;">
+                                                <?= $status_text ?>
+                                            </span>
                                         </div>
-                                        <span class="timeline-badge" style="background-color: <?= $status_color ?>20; color: <?= $status_color ?>;">
-                                            <?= $status_text ?>
-                                        </span>
+
+                                        <div class="action-buttons">
+                                            <button class="btn-edit-training edit-treinamento-btn"
+                                                data-id="<?= $t['id_treinamento'] ?>"
+                                                data-data_treinamento="<?= $t['data_treinamento'] ?>"
+                                                data-tema="<?= htmlspecialchars($t['tema']) ?>"
+                                                data-status="<?= $t['status'] ?>"
+                                                data-id_contato="<?= $t['id_contato'] ?? '' ?>"
+                                                data-google_event_link="<?= htmlspecialchars($t['google_event_link'] ?? '') ?>"
+                                                data-observacoes="<?= htmlspecialchars($t['observacoes'] ?? '') ?>">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                        </div>
                                     </div>
 
-                                    <div class="action-buttons">
-                                        <button class="btn-edit-training edit-treinamento-btn"
-                                            data-id="<?= $t['id_treinamento'] ?>"
-                                            data-data_treinamento="<?= $t['data_treinamento'] ?>"
-                                            data-tema="<?= htmlspecialchars($t['tema']) ?>"
-                                            data-observacoes="<?= htmlspecialchars($t['observacoes']) ?>"
-                                            data-status="<?= $t['status'] ?>">
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
+                                    <div class="timeline-body">
+                                        <h6 class="timeline-theme">
+                                            <i class="bi bi-book me-2"></i>
+                                            <?= htmlspecialchars($t['tema']) ?>
+                                        </h6>
+
+                                        <?php if (!empty($t['observacoes'])): ?>
+                                            <div class="timeline-observations">
+                                                <strong class="d-block mb-2" style="color: #495057;">Observações:</strong>
+                                                <?= nl2br(htmlspecialchars($t['observacoes'])) ?>
+                                            </div>
+                                        <?php endif; ?>
+
+                                        <div class="timeline-details">
+                                            <?php if (!empty($nome_contato)): ?>
+                                                <div class="d-flex align-items-center gap-2 mb-1">
+                                                    <i class="bi bi-person text-muted"></i>
+                                                    <small class="text-muted">
+                                                        <strong>Contato:</strong> <?= htmlspecialchars($nome_contato) ?>
+                                                    </small>
+                                                </div>
+                                            <?php endif; ?>
+
+                                            <?php if (!empty($t['google_event_link'])): ?>
+                                                <div class="d-flex align-items-center gap-2 mb-1">
+                                                    <i class="bi bi-google text-primary"></i>
+                                                    <small>
+                                                        <a href="<?= htmlspecialchars($t['google_event_link']) ?>"
+                                                            target="_blank"
+                                                            class="text-decoration-none">
+                                                            <strong>Link Google Agenda</strong>
+                                                        </a>
+                                                    </small>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div class="timeline-body">
-                                    <h6 class="timeline-theme">
-                                        <i class="bi bi-book me-2"></i>
-                                        <?= htmlspecialchars($t['tema']) ?>
-                                    </h6>
-
-                                    <?php if (!empty($t['observacoes'])): ?>
-                                        <div class="timeline-observations">
-                                            <strong class="d-block mb-2" style="color: #495057;">Observações:</strong>
-                                            <?= nl2br(htmlspecialchars($t['observacoes'])) ?>
-                                        </div>
-                                    <?php endif; ?>
-
-                                    <?php if (!empty($t['instrutor'])): ?>
-                                        <div class="d-flex align-items-center gap-2 mb-2">
-                                            <i class="bi bi-person-badge text-muted"></i>
-                                            <small class="text-muted">
-                                                <strong>Instrutor:</strong> <?= htmlspecialchars($t['instrutor']) ?>
+                                    <div class="timeline-footer">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small>
+                                                <i class="bi bi-info-circle me-1"></i>
+                                                Registro #<?= $t['id_treinamento'] ?>
+                                            </small>
+                                            <small>
+                                                <i class="bi bi-calendar-check me-1"></i>
+                                                <?= $data_full ?>
                                             </small>
                                         </div>
-                                    <?php endif; ?>
-
-                                    <?php if (!empty($t['duracao'])): ?>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <i class="bi bi-clock text-muted"></i>
-                                            <small class="text-muted">
-                                                <strong>Duração:</strong> <?= htmlspecialchars($t['duracao']) ?>
-                                            </small>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-
-                                <div class="timeline-footer">
-                                    <div class="d-flex justify-content-between align-items-center">
-                                        <small>
-                                            <i class="bi bi-info-circle me-1"></i>
-                                            Registro #<?= $t['id_treinamento'] ?>
-                                        </small>
-                                        <small>
-                                            <i class="bi bi-calendar-check me-1"></i>
-                                            <?= $data_full ?>
-                                        </small>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php else: ?>
-                <div class="empty-state">
-                    <i class="bi bi-journal-x empty-state-icon"></i>
-                    <h5 class="fw-bold mb-3">Nenhum treinamento registrado</h5>
-                    <p class="mb-4">Este cliente ainda não possui treinamentos cadastrados.</p>
-                    <button class="btn-add-training" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
-                        <i class="bi bi-plus-circle me-2"></i>
-                        Cadastrar Primeiro Treinamento
-                    </button>
-                </div>
-            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="empty-state">
+                        <i class="bi bi-journal-x empty-state-icon"></i>
+                        <h5 class="fw-bold mb-3">Nenhum treinamento registrado</h5>
+                        <p class="mb-4">Este cliente ainda não possui treinamentos cadastrados.</p>
+                        <button class="btn-add-training" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
+                            <i class="bi bi-plus-circle me-2"></i>
+                            Cadastrar Primeiro Treinamento
+                        </button>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- MODAL DE TREINAMENTO -->
-<!-- MODAL DE TREINAMENTO - REPLICADO DE treinamentos.php -->
-<div class="modal fade" id="modalTreinamento" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <form method="POST" action="salvar_treinamento.php" class="modal-content border-0 shadow-lg" style="border-radius:16px;">
-            <input type="hidden" name="id_cliente" value="<?= $id_cliente ?>">
-            <input type="hidden" name="id_treinamento" id="id_treinamento">
+    <!-- MODAL PARA AGENDAR/EDITAR TREINAMENTO (REPLICADO DE treinamentos.php) -->
+    <div class="modal fade" id="modalTreinamento" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <form method="POST" action="salvar_treinamento.php" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+                <input type="hidden" name="id_cliente" value="<?= $id_cliente ?>">
+                <input type="hidden" name="id_treinamento" id="id_treinamento">
 
-            <div class="modal-header border-0 px-4 pt-4">
-                <h5 class="fw-bold" id="modalTreinamentoTitle">Novo Treinamento</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-
-            <div class="modal-body px-4">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold">Cliente</label>
-                        <input type="text" class="form-control bg-light" value="<?= htmlspecialchars($cliente['fantasia']) ?>" readonly>
+                <div class="modal-header border-0 px-4 pt-4">
+                    <h5 class="fw-bold" id="modalTitle">Agendar Treinamento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body px-4">
+                    <!-- CLIENTE FIXO (já sabemos qual é) -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Cliente</label>
+                        <input type="text"
+                            class="form-control bg-light"
+                            value="<?= htmlspecialchars($cliente['fantasia']) ?> - ID: <?= $id_cliente ?>"
+                            readonly
+                            style="cursor: not-allowed;">
+                        <div class="form-text">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i>
+                                Este treinamento será associado ao cliente <?= htmlspecialchars($cliente['fantasia']) ?>
+                            </small>
+                        </div>
                     </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold">Data Treinamento <span class="text-danger">*</span></label>
-                        <input type="date" name="data_treinamento" id="data_treinamento" class="form-control" required>
+                    <!-- CONTATO (somente contatos deste cliente) -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Contato</label>
+                        <select name="id_contato" id="id_contato" class="form-select" required>
+                            <option value="">Selecione o contato...</option>
+                            <?php if (count($contatos) > 0): ?>
+                                <?php foreach ($contatos as $contato): ?>
+                                    <option value="<?= $contato['id_contato'] ?>">
+                                        <?= htmlspecialchars($contato['nome']) ?>
+                                        <?php
+                                        // Mostrar informações de contato disponíveis
+                                        $info_extra = [];
+                                        if (isset($contato['telefone']) && !empty($contato['telefone'])) {
+                                            $info_extra[] = 'Tel: ' . htmlspecialchars($contato['telefone']);
+                                        }
+                                        if (isset($contato['celular']) && !empty($contato['celular'])) {
+                                            $info_extra[] = 'Cel: ' . htmlspecialchars($contato['celular']);
+                                        }
+                                        if (isset($contato['telefone_ddd']) && !empty($contato['telefone_ddd'])) {
+                                            $info_extra[] = 'DDD: ' . htmlspecialchars($contato['telefone_ddd']);
+                                        }
+                                        if (isset($contato['email']) && !empty($contato['email'])) {
+                                            $info_extra[] = 'Email: ' . htmlspecialchars($contato['email']);
+                                        }
+
+                                        if (!empty($info_extra)) {
+                                            echo ' - ' . implode(', ', $info_extra);
+                                        }
+                                        ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <option value="" disabled>Nenhum contato cadastrado para este cliente</option>
+                            <?php endif; ?>
+                        </select>
+                        <div class="form-text">
+                            <small class="text-muted">
+                                <i class="bi bi-plus-circle"></i>
+                                <a href="contatos.php?cliente=<?= $id_cliente ?>" target="_blank" class="text-decoration-none">
+                                    Adicionar novo contato
+                                </a>
+                            </small>
+                        </div>
                     </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold">Tema <span class="text-danger">*</span></label>
-                        <input type="text" name="tema" id="tema" class="form-control" placeholder="Ex: Treinamento inicial" required>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold">Status</label>
-                        <select name="status" id="status" class="form-select">
-                            <option value="REALIZADO">Realizado</option>
-                            <option value="PENDENTE">Pendente</option>
-                            <option value="AGENDADO">Agendado</option>
-                            <option value="CANCELADO">Cancelado</option>
+                    <!-- TEMA (mesmo do treinamentos.php) -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Tema</label>
+                        <select name="tema" id="tema" class="form-select" required>
+                            <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
+                            <option value="CADASTROS">CADASTROS</option>
+                            <option value="ORÇAMENTO DE VENDA">ORÇAMENTO DE VENDA</option>
+                            <option value="ENTRADA DE COMPRA">ENTRADA DE COMPRAS</option>
+                            <option value="FINANCEIRO">FINANCEIRO</option>
+                            <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
+                            <option value="PDV">PDV</option>
+                            <option value="NOTA FISCAL">NOTA FISCAL</option>
+                            <option value="RELATÓRIOS">RELATÓRIOS</option>
+                            <option value="OUTROS">OUTROS</option>
                         </select>
                     </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold">Instrutor</label>
-                        <input type="text" name="instrutor" id="instrutor" class="form-control" placeholder="Nome do instrutor">
+                    <!-- DATA/HORA E STATUS -->
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Data/Hora</label>
+                            <input type="datetime-local" name="data_treinamento" id="data_treinamento" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Status</label>
+                            <select name="status" id="status" class="form-select">
+                                <option value="PENDENTE">PENDENTE</option>
+                                <option value="AGENDADO">AGENDADO</option>
+                                <option value="REALIZADO">REALIZADO</option>
+                                <option value="CANCELADO">CANCELADO</option>
+                                <option value="Resolvido">Resolvido</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold">Duração</label>
-                        <input type="text" name="duracao" id="duracao" class="form-control" placeholder="Ex: 2 horas">
+                    <!-- LINK DO GOOGLE AGENDA (mesmo do treinamentos.php) -->
+                    <div class="mb-3 mt-3">
+                        <label class="form-label small fw-bold text-muted">
+                            <i class="bi bi-google me-1"></i>Link do Google Agenda
+                        </label>
+                        <div class="input-group link-input-group">
+                            <input type="url"
+                                name="google_event_link"
+                                id="google_event_link"
+                                class="form-control"
+                                placeholder="https://calendar.google.com/calendar/u/0/r/event/..."
+                                pattern="https?://.*">
+                            <button type="button"
+                                class="btn btn-outline-secondary"
+                                onclick="copiarLinkModal()"
+                                data-bs-toggle="tooltip"
+                                data-bs-title="Copiar link">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i>
+                                Cole o link do evento criado no Google Agenda para compartilhar com o cliente
+                            </small>
+                        </div>
                     </div>
 
-                    <div class="col-12">
-                        <label class="form-label small fw-bold">Observações</label>
-                        <textarea name="observacoes" id="observacoes" class="form-control" rows="4" placeholder="Detalhes do treinamento..."></textarea>
-                    </div>
-
-                    <!-- CAMPOS ADICIONAIS COMUNS EM treinamentos.php -->
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold">Tipo de Treinamento</label>
-                        <select name="tipo" id="tipo" class="form-select">
-                            <option value="INICIAL">Inicial</option>
-                            <option value="RECICLAGEM">Reciclagem</option>
-                            <option value="AVANÇADO">Avançado</option>
-                            <option value="PERSONALIZADO">Personalizado</option>
-                        </select>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold">Participantes</label>
-                        <input type="number" name="participantes" id="participantes" class="form-control" min="0" placeholder="Número de participantes">
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold">Satisfação</label>
-                        <select name="satisfacao" id="satisfacao" class="form-select">
-                            <option value="">Não avaliado</option>
-                            <option value="1">⭐ Muito Insatisfeito</option>
-                            <option value="2">⭐⭐ Insatisfeito</option>
-                            <option value="3">⭐⭐⭐ Neutro</option>
-                            <option value="4">⭐⭐⭐⭐ Satisfeito</option>
-                            <option value="5">⭐⭐⭐⭐⭐ Muito Satisfeito</option>
-                        </select>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold">Material Entregue</label>
-                        <select name="material" id="material" class="form-select">
-                            <option value="NÃO">Não</option>
-                            <option value="SIM">Sim</option>
-                        </select>
+                    <!-- OBSERVAÇÕES (campo extra que pode ser útil) -->
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted">Observações</label>
+                        <textarea name="observacoes" id="observacoes" class="form-control" rows="3" placeholder="Detalhes adicionais sobre o treinamento..."></textarea>
                     </div>
                 </div>
-            </div>
-
-            <div class="modal-footer border-0 p-4">
-                <button type="button" class="btn btn-light fw-bold px-4" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-primary fw-bold shadow-sm px-4">Salvar Treinamento</button>
-            </div>
-        </form>
+                <div class="modal-footer border-0 p-4">
+                    <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Fechar</button>
+                    <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">Salvar Treinamento</button>
+                </div>
+            </form>
+        </div>
     </div>
-</div>
 
-<script>
-    // Inicializar tooltips
-    document.addEventListener('DOMContentLoaded', function() {
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
-        });
-
-        // Configurar data atual como padrão
-        const dataInput = document.getElementById('data_treinamento');
-        if (dataInput && !dataInput.value) {
-            const now = new Date();
-            const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-                .toISOString()
-                .slice(0, 16);
-            dataInput.value = localDateTime;
-        }
-
-        // Configurar botões de edição
-        document.querySelectorAll('.edit-treinamento-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                openEditTreinamentoModal(this);
+    <script>
+        // Inicializar tooltips
+        document.addEventListener('DOMContentLoaded', function() {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+            var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl)
             });
-        });
-    });
 
-    // Função para abrir modal de edição
-    function openEditTreinamentoModal(button) {
-        document.getElementById('modalTreinamentoTitle').innerText = 'Editar Treinamento';
-        document.getElementById('id_treinamento').value = button.dataset.id;
+            // Configurar botões de edição
+            document.querySelectorAll('.edit-treinamento-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    openEditTreinamentoModal(this);
+                });
+            });
 
-        // Formatar data para o input datetime-local
-        const dataOriginal = button.dataset.data_treinamento;
-        const dataFormatada = dataOriginal.replace(' ', 'T');
-        document.getElementById('data_treinamento').value = dataFormatada;
+            // Configurar data/hora atual como padrão ao abrir modal novo
+            const modalTreinamento = document.getElementById('modalTreinamento');
+            if (modalTreinamento) {
+                modalTreinamento.addEventListener('show.bs.modal', function(event) {
+                    const modalTitle = document.getElementById('modalTitle');
+                    const idTreinamento = document.getElementById('id_treinamento');
 
-        document.getElementById('tema').value = button.dataset.tema;
-        document.getElementById('observacoes').value = button.dataset.observacoes;
-        document.getElementById('status').value = button.dataset.status || 'REALIZADO';
+                    // Se for um novo treinamento (sem ID), configurar data atual
+                    if (!idTreinamento.value) {
+                        const now = new Date();
+                        // Arredondar para os próximos 30 minutos
+                        const roundedMinutes = Math.ceil(now.getMinutes() / 30) * 30;
+                        now.setMinutes(roundedMinutes);
+                        now.setSeconds(0);
 
-        // Abrir modal
-        const modal = new bootstrap.Modal(document.getElementById('modalTreinamento'));
-        modal.show();
-    }
+                        const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+                            .toISOString()
+                            .slice(0, 16);
+                        document.getElementById('data_treinamento').value = localDateTime;
 
-    // Reset modal ao fechar
-    document.getElementById('modalTreinamento').addEventListener('hidden.bs.modal', function() {
-        const form = this.querySelector('form');
-        form.reset();
-        document.getElementById('id_treinamento').value = '';
-        document.getElementById('modalTreinamentoTitle').innerText = 'Novo Treinamento';
+                        // Definir título
+                        modalTitle.innerText = 'Agendar Treinamento';
 
-        // Resetar data para agora
-        const now = new Date();
-        const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-            .toISOString()
-            .slice(0, 16);
-        document.getElementById('data_treinamento').value = localDateTime;
+                        // Resetar campos
+                        document.getElementById('tema').value = 'INSTALAÇÃO SISTEMA';
+                        document.getElementById('status').value = 'PENDENTE';
+                        document.getElementById('id_contato').value = '';
+                        document.getElementById('google_event_link').value = '';
+                        document.getElementById('observacoes').value = '';
+                    } else {
+                        modalTitle.innerText = 'Editar Treinamento';
+                    }
+                });
 
-        // Resetar status
-        document.getElementById('status').value = 'REALIZADO';
-    });
-
-    // Filtro por status (opcional - para futuras implementações)
-    function filtrarPorStatus(status) {
-        const items = document.querySelectorAll('.timeline-item');
-        items.forEach(item => {
-            const badge = item.querySelector('.timeline-badge');
-            if (status === 'todos' || badge.textContent.trim() === status) {
-                item.style.display = 'block';
-            } else {
-                item.style.display = 'none';
+                // Reset modal ao fechar
+                modalTreinamento.addEventListener('hidden.bs.modal', function() {
+                    document.getElementById('id_treinamento').value = '';
+                    document.getElementById('modalTitle').innerText = 'Agendar Treinamento';
+                });
             }
         });
-    }
-</script>
 
-<?php include 'footer.php'; ?>
+        // Função para abrir modal de edição
+        function openEditTreinamentoModal(button) {
+            document.getElementById('modalTitle').innerText = 'Editar Treinamento';
+            document.getElementById('id_treinamento').value = button.dataset.id;
+
+            // Formatar data para o input datetime-local
+            const dataOriginal = button.dataset.data_treinamento;
+            let dataFormatada = '';
+
+            if (dataOriginal) {
+                // Se já estiver no formato correto (YYYY-MM-DD HH:MM:SS)
+                if (dataOriginal.includes(' ')) {
+                    dataFormatada = dataOriginal.replace(' ', 'T').slice(0, 16);
+                } else if (dataOriginal.includes('T')) {
+                    // Já está no formato datetime-local
+                    dataFormatada = dataOriginal.slice(0, 16);
+                } else {
+                    // Converter para datetime-local
+                    const dataObj = new Date(dataOriginal);
+                    if (!isNaN(dataObj)) {
+                        dataFormatada = dataObj.toISOString().slice(0, 16);
+                    }
+                }
+            }
+
+            if (dataFormatada) {
+                document.getElementById('data_treinamento').value = dataFormatada;
+            }
+
+            // Preencher campos do modal
+            document.getElementById('tema').value = button.dataset.tema || 'INSTALAÇÃO SISTEMA';
+            document.getElementById('status').value = button.dataset.status || 'PENDENTE';
+            document.getElementById('id_contato').value = button.dataset.id_contato || '';
+            document.getElementById('google_event_link').value = button.dataset.google_event_link || '';
+            document.getElementById('observacoes').value = button.dataset.observacoes || '';
+
+            // Abrir modal
+            const modalEl = document.getElementById('modalTreinamento');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+
+        // Função para copiar link (do modal original)
+        function copiarLinkModal() {
+            const linkInput = document.getElementById('google_event_link');
+            if (linkInput.value) {
+                linkInput.select();
+                document.execCommand('copy');
+
+                // Mostrar feedback
+                const copyButton = linkInput.nextElementSibling;
+                const originalTitle = copyButton.getAttribute('data-bs-title');
+                const originalIcon = copyButton.querySelector('i').className;
+
+                copyButton.setAttribute('data-bs-title', 'Copiado!');
+                copyButton.querySelector('i').className = 'bi bi-check';
+
+                // Atualizar tooltip
+                const tooltip = bootstrap.Tooltip.getInstance(copyButton);
+                if (tooltip) {
+                    tooltip.setContent({
+                        '.tooltip-inner': 'Copiado!'
+                    });
+                    tooltip.show();
+                }
+
+                setTimeout(() => {
+                    copyButton.setAttribute('data-bs-title', originalTitle);
+                    copyButton.querySelector('i').className = originalIcon;
+
+                    if (tooltip) {
+                        tooltip.setContent({
+                            '.tooltip-inner': originalTitle
+                        });
+                    }
+                }, 2000);
+            }
+        }
+    </script>
+
+    <?php include 'footer.php'; ?>
