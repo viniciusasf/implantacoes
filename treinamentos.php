@@ -21,7 +21,7 @@ $total_hoje = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE DATE(data_tre
 // --- FILTRO POR CLIENTE ---
 $filtro_cliente = isset($_GET['filtro_cliente']) ? trim($_GET['filtro_cliente']) : '';
 $where_conditions = [];
-$params = [];
+$params = []; // Array para parâmetros posicionais
 
 if (!empty($filtro_cliente)) {
     $where_conditions[] = "c.fantasia LIKE ?";
@@ -115,16 +115,16 @@ switch ($ordenacao) {
         $ordenacao_sql = 't.' . $ordenacao;
 }
 
-$sql_base .= " ORDER BY $ordenacao_sql $direcao LIMIT :offset, :limit";
+// Usar placeholders ? para paginação também
+$sql_base .= " ORDER BY $ordenacao_sql $direcao LIMIT ?, ?";
+
+// Adicionar parâmetros de paginação ao array
+$params[] = $offset;
+$params[] = $por_pagina;
 
 // Preparar e executar query principal
 $stmt = $pdo->prepare($sql_base);
-foreach ($params as $index => $value) {
-    $stmt->bindValue($index + 1, $value, PDO::PARAM_STR);
-}
-$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-$stmt->bindValue(':limit', $por_pagina, PDO::PARAM_INT);
-$stmt->execute();
+$stmt->execute($params);
 $treinamentos = $stmt->fetchAll();
 
 $total_resultados = count($treinamentos);
