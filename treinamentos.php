@@ -129,7 +129,12 @@ $treinamentos = $stmt->fetchAll();
 
 $total_resultados = count($treinamentos);
 
-$clientes_list = $pdo->query("SELECT id_cliente, fantasia FROM clientes ORDER BY fantasia ASC")->fetchAll();
+$clientes_list = $pdo->query("
+    SELECT id_cliente, fantasia 
+    FROM clientes 
+    WHERE (data_fim IS NULL OR data_fim = '0000-00-00')
+    ORDER BY fantasia ASC
+")->fetchAll();
 
 include 'header.php';
 ?>
@@ -663,44 +668,39 @@ include 'header.php';
     </div>
 </div>
 
-<!-- MODAL PARA AGENDAR/EDITAR TREINAMENTO -->
+<!-- Modal para Agendar/Editar Treinamento -->
 <div class="modal fade" id="modalTreinamento" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
             <div class="modal-header border-0 px-4 pt-4">
-                <h5 class="fw-bold d-flex align-items-center" id="modalTitle">
-                    <i class="bi bi-calendar-plus me-2"></i>Agendar Treinamento
-                </h5>
+                <h5 class="fw-bold" id="modalTitle">Agendar Treinamento</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body px-4">
                 <input type="hidden" name="id_treinamento" id="id_treinamento">
 
                 <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted d-flex align-items-center">
-                        <i class="bi bi-building me-1"></i>Cliente
-                    </label>
+                    <label class="form-label small fw-bold text-muted">Cliente</label>
                     <select name="id_cliente" id="id_cliente" class="form-select" required onchange="filterContatos(this.value)">
                         <option value="">Selecione o cliente...</option>
-                        <?php foreach ($clientes_list as $c): ?>
+                        <?php
+                        // CONSULTA MODIFICADA: Apenas clientes ativos
+                        foreach ($clientes_list as $c): ?>
+
                             <option value="<?= $c['id_cliente'] ?>"><?= htmlspecialchars($c['fantasia']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted d-flex align-items-center">
-                        <i class="bi bi-person me-1"></i>Contato
-                    </label>
+                    <label class="form-label small fw-bold text-muted">Contato</label>
                     <select name="id_contato" id="id_contato" class="form-select" required disabled>
                         <option value="">Aguardando cliente...</option>
                     </select>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted d-flex align-items-center">
-                        <i class="bi bi-tag me-1"></i>Tema
-                    </label>
+                    <label class="form-label small fw-bold text-muted">Tema</label>
                     <select name="tema" id="tema" class="form-select" required>
                         <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
                         <option value="CADASTROS">CADASTROS</option>
@@ -717,57 +717,21 @@ include 'header.php';
 
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label small fw-bold text-muted d-flex align-items-center">
-                            <i class="bi bi-clock me-1"></i>Data/Hora
-                        </label>
+                        <label class="form-label small fw-bold text-muted">Data/Hora</label>
                         <input type="datetime-local" name="data_treinamento" id="data_treinamento" class="form-control">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small fw-bold text-muted d-flex align-items-center">
-                            <i class="bi bi-circle-fill me-1"></i>Status
-                        </label>
+                        <label class="form-label small fw-bold text-muted">Status</label>
                         <select name="status" id="status" class="form-select">
                             <option value="PENDENTE">PENDENTE</option>
                             <option value="Resolvido">Resolvido</option>
                         </select>
                     </div>
                 </div>
-
-                <!-- NOVO CAMPO: LINK DO GOOGLE AGENDA -->
-                <div class="mb-3 mt-3">
-                    <label class="form-label small fw-bold text-muted d-flex align-items-center">
-                        <i class="bi bi-google me-1"></i>Link do Google Agenda
-                    </label>
-                    <div class="input-group link-input-group">
-                        <input type="url"
-                            name="google_event_link"
-                            id="google_event_link"
-                            class="form-control"
-                            placeholder="https://calendar.google.com/calendar/u/0/r/event/..."
-                            pattern="https?://.*">
-                        <button type="button"
-                            class="btn btn-outline-secondary d-flex align-items-center"
-                            onclick="copiarLinkModal()"
-                            data-bs-toggle="tooltip"
-                            data-bs-title="Copiar link">
-                            <i class="bi bi-clipboard"></i>
-                        </button>
-                    </div>
-                    <div class="form-text">
-                        <small class="text-muted">
-                            <i class="bi bi-info-circle"></i>
-                            Cole o link do evento criado no Google Agenda para compartilhar com o cliente
-                        </small>
-                    </div>
-                </div>
             </div>
             <div class="modal-footer border-0 p-4">
-                <button type="button" class="btn btn-light px-4 fw-bold d-flex align-items-center" data-bs-dismiss="modal">
-                    <i class="bi bi-x-lg me-1"></i>Fechar
-                </button>
-                <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm d-flex align-items-center">
-                    <i class="bi bi-check-lg me-1"></i>Salvar Alterações
-                </button>
+                <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Fechar</button>
+                <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">Salvar Alterações</button>
             </div>
         </form>
     </div>

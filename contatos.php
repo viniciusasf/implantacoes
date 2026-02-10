@@ -31,9 +31,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     exit;
 }
 
-// Filtros
-$filtro_cliente = isset($_GET['filtro_cliente']) ? trim($_GET['filtro_cliente']) : '';
-$filtro_contato = isset($_GET['filtro_contato']) ? trim($_GET['filtro_contato']) : '';
+// Filtro único
+$filtro = isset($_GET['filtro']) ? trim($_GET['filtro']) : '';
 
 // Ordenação
 $ordenacao = isset($_GET['ordenacao']) ? $_GET['ordenacao'] : 'nome';
@@ -58,47 +57,41 @@ $sql_contagem = "SELECT COUNT(*) as total FROM contatos c
                  WHERE 1=1";
 
 $params = [];
-$where_conditions = [];
+$params_contagem = [];
 
-if (!empty($filtro_cliente)) {
-    $where_conditions[] = "cl.fantasia LIKE ?";
-    $params[] = "%$filtro_cliente%";
-}
-
-if (!empty($filtro_contato)) {
-    $where_conditions[] = "(c.nome LIKE ? OR c.cargo LIKE ?)";
-    $params[] = "%$filtro_contato%";
-    $params[] = "%$filtro_contato%";
-}
-
-if (!empty($where_conditions)) {
-    $where_sql = " AND " . implode(" AND ", $where_conditions);
-    $sql_base .= $where_sql;
-    $sql_contagem .= $where_sql;
+if (!empty($filtro)) {
+    $sql_base .= " AND (cl.fantasia LIKE ? OR c.nome LIKE ? OR c.cargo LIKE ?)";
+    $sql_contagem .= " AND (cl.fantasia LIKE ? OR c.nome LIKE ? OR c.cargo LIKE ?)";
+    
+    $param_value = "%$filtro%";
+    $params = [$param_value, $param_value, $param_value];
+    $params_contagem = [$param_value, $param_value, $param_value];
 }
 
 // Executar contagem
 $stmt_contagem = $pdo->prepare($sql_contagem);
-$stmt_contagem->execute($params);
+$stmt_contagem->execute($params_contagem);
 $total_registros = $stmt_contagem->fetchColumn();
 
 // Calcular total de páginas
 $total_paginas = ceil($total_registros / $por_pagina);
 
 // Query dos dados com ordenação e paginação
-$sql_base .= " ORDER BY c.$ordenacao $direcao LIMIT :offset, :limit";
+$sql_base .= " ORDER BY c.$ordenacao $direcao LIMIT ?, ?";
+
+// Adicionar parâmetros de paginação
+$params[] = $offset;
+$params[] = $por_pagina;
 
 // Preparar e executar query principal
 $stmt = $pdo->prepare($sql_base);
-foreach ($params as $index => $value) {
-    $stmt->bindValue($index + 1, $value, PDO::PARAM_STR);
-}
-$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-$stmt->bindValue(':limit', $por_pagina, PDO::PARAM_INT);
-$stmt->execute();
+$stmt->execute($params);
 $contatos = $stmt->fetchAll();
 
-$clientes = $pdo->query("SELECT id_cliente, fantasia FROM clientes ORDER BY fantasia ASC")->fetchAll();
+// Trazer apenas clientes ativos para o modal
+$clientes = $pdo->query("SELECT id_cliente, fantasia FROM clientes 
+                         WHERE (data_fim IS NULL OR data_fim = '0000-00-00' OR data_fim > NOW())
+                         ORDER BY fantasia ASC")->fetchAll();
 
 include 'header.php';
 ?>
@@ -136,40 +129,29 @@ include 'header.php';
     </div>
 <?php endif; ?>
 
-<!-- Barra de Filtro -->
+<!-- Barra de Filtro Simplificada -->
 <div class="card shadow-sm border-0 mb-4">
     <div class="card-body py-3">
         <form method="GET" class="row g-3 align-items-center">
-            <div class="col-md-5">
+            <div class="col-md-10">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0">
-                        <i class="bi bi-building text-muted"></i>
+                        <i class="bi bi-search text-muted"></i>
                     </span>
                     <input type="text" 
-                           name="filtro_cliente" 
+                           name="filtro" 
                            class="form-control border-start-0 ps-0" 
-                           placeholder="Cliente (nome fantasia)..."
-                           value="<?php echo htmlspecialchars($filtro_cliente); ?>">
-                </div>
-            </div>
-            <div class="col-md-5">
-                <div class="input-group">
-                    <span class="input-group-text bg-white border-end-0">
-                        <i class="bi bi-person text-muted"></i>
-                    </span>
-                    <input type="text" 
-                           name="filtro_contato" 
-                           class="form-control border-start-0 ps-0" 
-                           placeholder="Nome do contato ou cargo..."
-                           value="<?php echo htmlspecialchars($filtro_contato); ?>">
+                           placeholder="Buscar por cliente, nome do contato ou cargo..."
+                           value="<?php echo htmlspecialchars($filtro); ?>"
+                           autocomplete="off">
                 </div>
             </div>
             <div class="col-md-2 d-flex gap-2">
                 <button type="submit" class="btn btn-primary flex-fill d-flex align-items-center justify-content-center">
-                    <i class="bi bi-search me-2"></i>Filtrar
+                    <i class="bi bi-search me-2"></i>Buscar
                 </button>
-                <?php if (!empty($filtro_cliente) || !empty($filtro_contato)): ?>
-                    <a href="contatos.php" class="btn btn-outline-secondary d-flex align-items-center" title="Limpar filtros">
+                <?php if (!empty($filtro)): ?>
+                    <a href="contatos.php" class="btn btn-outline-secondary d-flex align-items-center" title="Limpar filtro">
                         <i class="bi bi-x-lg"></i>
                     </a>
                 <?php endif; ?>
@@ -187,7 +169,7 @@ include 'header.php';
                     <span class="text-muted small">
                         <?php if ($total_registros > 0): ?>
                             Exibindo <strong><?php echo min($por_pagina, count($contatos)); ?></strong> de <strong><?php echo $total_registros; ?></strong> contatos
-                            <?php if (!empty($filtro_cliente) || !empty($filtro_contato)): ?>
+                            <?php if (!empty($filtro)): ?>
                                 <span class="text-primary">(filtrados)</span>
                             <?php endif; ?>
                         <?php else: ?>
@@ -198,7 +180,7 @@ include 'header.php';
             </div>
             <div class="col-md-6 text-md-end">
                 <div class="btn-group" role="group">
-                    <a href="contatos.php?ordenacao=<?php echo $ordenacao; ?>&direcao=<?php echo $direcao == 'asc' ? 'desc' : 'asc'; ?>&filtro_cliente=<?php echo urlencode($filtro_cliente); ?>&filtro_contato=<?php echo urlencode($filtro_contato); ?>"
+                    <a href="contatos.php?ordenacao=<?php echo $ordenacao; ?>&direcao=<?php echo $direcao == 'asc' ? 'desc' : 'asc'; ?>&filtro=<?php echo urlencode($filtro); ?>"
                        class="btn btn-outline-secondary btn-sm d-flex align-items-center">
                         <i class="bi bi-sort-<?php echo $direcao == 'asc' ? 'down' : 'up'; ?> me-1"></i>
                         Ordenar
@@ -207,10 +189,10 @@ include 'header.php';
                         <?php echo ucfirst(str_replace('_ddd', '', $ordenacao)); ?>
                     </button>
                     <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="contatos.php?ordenacao=nome&direcao=asc&filtro_cliente=<?php echo urlencode($filtro_cliente); ?>&filtro_contato=<?php echo urlencode($filtro_contato); ?>">Nome</a></li>
-                        <li><a class="dropdown-item" href="contatos.php?ordenacao=fantasia&direcao=asc&filtro_cliente=<?php echo urlencode($filtro_cliente); ?>&filtro_contato=<?php echo urlencode($filtro_contato); ?>">Cliente</a></li>
-                        <li><a class="dropdown-item" href="contatos.php?ordenacao=cargo&direcao=asc&filtro_cliente=<?php echo urlencode($filtro_cliente); ?>&filtro_contato=<?php echo urlencode($filtro_contato); ?>">Cargo</a></li>
-                        <li><a class="dropdown-item" href="contatos.php?ordenacao=telefone_ddd&direcao=asc&filtro_cliente=<?php echo urlencode($filtro_cliente); ?>&filtro_contato=<?php echo urlencode($filtro_contato); ?>">Telefone</a></li>
+                        <li><a class="dropdown-item" href="contatos.php?ordenacao=nome&direcao=asc&filtro=<?php echo urlencode($filtro); ?>">Nome</a></li>
+                        <li><a class="dropdown-item" href="contatos.php?ordenacao=fantasia&direcao=asc&filtro=<?php echo urlencode($filtro); ?>">Cliente</a></li>
+                        <li><a class="dropdown-item" href="contatos.php?ordenacao=cargo&direcao=asc&filtro=<?php echo urlencode($filtro); ?>">Cargo</a></li>
+                        <li><a class="dropdown-item" href="contatos.php?ordenacao=telefone_ddd&direcao=asc&filtro=<?php echo urlencode($filtro); ?>">Telefone</a></li>
                     </ul>
                 </div>
             </div>
@@ -222,13 +204,13 @@ include 'header.php';
             <div class="text-center py-5">
                 <i class="bi bi-person-x fs-1 text-muted d-block mb-3"></i>
                 <p class="text-muted mb-3">
-                    <?php echo (!empty($filtro_cliente) || !empty($filtro_contato)) ? 
-                        'Nenhum contato encontrado com os filtros aplicados.' : 
+                    <?php echo !empty($filtro) ? 
+                        'Nenhum contato encontrado com o filtro aplicado.' : 
                         'Nenhum contato cadastrado ainda. Comece adicionando o primeiro!'; ?>
                 </p>
-                <?php if (!empty($filtro_cliente) || !empty($filtro_contato)): ?>
+                <?php if (!empty($filtro)): ?>
                     <a href="contatos.php" class="btn btn-outline-primary">
-                        <i class="bi bi-arrow-counterclockwise me-1"></i>Limpar filtros
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Limpar filtro
                     </a>
                 <?php else: ?>
                     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalContato">
@@ -242,7 +224,7 @@ include 'header.php';
                     <thead class="table-light">
                         <tr>
                             <th class="ps-4 py-3 border-bottom-0">
-                                <a href="contatos.php?ordenacao=nome&direcao=<?php echo ($ordenacao == 'nome' && $direcao == 'asc') ? 'desc' : 'asc'; ?>&filtro_cliente=<?php echo urlencode($filtro_cliente); ?>&filtro_contato=<?php echo urlencode($filtro_contato); ?>"
+                                <a href="contatos.php?ordenacao=nome&direcao=<?php echo ($ordenacao == 'nome' && $direcao == 'asc') ? 'desc' : 'asc'; ?>&filtro=<?php echo urlencode($filtro); ?>"
                                    class="text-decoration-none text-dark d-flex align-items-center">
                                     Nome
                                     <?php if ($ordenacao == 'nome'): ?>
@@ -251,7 +233,7 @@ include 'header.php';
                                 </a>
                             </th>
                             <th class="py-3 border-bottom-0">
-                                <a href="contatos.php?ordenacao=fantasia&direcao=<?php echo ($ordenacao == 'fantasia' && $direcao == 'asc') ? 'desc' : 'asc'; ?>&filtro_cliente=<?php echo urlencode($filtro_cliente); ?>&filtro_contato=<?php echo urlencode($filtro_contato); ?>"
+                                <a href="contatos.php?ordenacao=fantasia&direcao=<?php echo ($ordenacao == 'fantasia' && $direcao == 'asc') ? 'desc' : 'asc'; ?>&filtro=<?php echo urlencode($filtro); ?>"
                                    class="text-decoration-none text-dark d-flex align-items-center">
                                     Cliente
                                     <?php if ($ordenacao == 'fantasia'): ?>
@@ -260,7 +242,7 @@ include 'header.php';
                                 </a>
                             </th>
                             <th class="py-3 border-bottom-0">
-                                <a href="contatos.php?ordenacao=cargo&direcao=<?php echo ($ordenacao == 'cargo' && $direcao == 'asc') ? 'desc' : 'asc'; ?>&filtro_cliente=<?php echo urlencode($filtro_cliente); ?>&filtro_contato=<?php echo urlencode($filtro_contato); ?>"
+                                <a href="contatos.php?ordenacao=cargo&direcao=<?php echo ($ordenacao == 'cargo' && $direcao == 'asc') ? 'desc' : 'asc'; ?>&filtro=<?php echo urlencode($filtro); ?>"
                                    class="text-decoration-none text-dark d-flex align-items-center">
                                     Cargo
                                     <?php if ($ordenacao == 'cargo'): ?>
@@ -269,7 +251,7 @@ include 'header.php';
                                 </a>
                             </th>
                             <th class="py-3 border-bottom-0">
-                                <a href="contatos.php?ordenacao=telefone_ddd&direcao=<?php echo ($ordenacao == 'telefone_ddd' && $direcao == 'asc') ? 'desc' : 'asc'; ?>&filtro_cliente=<?php echo urlencode($filtro_cliente); ?>&filtro_contato=<?php echo urlencode($filtro_contato); ?>"
+                                <a href="contatos.php?ordenacao=telefone_ddd&direcao=<?php echo ($ordenacao == 'telefone_ddd' && $direcao == 'asc') ? 'desc' : 'asc'; ?>&filtro=<?php echo urlencode($filtro); ?>"
                                    class="text-decoration-none text-dark d-flex align-items-center">
                                     Telefone
                                     <?php if ($ordenacao == 'telefone_ddd'): ?>
@@ -329,7 +311,7 @@ include 'header.php';
                                             title="Editar contato">
                                         <i class="bi bi-pencil-square"></i>
                                     </button>
-                                    <a href="contatos.php?delete=<?php echo $c['id_contato']; ?>&pagina=<?php echo $pagina; ?>&filtro_cliente=<?php echo urlencode($filtro_cliente); ?>&filtro_contato=<?php echo urlencode($filtro_contato); ?>" 
+                                    <a href="contatos.php?delete=<?php echo $c['id_contato']; ?>&pagina=<?php echo $pagina; ?>&filtro=<?php echo urlencode($filtro); ?>" 
                                        class="btn btn-sm btn-outline-danger" 
                                        onclick="return confirm('Tem certeza que deseja excluir o contato \\'<?php echo addslashes($c['nome']); ?>\\'?')"
                                        title="Excluir contato">
@@ -350,7 +332,7 @@ include 'header.php';
                     <ul class="pagination justify-content-center mb-0">
                         <?php if ($pagina > 1): ?>
                             <li class="page-item">
-                                <a class="page-link" href="contatos.php?pagina=<?php echo $pagina-1; ?>&ordenacao=<?php echo $ordenacao; ?>&direcao=<?php echo $direcao; ?>&filtro_cliente=<?php echo urlencode($filtro_cliente); ?>&filtro_contato=<?php echo urlencode($filtro_contato); ?>">
+                                <a class="page-link" href="contatos.php?pagina=<?php echo $pagina-1; ?>&ordenacao=<?php echo $ordenacao; ?>&direcao=<?php echo $direcao; ?>&filtro=<?php echo urlencode($filtro); ?>">
                                     <i class="bi bi-chevron-left"></i>
                                 </a>
                             </li>
@@ -361,14 +343,14 @@ include 'header.php';
                         $fim = min($total_paginas, $pagina + 2);
                         
                         if ($inicio > 1) {
-                            echo '<li class="page-item"><a class="page-link" href="contatos.php?pagina=1&ordenacao='.$ordenacao.'&direcao='.$direcao.'&filtro_cliente='.urlencode($filtro_cliente).'&filtro_contato='.urlencode($filtro_contato).'">1</a></li>';
+                            echo '<li class="page-item"><a class="page-link" href="contatos.php?pagina=1&ordenacao='.$ordenacao.'&direcao='.$direcao.'&filtro='.urlencode($filtro).'">1</a></li>';
                             if ($inicio > 2) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
                         }
                         
                         for ($i = $inicio; $i <= $fim; $i++):
                         ?>
                             <li class="page-item <?php echo ($i == $pagina) ? 'active' : ''; ?>">
-                                <a class="page-link" href="contatos.php?pagina=<?php echo $i; ?>&ordenacao=<?php echo $ordenacao; ?>&direcao=<?php echo $direcao; ?>&filtro_cliente=<?php echo urlencode($filtro_cliente); ?>&filtro_contato=<?php echo urlencode($filtro_contato); ?>">
+                                <a class="page-link" href="contatos.php?pagina=<?php echo $i; ?>&ordenacao=<?php echo $ordenacao; ?>&direcao=<?php echo $direcao; ?>&filtro=<?php echo urlencode($filtro); ?>">
                                     <?php echo $i; ?>
                                 </a>
                             </li>
@@ -377,13 +359,13 @@ include 'header.php';
                         <?php
                         if ($fim < $total_paginas) {
                             if ($fim < $total_paginas - 1) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                            echo '<li class="page-item"><a class="page-link" href="contatos.php?pagina='.$total_paginas.'&ordenacao='.$ordenacao.'&direcao='.$direcao.'&filtro_cliente='.urlencode($filtro_cliente).'&filtro_contato='.urlencode($filtro_contato).'">'.$total_paginas.'</a></li>';
+                            echo '<li class="page-item"><a class="page-link" href="contatos.php?pagina='.$total_paginas.'&ordenacao='.$ordenacao.'&direcao='.$direcao.'&filtro='.urlencode($filtro).'">'.$total_paginas.'</a></li>';
                         }
                         ?>
                         
                         <?php if ($pagina < $total_paginas): ?>
                             <li class="page-item">
-                                <a class="page-link" href="contatos.php?pagina=<?php echo $pagina+1; ?>&ordenacao=<?php echo $ordenacao; ?>&direcao=<?php echo $direcao; ?>&filtro_cliente=<?php echo urlencode($filtro_cliente); ?>&filtro_contato=<?php echo urlencode($filtro_contato); ?>">
+                                <a class="page-link" href="contatos.php?pagina=<?php echo $pagina+1; ?>&ordenacao=<?php echo $ordenacao; ?>&direcao=<?php echo $direcao; ?>&filtro=<?php echo urlencode($filtro); ?>">
                                     <i class="bi bi-chevron-right"></i>
                                 </a>
                             </li>
@@ -411,14 +393,24 @@ include 'header.php';
                     <input type="hidden" name="id_contato" id="id_contato">
                     <div class="mb-3">
                         <label class="form-label fw-semibold small d-flex align-items-center">
-                            <i class="bi bi-building me-1"></i>Cliente
+                            <i class="bi bi-building me-1"></i>Cliente (ativos)
                         </label>
                         <select name="id_cliente" id="id_cliente" class="form-select" required>
-                            <option value="">Selecione um cliente...</option>
-                            <?php foreach ($clientes as $cl): ?>
-                                <option value="<?php echo $cl['id_cliente']; ?>"><?php echo htmlspecialchars($cl['fantasia']); ?></option>
-                            <?php endforeach; ?>
+                            <option value="">Selecione um cliente ativo...</option>
+                            <?php if (empty($clientes)): ?>
+                                <option value="" disabled>Nenhum cliente ativo encontrado</option>
+                            <?php else: ?>
+                                <?php foreach ($clientes as $cl): ?>
+                                    <option value="<?php echo $cl['id_cliente']; ?>"><?php echo htmlspecialchars($cl['fantasia']); ?></option>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                         </select>
+                        <?php if (empty($clientes)): ?>
+                            <div class="alert alert-warning mt-2 small">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                Não há clientes ativos cadastrados. Cadastre um cliente antes de adicionar contatos.
+                            </div>
+                        <?php endif; ?>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold small d-flex align-items-center">
@@ -451,7 +443,7 @@ include 'header.php';
                     <button type="button" class="btn btn-light fw-bold d-flex align-items-center" data-bs-dismiss="modal">
                         <i class="bi bi-x-lg me-1"></i>Cancelar
                     </button>
-                    <button type="submit" class="btn btn-primary px-4 d-flex align-items-center">
+                    <button type="submit" class="btn btn-primary px-4 d-flex align-items-center" <?php echo empty($clientes) ? 'disabled' : ''; ?>>
                         <i class="bi bi-check-lg me-1"></i>Salvar Contato
                     </button>
                 </div>
@@ -492,6 +484,13 @@ document.getElementById('modalContato').addEventListener('hidden.bs.modal', func
     document.querySelector('form').reset();
     document.getElementById('id_contato').value = '';
 });
+
+// Foco automático no campo de busca
+const filtroInput = document.querySelector('input[name="filtro"]');
+if (filtroInput && window.location.search.includes('filtro=')) {
+    filtroInput.focus();
+    filtroInput.select();
+}
 </script>
 
 <?php include 'footer.php'; ?>

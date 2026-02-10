@@ -63,6 +63,15 @@ foreach ($orientacoes as $o) {
 include 'header.php';
 ?>
 
+<style>
+.collapse-icon {
+    transition: transform 0.3s ease;
+}
+.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h2 class="fw-bold mb-0">Orientações do Sistema</h2>
@@ -89,12 +98,12 @@ include 'header.php';
                     <span class="input-group-text bg-white border-end-0">
                         <i class="bi bi-search text-muted"></i>
                     </span>
-                    <input type="text" 
-                           name="busca" 
-                           class="form-control border-start-0 ps-0" 
-                           placeholder="Buscar por título, descrição ou palavras-chave..."
-                           value="<?php echo htmlspecialchars($busca); ?>"
-                           autofocus>
+                    <input type="text"
+                        name="busca"
+                        class="form-control border-start-0 ps-0"
+                        placeholder="Buscar por título, descrição ou palavras-chave..."
+                        value="<?php echo htmlspecialchars($busca); ?>"
+                        autofocus>
                 </div>
             </div>
             <div class="col-md-4">
@@ -138,26 +147,31 @@ include 'header.php';
 <?php else: ?>
     <!-- Accordion por Categoria -->
     <div class="accordion" id="accordionOrientacoes">
-        <?php foreach ($orientacoes_agrupadas as $categoria => $items): ?>
+        <?php
+        $first = true; // Variável para controlar o primeiro item
+        foreach ($orientacoes_agrupadas as $categoria => $items):
+            $categoria_id = md5($categoria);
+        ?>
             <div class="card shadow-sm border-0 mb-3">
-                <div class="card-header bg-white border-0" id="heading<?php echo md5($categoria); ?>">
+                <div class="card-header bg-white border-0" id="heading<?php echo $categoria_id; ?>">
                     <h2 class="mb-0">
-                        <button class="btn btn-link btn-block text-start fw-bold text-dark text-decoration-none d-flex align-items-center" 
-                                type="button" 
-                                data-bs-toggle="collapse" 
-                                data-bs-target="#collapse<?php echo md5($categoria); ?>" 
-                                aria-expanded="true">
+                        <button class="btn btn-link btn-block text-start fw-bold text-dark text-decoration-none d-flex align-items-center collapsed"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#collapse<?php echo $categoria_id; ?>"
+                            aria-expanded="false" 
+                            <?php echo $categoria_id; ?>
                             <i class="bi bi-folder-fill text-primary me-2 fs-5"></i>
                             <?php echo htmlspecialchars($categoria); ?>
                             <span class="badge bg-primary ms-2"><?php echo count($items); ?></span>
+                            <i class="bi bi-chevron-down ms-auto collapse-icon"></i> <!-- Ícone indicador -->
                         </button>
                     </h2>
                 </div>
 
-                <div id="collapse<?php echo md5($categoria); ?>" 
-                     class="collapse show" 
-                     aria-labelledby="heading<?php echo md5($categoria); ?>" 
-                     data-bs-parent="#accordionOrientacoes">
+                <div id="collapse<?php echo $categoria_id; ?>"
+                    class="collapse" <!-- ALTERADO: removida a classe 'show' -->
+                    <aria-labelledby="heading<?php echo $categoria_id; ?>"<data-bs-parent="#accordionOrientacoes">
                     <div class="card-body p-0">
                         <div class="list-group list-group-flush">
                             <?php foreach ($items as $o): ?>
@@ -173,9 +187,9 @@ include 'header.php';
                                             </div>
                                             <?php if (!empty($o['link_acesso'])): ?>
                                                 <div class="mb-2">
-                                                    <a href="<?php echo htmlspecialchars($o['link_acesso']); ?>" 
-                                                       class="btn btn-sm btn-outline-primary" 
-                                                       target="_blank">
+                                                    <a href="<?php echo htmlspecialchars($o['link_acesso']); ?>"
+                                                        class="btn btn-sm btn-outline-primary"
+                                                        target="_blank">
                                                         <i class="bi bi-link-45deg me-1"></i>Acessar Link
                                                     </a>
                                                 </div>
@@ -183,7 +197,7 @@ include 'header.php';
                                             <?php if (!empty($o['palavras_chave'])): ?>
                                                 <div class="small text-muted">
                                                     <i class="bi bi-tags me-1"></i>
-                                                    <?php 
+                                                    <?php
                                                     $tags = explode(',', $o['palavras_chave']);
                                                     foreach ($tags as $tag): ?>
                                                         <span class="badge bg-light text-dark border me-1"><?php echo trim(htmlspecialchars($tag)); ?></span>
@@ -192,21 +206,21 @@ include 'header.php';
                                             <?php endif; ?>
                                         </div>
                                         <div class="ms-3">
-                                            <button class="btn btn-sm btn-light text-primary edit-btn me-1" 
-                                                    data-id="<?php echo $o['id_orientacao']; ?>"
-                                                    data-titulo="<?php echo htmlspecialchars($o['titulo']); ?>"
-                                                    data-categoria="<?php echo htmlspecialchars($o['categoria']); ?>"
-                                                    data-descricao="<?php echo htmlspecialchars($o['descricao']); ?>"
-                                                    data-link="<?php echo htmlspecialchars($o['link_acesso']); ?>"
-                                                    data-palavras="<?php echo htmlspecialchars($o['palavras_chave']); ?>"
-                                                    data-ordem="<?php echo $o['ordem']; ?>"
-                                                    data-bs-toggle="modal" 
-                                                    data-bs-target="#modalOrientacao">
+                                            <button class="btn btn-sm btn-light text-primary edit-btn me-1"
+                                                data-id="<?php echo $o['id_orientacao']; ?>"
+                                                data-titulo="<?php echo htmlspecialchars($o['titulo']); ?>"
+                                                data-categoria="<?php echo htmlspecialchars($o['categoria']); ?>"
+                                                data-descricao="<?php echo htmlspecialchars($o['descricao']); ?>"
+                                                data-link="<?php echo htmlspecialchars($o['link_acesso']); ?>"
+                                                data-palavras="<?php echo htmlspecialchars($o['palavras_chave']); ?>"
+                                                data-ordem="<?php echo $o['ordem']; ?>"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#modalOrientacao">
                                                 <i class="bi bi-pencil-square"></i>
                                             </button>
-                                            <a href="orientacoes.php?delete=<?php echo $o['id_orientacao']; ?>" 
-                                               class="btn btn-sm btn-light text-danger" 
-                                               onclick="return confirm('Deseja realmente excluir esta orientação?')">
+                                            <a href="orientacoes.php?delete=<?php echo $o['id_orientacao']; ?>"
+                                                class="btn btn-sm btn-light text-danger"
+                                                onclick="return confirm('Deseja realmente excluir esta orientação?')">
                                                 <i class="bi bi-trash"></i>
                                             </a>
                                         </div>
@@ -217,7 +231,10 @@ include 'header.php';
                     </div>
                 </div>
             </div>
-        <?php endforeach; ?>
+        <?php
+            $first = false;
+        endforeach;
+        ?>
     </div>
 <?php endif; ?>
 
@@ -232,26 +249,26 @@ include 'header.php';
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="id_orientacao" id="id_orientacao">
-                    
+
                     <div class="row mb-3">
                         <div class="col-md-8">
                             <label class="form-label fw-semibold small">Título da Orientação</label>
-                            <input type="text" 
-                                   name="titulo" 
-                                   id="titulo" 
-                                   class="form-control" 
-                                   required 
-                                   placeholder="Ex: Como cadastrar um novo cliente">
+                            <input type="text"
+                                name="titulo"
+                                id="titulo"
+                                class="form-control"
+                                required
+                                placeholder="Ex: Como cadastrar um novo cliente">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-semibold small">Ordem</label>
-                            <input type="number" 
-                                   name="ordem" 
-                                   id="ordem" 
-                                   class="form-control" 
-                                   value="0"
-                                   min="0"
-                                   placeholder="0">
+                            <input type="number"
+                                name="ordem"
+                                id="ordem"
+                                class="form-control"
+                                value="0"
+                                min="0"
+                                placeholder="0">
                             <small class="text-muted">Ordem de exibição</small>
                         </div>
                     </div>
@@ -271,12 +288,12 @@ include 'header.php';
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold small">Descrição / Passo a Passo</label>
-                        <textarea name="descricao" 
-                                  id="descricao" 
-                                  class="form-control" 
-                                  rows="6" 
-                                  required 
-                                  placeholder="Descreva o procedimento passo a passo...
+                        <textarea name="descricao"
+                            id="descricao"
+                            class="form-control"
+                            rows="6"
+                            required
+                            placeholder="Descreva o procedimento passo a passo...
 
 Exemplo:
 1. Acesse o menu Clientes
@@ -287,21 +304,21 @@ Exemplo:
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold small">Link de Acesso (Opcional)</label>
-                        <input type="url" 
-                               name="link_acesso" 
-                               id="link_acesso" 
-                               class="form-control" 
-                               placeholder="https://exemplo.com/pagina">
+                        <input type="url"
+                            name="link_acesso"
+                            id="link_acesso"
+                            class="form-control"
+                            placeholder="https://exemplo.com/pagina">
                         <small class="text-muted">URL para página relacionada ou documentação externa</small>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold small">Palavras-chave (Tags)</label>
-                        <input type="text" 
-                               name="palavras_chave" 
-                               id="palavras_chave" 
-                               class="form-control" 
-                               placeholder="cadastro, cliente, empresa">
+                        <input type="text"
+                            name="palavras_chave"
+                            id="palavras_chave"
+                            class="form-control"
+                            placeholder="cadastro, cliente, empresa">
                         <small class="text-muted">Separe por vírgulas. Facilita a busca e localização.</small>
                     </div>
                 </div>
@@ -315,26 +332,26 @@ Exemplo:
 </div>
 
 <script>
-// Lógica de Edição
-document.querySelectorAll('.edit-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-        document.getElementById('modalTitle').innerText = 'Editar Orientação';
-        document.getElementById('id_orientacao').value = this.dataset.id;
-        document.getElementById('titulo').value = this.dataset.titulo;
-        document.getElementById('categoria').value = this.dataset.categoria;
-        document.getElementById('descricao').value = this.dataset.descricao;
-        document.getElementById('link_acesso').value = this.dataset.link;
-        document.getElementById('palavras_chave').value = this.dataset.palavras;
-        document.getElementById('ordem').value = this.dataset.ordem;
+    // Lógica de Edição
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('modalTitle').innerText = 'Editar Orientação';
+            document.getElementById('id_orientacao').value = this.dataset.id;
+            document.getElementById('titulo').value = this.dataset.titulo;
+            document.getElementById('categoria').value = this.dataset.categoria;
+            document.getElementById('descricao').value = this.dataset.descricao;
+            document.getElementById('link_acesso').value = this.dataset.link;
+            document.getElementById('palavras_chave').value = this.dataset.palavras;
+            document.getElementById('ordem').value = this.dataset.ordem;
+        });
     });
-});
 
-// Reset ao fechar modal
-document.getElementById('modalOrientacao').addEventListener('hidden.bs.modal', function () {
-    document.getElementById('modalTitle').innerText = 'Nova Orientação';
-    document.querySelector('form').reset();
-    document.getElementById('id_orientacao').value = '';
-});
+    // Reset ao fechar modal
+    document.getElementById('modalOrientacao').addEventListener('hidden.bs.modal', function() {
+        document.getElementById('modalTitle').innerText = 'Nova Orientação';
+        document.querySelector('form').reset();
+        document.getElementById('id_orientacao').value = '';
+    });
 </script>
 
 <?php include 'footer.php'; ?>
