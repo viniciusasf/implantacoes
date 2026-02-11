@@ -210,6 +210,27 @@ $total_relatorios = 0; // Pode ser adaptado para contar relatórios pendentes, e
                 margin-left: 0;
             }
         }
+
+        /* Adicionar ao CSS global */
+        .text-purple {
+            color: #7209b7 !important;
+        }
+
+        .btn-purple {
+            background-color: #7209b7;
+            border-color: #7209b7;
+            color: white;
+        }
+
+        .btn-purple:hover {
+            background-color: #5a08a5;
+            border-color: #5a08a5;
+            color: white;
+        }
+
+        .stat-icon.text-purple {
+            color: #7209b7 !important;
+        }
     </style>
 </head>
 

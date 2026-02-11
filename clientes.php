@@ -730,6 +730,31 @@ include 'header.php';
         padding-top: 12px;
         padding-bottom: 12px;
     }
+
+    /* CORREÇÕES PARA BOTÕES */
+    a.btn-action {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-decoration: none !important;
+        cursor: pointer !important;
+        pointer-events: auto !important;
+    }
+
+    .client-card .client-card-footer,
+    .table td.text-center.pe-4 {
+        overflow: visible !important;
+    }
+
+    .action-buttons {
+        position: relative;
+        z-index: 100;
+    }
+
+    .client-card .btn-action {
+        min-width: 28px;
+        min-height: 28px;
+    }
 </style>
 
 <div class="container-fluid py-4">
@@ -1034,29 +1059,33 @@ include 'header.php';
                                 </small>
                                 <div class="action-buttons">
                                     <?php if (!$cliente_encerrado): ?>
-                                        <!-- BOTÃO CONCLUIR IMPLANTAÇÃO -->
-                                        <a href="?concluir=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>"
-                                            class="btn-action concluir"
-                                            data-bs-toggle="tooltip"
-                                            data-bs-title="Concluir Implantação"
-                                            onclick="return confirm('Deseja marcar esta implantação como CONCLUÍDA?')">
-                                            <i class="bi bi-check-circle"></i>
-                                        </a>
+                                        <!-- BOTÃO CONCLUIR - CORRIGIDO -->
+                                        <form method="GET" action="clientes.php" style="display: inline;" onsubmit="return confirm('Deseja marcar esta implantação como CONCLUÍDA?');">
+                                            <input type="hidden" name="concluir" value="<?= $c['id_cliente'] ?>">
+                                            <input type="hidden" name="view" value="<?= $view_mode ?>">
+                                            <input type="hidden" name="mostrar_encerrados" value="<?= $mostrar_encerrados ?>">
+                                            <button type="submit" class="btn-action concluir" data-bs-toggle="tooltip" data-bs-title="Concluir Implantação">
+                                                <i class="bi bi-check-circle"></i>
+                                            </button>
+                                        </form>
 
-                                        <!-- BOTÃO CANCELAR IMPLANTAÇÃO -->
-                                        <a href="?cancelar=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>"
-                                            class="btn-action cancelar"
-                                            data-bs-toggle="tooltip"
-                                            data-bs-title="Cancelar Implantação"
-                                            onclick="return confirm('Deseja CANCELAR esta implantação? Esta ação será registrada nas observações.')">
-                                            <i class="bi bi-x-circle"></i>
-                                        </a>
+                                        <!-- BOTÃO CANCELAR IMPLANTAÇÃO - CORRIGIDO -->
+                                        <form method="GET" action="clientes.php" style="display: inline;" onsubmit="return confirm('Deseja CANCELAR esta implantação? Esta ação será registrada nas observações.');">
+                                            <input type="hidden" name="cancelar" value="<?= $c['id_cliente'] ?>">
+                                            <input type="hidden" name="view" value="<?= $view_mode ?>">
+                                            <input type="hidden" name="mostrar_encerrados" value="<?= $mostrar_encerrados ?>">
+                                            <button type="submit" class="btn-action cancelar" data-bs-toggle="tooltip" data-bs-title="Cancelar Implantação">
+                                                <i class="bi bi-x-circle"></i>
+                                            </button>
+                                        </form>
                                     <?php endif; ?>
 
-                                    <!-- BOTÃO EDITAR -->
-                                    <button class="btn-action edit edit-btn"
-                                        data-bs-toggle="tooltip"
-                                        data-bs-title="Editar cliente"
+                                    <!-- BOTÃO EDITAR - VERSÃO BOOTSTRAP NATIVA -->
+                                    <button type="button"
+                                        class="btn-action edit edit-btn"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#modalCliente"
+                                        data-bs-whatever="edit"
                                         data-id="<?= $c['id_cliente'] ?>"
                                         data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
                                         data-servidor="<?= htmlspecialchars($c['servidor']) ?>"
@@ -1066,26 +1095,27 @@ include 'header.php';
                                         data-observacao="<?= htmlspecialchars($c['observacao'] ?? '') ?>"
                                         data-emitir_nf="<?= htmlspecialchars($c['emitir_nf']) ?>"
                                         data-configurado="<?= htmlspecialchars($c['configurado']) ?>"
-                                        onclick="openEditModal(this)">
+                                        onclick="event.stopPropagation();">
                                         <i class="bi bi-pencil"></i>
                                     </button>
 
-                                    <!-- BOTÃO VER TREINAMENTOS -->
+                                    <!-- BOTÃO VER TREINAMENTOS - VERSÃO CORRIGIDA -->
                                     <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>"
                                         class="btn-action treinamentos"
                                         data-bs-toggle="tooltip"
-                                        data-bs-title="Ver treinamentos">
+                                        data-bs-title="Ver treinamentos"
+                                        onclick="event.stopPropagation(); return true;">
                                         <i class="bi bi-journal-check"></i>
                                     </a>
 
-                                    <!-- BOTÃO EXCLUIR -->
-                                    <a href="?delete=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>"
-                                        class="btn-action delete"
-                                        data-bs-toggle="tooltip"
-                                        data-bs-title="Excluir cliente"
-                                        onclick="return confirm('Tem certeza que deseja excluir este cliente?')">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
+                                    <form method="GET" action="clientes.php" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir este cliente?');">
+                                        <input type="hidden" name="delete" value="<?= $c['id_cliente'] ?>">
+                                        <input type="hidden" name="view" value="<?= $view_mode ?>">
+                                        <input type="hidden" name="mostrar_encerrados" value="<?= $mostrar_encerrados ?>">
+                                        <button type="submit" class="btn-action delete" data-bs-toggle="tooltip" data-bs-title="Excluir cliente">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
                                 </div>
                             </div>
                         </div>
@@ -1105,7 +1135,7 @@ include 'header.php';
                         <th>Início</th>
                         <th>Dias</th>
                         <th>Treinamentos</th>
-                        <th class="text-center pe-4">Ações</th> <!-- Alterado para text-center -->
+                        <th class="text-center pe-4">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1210,32 +1240,34 @@ include 'header.php';
                                         <?php endif; ?>
                                     </div>
                                 </td>
-                                <td class="text-center pe-4"> <!-- Alterado para text-center -->
-                                    <div class="action-buttons justify-content-center"> <!-- Adicionado justify-content-center -->
+                                <td class="text-center pe-4">
+                                    <div class="action-buttons justify-content-center">
                                         <?php if (!$cliente_encerrado): ?>
-                                            <!-- BOTÃO CONCLUIR IMPLANTAÇÃO -->
+                                            <!-- BOTÃO CONCLUIR IMPLANTAÇÃO - CORRIGIDO -->
                                             <a href="?concluir=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>"
                                                 class="btn-action concluir"
                                                 data-bs-toggle="tooltip"
                                                 data-bs-title="Concluir Implantação"
-                                                onclick="return confirm('Deseja marcar esta implantação como CONCLUÍDA?')">
+                                                onclick="event.stopPropagation(); return confirm('Deseja marcar esta implantação como CONCLUÍDA?');">
                                                 <i class="bi bi-check-circle"></i>
                                             </a>
 
-                                            <!-- BOTÃO CANCELAR IMPLANTAÇÃO -->
+                                            <!-- BOTÃO CANCELAR IMPLANTAÇÃO - CORRIGIDO -->
                                             <a href="?cancelar=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>"
                                                 class="btn-action cancelar"
                                                 data-bs-toggle="tooltip"
                                                 data-bs-title="Cancelar Implantação"
-                                                onclick="return confirm('Deseja CANCELAR esta implantação? Esta ação será registrada nas observações.')">
+                                                onclick="event.stopPropagation(); return confirm('Deseja CANCELAR esta implantação? Esta ação será registrada nas observações.');">
                                                 <i class="bi bi-x-circle"></i>
                                             </a>
                                         <?php endif; ?>
 
-                                        <!-- BOTÃO EDITAR -->
-                                        <button class="btn-action edit edit-btn"
-                                            data-bs-toggle="tooltip"
-                                            data-bs-title="Editar cliente"
+                                        <!-- BOTÃO EDITAR - VERSÃO BOOTSTRAP NATIVA -->
+                                        <button type="button"
+                                            class="btn-action edit edit-btn"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalCliente"
+                                            data-bs-whatever="edit"
                                             data-id="<?= $c['id_cliente'] ?>"
                                             data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
                                             data-servidor="<?= htmlspecialchars($c['servidor']) ?>"
@@ -1245,15 +1277,16 @@ include 'header.php';
                                             data-observacao="<?= htmlspecialchars($c['observacao'] ?? '') ?>"
                                             data-emitir_nf="<?= htmlspecialchars($c['emitir_nf']) ?>"
                                             data-configurado="<?= htmlspecialchars($c['configurado']) ?>"
-                                            onclick="openEditModal(this)">
+                                            onclick="event.stopPropagation();">
                                             <i class="bi bi-pencil"></i>
                                         </button>
 
-                                        <!-- BOTÃO VER TREINAMENTOS -->
+                                        <!-- BOTÃO VER TREINAMENTOS - VERSÃO CORRIGIDA -->
                                         <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>"
                                             class="btn-action treinamentos"
                                             data-bs-toggle="tooltip"
-                                            data-bs-title="Ver treinamentos">
+                                            data-bs-title="Ver treinamentos"
+                                            onclick="event.stopPropagation(); return true;">
                                             <i class="bi bi-journal-check"></i>
                                         </a>
 
@@ -1262,7 +1295,7 @@ include 'header.php';
                                             class="btn-action delete"
                                             data-bs-toggle="tooltip"
                                             data-bs-title="Excluir cliente"
-                                            onclick="return confirm('Tem certeza que deseja excluir este cliente?')">
+                                            onclick="event.stopPropagation(); return confirm('Tem certeza que deseja excluir este cliente?');">
                                             <i class="bi bi-trash"></i>
                                         </a>
                                     </div>
@@ -1338,9 +1371,9 @@ include 'header.php';
 <script>
     // Inicializar tooltips
     document.addEventListener('DOMContentLoaded', function() {
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
         var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
+            return new bootstrap.Tooltip(tooltipTriggerEl);
         });
 
         // Configurar data atual como padrão para novo cliente
@@ -1349,6 +1382,29 @@ include 'header.php';
             const today = new Date().toISOString().split('T')[0];
             dataInicioInput.value = today;
         }
+
+        // CORREÇÃO: Impedir que cliques nos containers interfiram com os botões
+        document.querySelectorAll('.client-card, .client-card-footer, tr').forEach(container => {
+            container.addEventListener('click', function(e) {
+                if (e.target.closest('.btn-action')) {
+                    e.stopPropagation();
+                }
+            }, true);
+        });
+
+        // CORREÇÃO ESPECÍFICA PARA BOTÕES EDITAR
+        // Reaplicar eventos nos botões de editar
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+            // Remover listeners antigos clonando
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+
+            // Adicionar listener de clique
+            newBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                openEditModal(this);
+            });
+        });
     });
 
     // Funções de controle da view
@@ -1388,7 +1444,6 @@ include 'header.php';
         const configLabel = document.getElementById('label_configurado');
         const emitirLabel = document.getElementById('label_emitir_nf');
 
-        // Reset classes
         emitirSelect.classList.remove('border-warning', 'border-success', 'border-2');
         configSelect.classList.remove('border-warning', 'border-success', 'border-2');
         emitirLabel.classList.remove('text-warning', 'text-success', 'fw-bold');
@@ -1415,6 +1470,9 @@ include 'header.php';
     }
 
     function openEditModal(button) {
+        // Prevenir qualquer propagação de evento
+        if (event) event.stopPropagation();
+
         document.getElementById('modalTitle').innerText = 'Editar Cliente';
         document.getElementById('id_cliente').value = button.dataset.id;
         document.getElementById('fantasia').value = button.dataset.fantasia;
@@ -1432,7 +1490,6 @@ include 'header.php';
 
         toggleConfigurado(nf);
 
-        // Abrir modal
         const modal = new bootstrap.Modal(document.getElementById('modalCliente'));
         modal.show();
     }
@@ -1447,7 +1504,6 @@ include 'header.php';
         document.getElementById('configurado').value = 'Não';
         toggleConfigurado('Não');
 
-        // Resetar data para hoje
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('data_inicio').value = today;
     });
@@ -1470,6 +1526,32 @@ include 'header.php';
     });
 
     document.getElementById('configurado').addEventListener('change', updateModalVisual);
+
+    // Abrir modal de edição com os dados do botão
+    document.addEventListener('DOMContentLoaded', function() {
+        var modalCliente = document.getElementById('modalCliente');
+        modalCliente.addEventListener('show.bs.modal', function(event) {
+            var button = event.relatedTarget; // Botão que acionou o modal
+            if (button && button.dataset.id) {
+                document.getElementById('modalTitle').innerText = 'Editar Cliente';
+                document.getElementById('id_cliente').value = button.dataset.id;
+                document.getElementById('fantasia').value = button.dataset.fantasia || '';
+                document.getElementById('servidor').value = button.dataset.servidor || '';
+                document.getElementById('vendedor').value = button.dataset.vendedor || '';
+                document.getElementById('data_inicio').value = button.dataset.data_inicio || '';
+                document.getElementById('id_data_fim').value = button.dataset.data_fim || '';
+                document.getElementById('observacao').value = button.dataset.observacao || '';
+
+                const nf = button.dataset.emitir_nf || 'Não';
+                const conf = button.dataset.configurado || 'Não';
+
+                document.getElementById('emitir_nf').value = nf;
+                document.getElementById('configurado').value = conf;
+
+                toggleConfigurado(nf);
+            }
+        });
+    });
 </script>
 
 <?php include 'footer.php'; ?>
