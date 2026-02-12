@@ -37,7 +37,7 @@ if (isset($_GET['delete'])) {
     exit;
 }
 
-// 4. Lógica para Adicionar/Editar
+// 4. Lógica para Adicionar/Editar - ATUALIZADO COM NOVOS CAMPOS
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $fantasia = $_POST['fantasia'];
     $servidor = $_POST['servidor'];
@@ -49,12 +49,51 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $emitir_nf = $_POST['emitir_nf'] ?? 'Não';
     $configurado = $_POST['configurado'] ?? 'Não';
 
+    // NOVOS CAMPOS
+    $num_licencas = $_POST['num_licencas'] ?? 0;
+    $anexo = $_POST['anexo'] ?? '';
+
     if (isset($_POST['id_cliente']) && !empty($_POST['id_cliente'])) {
-        $stmt = $pdo->prepare("UPDATE clientes SET fantasia=?, servidor=?, vendedor=?, telefone_ddd=?, data_inicio=?, data_fim=?, observacao=?, emitir_nf=?, configurado=? WHERE id_cliente=?");
-        $stmt->execute([$fantasia, $servidor, $vendedor, $telefone, $data_inicio, $data_fim, $observacao, $emitir_nf, $configurado, $_POST['id_cliente']]);
+        // UPDATE com novos campos
+        $stmt = $pdo->prepare("UPDATE clientes SET 
+            fantasia=?, servidor=?, vendedor=?, telefone_ddd=?, 
+            data_inicio=?, data_fim=?, observacao=?, 
+            emitir_nf=?, configurado=?, num_licencas=?, anexo=? 
+            WHERE id_cliente=?");
+        $stmt->execute([
+            $fantasia,
+            $servidor,
+            $vendedor,
+            $telefone,
+            $data_inicio,
+            $data_fim,
+            $observacao,
+            $emitir_nf,
+            $configurado,
+            $num_licencas,
+            $anexo,
+            $_POST['id_cliente']
+        ]);
     } else {
-        $stmt = $pdo->prepare("INSERT INTO clientes (fantasia, servidor, vendedor, telefone_ddd, data_inicio, data_fim, observacao, emitir_nf, configurado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$fantasia, $servidor, $vendedor, $telefone, $data_inicio, $data_fim, $observacao, $emitir_nf, $configurado]);
+        // INSERT com novos campos
+        $stmt = $pdo->prepare("INSERT INTO clientes (
+            fantasia, servidor, vendedor, telefone_ddd, 
+            data_inicio, data_fim, observacao, 
+            emitir_nf, configurado, num_licencas, anexo
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([
+            $fantasia,
+            $servidor,
+            $vendedor,
+            $telefone,
+            $data_inicio,
+            $data_fim,
+            $observacao,
+            $emitir_nf,
+            $configurado,
+            $num_licencas,
+            $anexo
+        ]);
     }
     header("Location: clientes.php?msg=Dados+atualizados&view=" . $view_mode);
     exit;
@@ -1031,6 +1070,22 @@ include 'header.php';
                                         <?php endif; ?>
                                     </div>
                                 </div>
+                                <?php if (isset($c['num_licencas']) && $c['num_licencas'] > 0): ?>
+                                    <div class="mt-1 small text-muted">
+                                        <i class="bi bi-people me-1"></i>
+                                        <?= $c['num_licencas'] ?> licença(s)
+                                    </div>
+                                <?php endif; ?>
+
+                                <?php if (!empty($c['anexo'])): ?>
+                                    <div class="mt-1">
+                                        <a href="<?= htmlspecialchars($c['anexo']) ?>" target="_blank" class="small text-info">
+                                            <i class="bi bi-paperclip me-1"></i>Anexo
+                                        </a>
+                                    </div>
+                                <?php endif; ?>
+
+
                             </div>
 
                             <?php if ($c['emitir_nf'] == 'Sim'): ?>
@@ -1081,11 +1136,10 @@ include 'header.php';
                                     <?php endif; ?>
 
                                     <!-- BOTÃO EDITAR - VERSÃO BOOTSTRAP NATIVA -->
-                                    <button type="button"
-                                        class="btn-action edit edit-btn"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#modalCliente"
-                                        data-bs-whatever="edit"
+                                    <!-- Nos cards (view_mode == 'cards') - adicionar data-num_licencas e data-anexo -->
+                                    <button class="btn-action edit edit-btn"
+                                        data-bs-toggle="tooltip"
+                                        data-bs-title="Editar cliente"
                                         data-id="<?= $c['id_cliente'] ?>"
                                         data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
                                         data-servidor="<?= htmlspecialchars($c['servidor']) ?>"
@@ -1095,7 +1149,8 @@ include 'header.php';
                                         data-observacao="<?= htmlspecialchars($c['observacao'] ?? '') ?>"
                                         data-emitir_nf="<?= htmlspecialchars($c['emitir_nf']) ?>"
                                         data-configurado="<?= htmlspecialchars($c['configurado']) ?>"
-                                        onclick="event.stopPropagation();">
+                                        data-num_licencas="<?= $c['num_licencas'] ?? 0 ?>"
+                                        data-anexo="<?= htmlspecialchars($c['anexo'] ?? '') ?>">
                                         <i class="bi bi-pencil"></i>
                                     </button>
 
@@ -1200,13 +1255,15 @@ include 'header.php';
                                     <div class="fw-bold"><?= htmlspecialchars($c['fantasia']) ?></div>
                                     <div class="d-flex align-items-center">
                                         <small class="text-muted"><?= htmlspecialchars($c['servidor']) ?></small>
-                                        <?php if ($c['emitir_nf'] == 'Sim'): ?>
-                                            <span class="badge ms-2 <?= $c['configurado'] == 'Sim' ? 'bg-success' : 'bg-warning' ?>"
-                                                style="font-size: 0.6rem;"
+
+                                        <?php if (!empty($c['anexo'])): ?>
+                                            <a href="<?= htmlspecialchars($c['anexo']) ?>"
+                                                target="_blank"
+                                                class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 ms-2 text-decoration-none"
                                                 data-bs-toggle="tooltip"
-                                                data-bs-title="NF: <?= $c['emitir_nf'] ?> | Config: <?= $c['configurado'] ?>">
-                                                NF
-                                            </span>
+                                                data-bs-title="Ver anexo">
+                                                <i class="bi bi-paperclip me-1"></i>Anexo
+                                            </a>
                                         <?php endif; ?>
                                         <?php if ($cliente_encerrado): ?>
                                             <span class="badge ms-2 bg-secondary" style="font-size: 0.6rem;">
@@ -1263,11 +1320,10 @@ include 'header.php';
                                         <?php endif; ?>
 
                                         <!-- BOTÃO EDITAR - VERSÃO BOOTSTRAP NATIVA -->
-                                        <button type="button"
-                                            class="btn-action edit edit-btn"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#modalCliente"
-                                            data-bs-whatever="edit"
+                                        <!-- Nos cards (view_mode == 'cards') - adicionar data-num_licencas e data-anexo -->
+                                        <button class="btn-action edit edit-btn"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Editar cliente"
                                             data-id="<?= $c['id_cliente'] ?>"
                                             data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
                                             data-servidor="<?= htmlspecialchars($c['servidor']) ?>"
@@ -1277,7 +1333,9 @@ include 'header.php';
                                             data-observacao="<?= htmlspecialchars($c['observacao'] ?? '') ?>"
                                             data-emitir_nf="<?= htmlspecialchars($c['emitir_nf']) ?>"
                                             data-configurado="<?= htmlspecialchars($c['configurado']) ?>"
-                                            onclick="event.stopPropagation();">
+                                            data-num_licencas="<?= $c['num_licencas'] ?? 0 ?>"
+                                            data-anexo="<?= htmlspecialchars($c['anexo'] ?? '') ?>"
+                                            onclick="openEditModal(this)">
                                             <i class="bi bi-pencil"></i>
                                         </button>
 
@@ -1309,7 +1367,7 @@ include 'header.php';
     <?php endif; ?>
 </div>
 
-<!-- MODAL DE CLIENTE -->
+<!-- MODAL DE CLIENTE - ATUALIZADO COM CAMPOS NUM_LICENCAS E ANEXO -->
 <div class="modal fade" id="modalCliente" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:16px;">
@@ -1319,58 +1377,145 @@ include 'header.php';
             </div>
             <div class="modal-body px-4">
                 <input type="hidden" name="id_cliente" id="id_cliente">
+
                 <div class="row g-3">
+                    <!-- Linha 1: Nome Fantasia -->
                     <div class="col-12">
-                        <label class="form-label small fw-bold">Nome Fantasia</label>
-                        <input type="text" name="fantasia" id="fantasia" class="form-control" required>
+                        <label class="form-label small fw-bold">
+                            <i class="bi bi-building me-1"></i>Nome Fantasia
+                        </label>
+                        <input type="text" name="fantasia" id="fantasia" class="form-control" required
+                            placeholder="Digite o nome do cliente">
+                    </div>
+
+                    <!-- Linha 2: Servidor e Vendedor -->
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">
+                            <i class="bi bi-hdd me-1"></i>Servidor
+                        </label>
+                        <input type="text" name="servidor" id="servidor" class="form-control"
+                            placeholder="Ex: SRV-01">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small fw-bold">Servidor</label>
-                        <input type="text" name="servidor" id="servidor" class="form-control">
+                        <label class="form-label small fw-bold">
+                            <i class="bi bi-person-badge me-1"></i>Vendedor
+                        </label>
+                        <input type="text" name="vendedor" id="vendedor" class="form-control"
+                            placeholder="Nome do vendedor">
                     </div>
+
+                    <!-- Linha 3: Datas -->
                     <div class="col-md-6">
-                        <label class="form-label small fw-bold">Vendedor</label>
-                        <input type="text" name="vendedor" id="vendedor" class="form-control">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold">Data Início</label>
+                        <label class="form-label small fw-bold">
+                            <i class="bi bi-calendar-plus me-1"></i>Data Início
+                        </label>
                         <input type="date" name="data_inicio" id="data_inicio" class="form-control" required>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small fw-bold">Data Conclusão</label>
+                        <label class="form-label small fw-bold">
+                            <i class="bi bi-calendar-check me-1"></i>Data Conclusão
+                        </label>
                         <input type="date" name="data_fim" id="id_data_fim" class="form-control">
                     </div>
+
+                    <!-- Linha 4: Emitir NF e Configurado -->
                     <div class="col-md-6">
-                        <label class="form-label small fw-bold" id="label_emitir_nf">Emitir nota fiscal</label>
+                        <label class="form-label small fw-bold" id="label_emitir_nf">
+                            <i class="bi bi-receipt me-1"></i>Emitir nota fiscal
+                        </label>
                         <select name="emitir_nf" id="emitir_nf" class="form-select" onchange="toggleConfigurado(this.value)">
                             <option value="Não">Não</option>
                             <option value="Sim">Sim</option>
                         </select>
                     </div>
                     <div class="col-md-6" id="div_configurado" style="display: none;">
-                        <label class="form-label small fw-bold text-muted" id="label_configurado">Configurado</label>
+                        <label class="form-label small fw-bold text-muted" id="label_configurado">
+                            <i class="bi bi-gear me-1"></i>Configurado
+                        </label>
                         <select name="configurado" id="configurado" class="form-select">
                             <option value="Não">Não</option>
                             <option value="Sim">Sim</option>
                         </select>
                     </div>
+
+                    <!-- NOVA LINHA 5: Número de Licenças e Anexo -->
+                    <!-- NOVA LINHA 5: Número de Licenças e Anexo COM BOTÃO PARA ABRIR LINK -->
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">
+                            <i class="bi bi-people me-1"></i>Número de Licenças
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0">
+                                <i class="bi bi-123"></i>
+                            </span>
+                            <input type="number"
+                                name="num_licencas"
+                                id="num_licencas"
+                                class="form-control border-start-0"
+                                placeholder="0"
+                                min="0"
+                                step="1"
+                                value="0">
+                        </div>
+                        <small class="text-muted">Quantidade de licenças contratadas</small>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">
+                            <i class="bi bi-paperclip me-1"></i>Anexo (Google Drive)
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">
+                                <i class="bi bi-link-45deg"></i>
+                            </span>
+                            <input type="text"
+                                name="anexo"
+                                id="anexo"
+                                class="form-control"
+                                placeholder="https://drive.google.com/..."
+                                value="">
+                            <!-- BOTÃO PARA ABRIR LINK -->
+                            <button class="btn btn-outline-primary"
+                                type="button"
+                                id="btnAbrirAnexo"
+                                onclick="abrirAnexo()"
+                                data-bs-toggle="tooltip"
+                                data-bs-title="Abrir link no navegador">
+                                <i class="bi bi-box-arrow-up-right"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Cole o link do Google Drive, contrato ou documento
+                        </small>
+                    </div>
+
+                    <!-- Linha 6: Observações (ocupando linha inteira) -->
                     <div class="col-12">
-                        <label class="form-label small fw-bold">Observações</label>
-                        <textarea name="observacao" id="observacao" class="form-control" rows="3"></textarea>
+                        <label class="form-label small fw-bold">
+                            <i class="bi bi-chat-left-text me-1"></i>Observações
+                        </label>
+                        <textarea name="observacao" id="observacao" class="form-control"
+                            rows="3" placeholder="Informações adicionais sobre o cliente..."></textarea>
                     </div>
                 </div>
             </div>
             <div class="modal-footer border-0 p-4">
-                <button type="button" class="btn btn-light fw-bold px-4" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-primary fw-bold shadow-sm px-4">Salvar</button>
+                <button type="button" class="btn btn-light fw-bold px-4" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-2"></i>Cancelar
+                </button>
+                <button type="submit" class="btn btn-primary fw-bold shadow-sm px-4">
+                    <i class="bi bi-check-circle me-2"></i>Salvar
+                </button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
-    // Inicializar tooltips
+    // Inicializar tooltips e event listeners
     document.addEventListener('DOMContentLoaded', function() {
+        // Inicializar tooltips
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
         var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
@@ -1383,31 +1528,30 @@ include 'header.php';
             dataInicioInput.value = today;
         }
 
-        // CORREÇÃO: Impedir que cliques nos containers interfiram com os botões
-        document.querySelectorAll('.client-card, .client-card-footer, tr').forEach(container => {
-            container.addEventListener('click', function(e) {
-                if (e.target.closest('.btn-action')) {
-                    e.stopPropagation();
-                }
-            }, true);
-        });
+        // === CORREÇÃO: EVENT LISTENER PARA BOTÕES EDITAR ===
+        // Selecionar todos os botões com a classe edit-btn
+        const editButtons = document.querySelectorAll('.edit-btn');
 
-        // CORREÇÃO ESPECÍFICA PARA BOTÕES EDITAR
-        // Reaplicar eventos nos botões de editar
-        document.querySelectorAll('.edit-btn').forEach(btn => {
-            // Remover listeners antigos clonando
-            const newBtn = btn.cloneNode(true);
-            btn.parentNode.replaceChild(newBtn, btn);
+        // Adicionar event listener para cada botão
+        editButtons.forEach(function(button) {
+            button.addEventListener('click', function(e) {
+                e.preventDefault(); // Prevenir comportamento padrão
 
-            // Adicionar listener de clique
-            newBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
+                // Chamar função openEditModal com o botão clicado
                 openEditModal(this);
             });
         });
+
+        // Verificar se encontrou os botões (para debug)
+        console.log('Botões de editar encontrados:', editButtons.length);
+
+        setTimeout(function() {
+            const btns = document.querySelectorAll('.edit-btn');
+            console.log('Verificação tardia - Botões encontrados:', btns.length);
+        }, 2000);
     });
 
-    // Funções de controle da view
+    // Função de controle da view
     function changeViewMode(mode) {
         const url = new URL(window.location.href);
         url.searchParams.set('view', mode);
@@ -1429,11 +1573,49 @@ include 'header.php';
         window.location.href = url.toString();
     }
 
-    // Modal functions
+    // FUNÇÃO PRINCIPAL PARA ABRIR MODAL DE EDIÇÃO
+    function openEditModal(button) {
+        console.log('Abrindo modal para editar cliente ID:', button.dataset.id); // Debug
+
+        // Mudar título do modal
+        document.getElementById('modalTitle').innerText = 'Editar Cliente';
+
+        // Preencher campos básicos
+        document.getElementById('id_cliente').value = button.dataset.id;
+        document.getElementById('fantasia').value = button.dataset.fantasia || '';
+        document.getElementById('servidor').value = button.dataset.servidor || '';
+        document.getElementById('vendedor').value = button.dataset.vendedor || '';
+        document.getElementById('data_inicio').value = button.dataset.data_inicio || '';
+        document.getElementById('id_data_fim').value = button.dataset.data_fim || '';
+        document.getElementById('observacao').value = button.dataset.observacao || '';
+
+        // NOVOS CAMPOS
+        document.getElementById('num_licencas').value = button.dataset.num_licencas || 0;
+        document.getElementById('anexo').value = button.dataset.anexo || '';
+
+        // Campos de NF e Configurado
+        const nf = button.dataset.emitir_nf || 'Não';
+        const conf = button.dataset.configurado || 'Não';
+
+        document.getElementById('emitir_nf').value = nf;
+        document.getElementById('configurado').value = conf;
+
+        // Mostrar/esconder campo configurado baseado no valor de emitir_nf
+        toggleConfigurado(nf);
+
+        // Abrir modal
+        const modalElement = document.getElementById('modalCliente');
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    }
+
+    // Funções para controle do NF/Configurado
     function toggleConfigurado(valor) {
         const div = document.getElementById('div_configurado');
-        div.style.display = (valor === 'Sim') ? 'block' : 'none';
-        updateModalVisual();
+        if (div) {
+            div.style.display = (valor === 'Sim') ? 'block' : 'none';
+            updateModalVisual();
+        }
     }
 
     function updateModalVisual() {
@@ -1444,68 +1626,57 @@ include 'header.php';
         const configLabel = document.getElementById('label_configurado');
         const emitirLabel = document.getElementById('label_emitir_nf');
 
+        if (!emitirSelect || !configSelect) return;
+
+        // Reset classes
         emitirSelect.classList.remove('border-warning', 'border-success', 'border-2');
         configSelect.classList.remove('border-warning', 'border-success', 'border-2');
-        emitirLabel.classList.remove('text-warning', 'text-success', 'fw-bold');
-        configLabel.classList.remove('text-warning', 'text-success', 'fw-bold', 'text-muted');
+        emitirLabel?.classList.remove('text-warning', 'text-success', 'fw-bold');
+        configLabel?.classList.remove('text-warning', 'text-success', 'fw-bold', 'text-muted');
 
         if (emitirNf === 'Sim') {
             emitirSelect.classList.add('border-2');
-            emitirLabel.classList.add('fw-bold');
+            emitirLabel?.classList.add('fw-bold');
 
             if (configurado === 'Não') {
                 emitirSelect.classList.add('border-warning');
                 configSelect.classList.add('border-warning', 'border-2');
-                emitirLabel.classList.add('text-warning');
-                configLabel.classList.add('text-warning', 'fw-bold');
+                emitirLabel?.classList.add('text-warning');
+                configLabel?.classList.add('text-warning', 'fw-bold');
             } else if (configurado === 'Sim') {
                 emitirSelect.classList.add('border-success');
                 configSelect.classList.add('border-success', 'border-2');
-                emitirLabel.classList.add('text-success');
-                configLabel.classList.add('text-success', 'fw-bold');
+                emitirLabel?.classList.add('text-success');
+                configLabel?.classList.add('text-success', 'fw-bold');
             }
         } else {
-            configLabel.classList.add('text-muted');
+            configLabel?.classList.add('text-muted');
         }
-    }
-
-    function openEditModal(button) {
-        // Prevenir qualquer propagação de evento
-        if (event) event.stopPropagation();
-
-        document.getElementById('modalTitle').innerText = 'Editar Cliente';
-        document.getElementById('id_cliente').value = button.dataset.id;
-        document.getElementById('fantasia').value = button.dataset.fantasia;
-        document.getElementById('servidor').value = button.dataset.servidor;
-        document.getElementById('vendedor').value = button.dataset.vendedor;
-        document.getElementById('data_inicio').value = button.dataset.data_inicio;
-        document.getElementById('id_data_fim').value = button.dataset.data_fim || '';
-        document.getElementById('observacao').value = button.dataset.observacao || '';
-
-        const nf = button.dataset.emitir_nf || 'Não';
-        const conf = button.dataset.configurado || 'Não';
-
-        document.getElementById('emitir_nf').value = nf;
-        document.getElementById('configurado').value = conf;
-
-        toggleConfigurado(nf);
-
-        const modal = new bootstrap.Modal(document.getElementById('modalCliente'));
-        modal.show();
     }
 
     // Reset modal ao fechar
     document.getElementById('modalCliente').addEventListener('hidden.bs.modal', function() {
         const form = this.querySelector('form');
-        form.reset();
+        if (form) form.reset();
+
         document.getElementById('id_cliente').value = '';
         document.getElementById('modalTitle').innerText = 'Ficha do Cliente';
         document.getElementById('emitir_nf').value = 'Não';
         document.getElementById('configurado').value = 'Não';
+
+        // NOVOS CAMPOS - resetar valores padrão
+        const numLicencas = document.getElementById('num_licencas');
+        if (numLicencas) numLicencas.value = 0;
+
+        const anexo = document.getElementById('anexo');
+        if (anexo) anexo.value = '';
+
         toggleConfigurado('Não');
 
+        // Resetar data para hoje
         const today = new Date().toISOString().split('T')[0];
-        document.getElementById('data_inicio').value = today;
+        const dataInicio = document.getElementById('data_inicio');
+        if (dataInicio) dataInicio.value = today;
     });
 
     // Busca com debounce
@@ -1521,37 +1692,74 @@ include 'header.php';
     }
 
     // Configurar eventos dos selects
-    document.getElementById('emitir_nf').addEventListener('change', function() {
-        toggleConfigurado(this.value);
-    });
-
-    document.getElementById('configurado').addEventListener('change', updateModalVisual);
-
-    // Abrir modal de edição com os dados do botão
-    document.addEventListener('DOMContentLoaded', function() {
-        var modalCliente = document.getElementById('modalCliente');
-        modalCliente.addEventListener('show.bs.modal', function(event) {
-            var button = event.relatedTarget; // Botão que acionou o modal
-            if (button && button.dataset.id) {
-                document.getElementById('modalTitle').innerText = 'Editar Cliente';
-                document.getElementById('id_cliente').value = button.dataset.id;
-                document.getElementById('fantasia').value = button.dataset.fantasia || '';
-                document.getElementById('servidor').value = button.dataset.servidor || '';
-                document.getElementById('vendedor').value = button.dataset.vendedor || '';
-                document.getElementById('data_inicio').value = button.dataset.data_inicio || '';
-                document.getElementById('id_data_fim').value = button.dataset.data_fim || '';
-                document.getElementById('observacao').value = button.dataset.observacao || '';
-
-                const nf = button.dataset.emitir_nf || 'Não';
-                const conf = button.dataset.configurado || 'Não';
-
-                document.getElementById('emitir_nf').value = nf;
-                document.getElementById('configurado').value = conf;
-
-                toggleConfigurado(nf);
-            }
+    const emitirNfSelect = document.getElementById('emitir_nf');
+    if (emitirNfSelect) {
+        emitirNfSelect.addEventListener('change', function() {
+            toggleConfigurado(this.value);
         });
-    });
+    }
+
+    const configuradoSelect = document.getElementById('configurado');
+    if (configuradoSelect) {
+        configuradoSelect.addEventListener('change', updateModalVisual);
+    }
+
+    // Reaplicar event listeners após atualizações AJAX (se houver)
+    function refreshEditButtons() {
+        const editButtons = document.querySelectorAll('.edit-btn');
+        editButtons.forEach(function(button) {
+            // Remover listeners antigos e adicionar novos
+            button.removeEventListener('click', openEditModal);
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                openEditModal(this);
+            });
+        });
+        console.log('Botões de editar atualizados:', editButtons.length);
+    }
+
+    // Se você tiver carregamento dinâmico de conteúdo, chame refreshEditButtons()
+
+    // Função para abrir o link do anexo em nova aba
+    function abrirAnexo() {
+        const anexoInput = document.getElementById('anexo');
+        const link = anexoInput.value.trim();
+
+        if (!link) {
+            // Mostrar alerta se não houver link
+            Swal.fire({
+                icon: 'warning',
+                title: 'Anexo não encontrado',
+                text: 'Não há nenhum link cadastrado para este cliente.',
+                confirmButtonColor: '#4361ee'
+            });
+            return;
+        }
+
+        // Validar se é uma URL válida
+        try {
+            // Adicionar https:// se não tiver protocolo
+            let url = link;
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+            }
+
+            // Testar se é URL válida
+            new URL(url);
+
+            // Abrir em nova aba
+            window.open(url, '_blank');
+
+        } catch (e) {
+            // URL inválida
+            Swal.fire({
+                icon: 'error',
+                title: 'Link inválido',
+                text: 'O link fornecido não é uma URL válida.',
+                confirmButtonColor: '#4361ee'
+            });
+        }
+    }
 </script>
 
 <?php include 'footer.php'; ?>
