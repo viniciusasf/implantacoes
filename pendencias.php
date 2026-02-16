@@ -54,7 +54,7 @@ $sql_inatividade = "
     AND c.id_cliente NOT IN (
         SELECT DISTINCT id_cliente FROM treinamentos WHERE status = 'PENDENTE'
     )
-    AND (c.status_tratativa IS NULL OR c.status_tratativa != 'em_tratativa')
+    AND (c.status_tratativa IS NULL OR c.status_tratativa != 'em_tratativa')    
     GROUP BY c.id_cliente
     HAVING 
         (data_ultimo_treino < DATE_SUB(CURDATE(), INTERVAL 3 DAY)) OR 

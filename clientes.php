@@ -375,7 +375,8 @@ include 'header.php';
         transition: all 0.3s;
         position: relative;
         overflow: hidden;
-        height: 160px;
+        height: 240px;
+        /* AUMENTADO DE 200px PARA 240px */
         display: flex;
         flex-direction: column;
     }
@@ -794,6 +795,43 @@ include 'header.php';
         min-width: 28px;
         min-height: 28px;
     }
+
+
+    /* Estilo para o link do anexo nos cards */
+    .client-card .anexo-link {
+        transition: all 0.2s;
+        border-radius: 4px;
+        padding: 2px 6px;
+    }
+
+    .client-card .anexo-link:hover {
+        background-color: #e7f3ff !important;
+        text-decoration: underline !important;
+    }
+
+    /* Botão de copiar nos cards */
+    .client-card .btn-copy-link {
+        opacity: 0.6;
+        transition: opacity 0.2s;
+    }
+
+    .client-card .btn-copy-link:hover {
+        opacity: 1;
+        color: #4361ee !important;
+    }
+
+    /* Indicador de anexo na tabela */
+    .table .drive-badge {
+        transition: all 0.2s;
+        border: none;
+    }
+
+    .table .drive-badge:hover {
+        filter: brightness(1.1);
+        transform: translateY(-1px);
+    }
+
+    
 </style>
 
 <div class="container-fluid py-4">
@@ -1077,11 +1115,27 @@ include 'header.php';
                                     </div>
                                 <?php endif; ?>
 
+                                
+
+                                <!-- No client-card-body, após as informações existentes -->
                                 <?php if (!empty($c['anexo'])): ?>
-                                    <div class="mt-1">
-                                        <a href="<?= htmlspecialchars($c['anexo']) ?>" target="_blank" class="small text-info">
-                                            <i class="bi bi-paperclip me-1"></i>Anexo
+                                    <div class="mt-1 small text-muted"
+                                        style="background-color: #e7f3ff; font-size: 0.7rem;">                                        
+                                        <a href="<?= htmlspecialchars($c['anexo']) ?>"
+                                            target="_blank"
+                                            class="text-decoration-none small"
+                                            style="color: #4285F4; flex: 1;"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Abrir link do Google Drive">
+                                            <i class="bi bi-google"></i>                                            
                                         </a>
+                                        <span class="mx-1 text-muted">•</span>
+                                        <button class="btn btn-sm btn-link text-primary p-0 small"
+                                            onclick="copiarLinkCard('<?= htmlspecialchars($c['anexo']) ?>', event)"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Copiar link">
+                                            <i class="bi bi-files"></i>
+                                        </button>
                                     </div>
                                 <?php endif; ?>
 
@@ -1251,22 +1305,41 @@ include 'header.php';
                             }
                         ?>
                             <tr <?= $cliente_encerrado ? 'class="table-secondary"' : '' ?>>
+                                <!-- Na coluna Cliente/Servidor da tabela -->
                                 <td class="ps-4">
                                     <div class="fw-bold"><?= htmlspecialchars($c['fantasia']) ?></div>
-                                    <div class="d-flex align-items-center">
+                                    <div class="d-flex align-items-center flex-wrap gap-1">
                                         <small class="text-muted"><?= htmlspecialchars($c['servidor']) ?></small>
+
+                                        <?php if ($c['emitir_nf'] == 'Sim'): ?>
+                                            <span class="badge ms-1 <?= $c['configurado'] == 'Sim' ? 'bg-success' : 'bg-warning' ?>"
+                                                style="font-size: 0.6rem;"
+                                                data-bs-toggle="tooltip"
+                                                data-bs-title="NF: <?= $c['emitir_nf'] ?> | Config: <?= $c['configurado'] ?>">
+                                                NF
+                                            </span>
+                                        <?php endif; ?>
 
                                         <?php if (!empty($c['anexo'])): ?>
                                             <a href="<?= htmlspecialchars($c['anexo']) ?>"
                                                 target="_blank"
-                                                class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 ms-2 text-decoration-none"
+                                                class="badge text-decoration-none ms-1"
+                                                style="background-color: #4285F4; color: white; font-size: 0.6rem;"
                                                 data-bs-toggle="tooltip"
-                                                data-bs-title="Ver anexo">
-                                                <i class="bi bi-paperclip me-1"></i>Anexo
+                                                data-bs-title="Abrir anexo do Google Drive">
+                                                <i class="bi bi-google me-1"></i>Drive
                                             </a>
+                                            <button class="btn btn-sm btn-link p-0 text-muted"
+                                                onclick="copiarLinkCard('<?= htmlspecialchars($c['anexo']) ?>', event)"
+                                                data-bs-toggle="tooltip"
+                                                data-bs-title="Copiar link"
+                                                style="font-size: 0.7rem;">
+                                                <i class="bi bi-files"></i>
+                                            </button>
                                         <?php endif; ?>
+
                                         <?php if ($cliente_encerrado): ?>
-                                            <span class="badge ms-2 bg-secondary" style="font-size: 0.6rem;">
+                                            <span class="badge ms-1 bg-secondary" style="font-size: 0.6rem;">
                                                 <i class="bi bi-archive me-1"></i>Encerrado
                                             </span>
                                         <?php endif; ?>
@@ -1758,6 +1831,55 @@ include 'header.php';
                 text: 'O link fornecido não é uma URL válida.',
                 confirmButtonColor: '#4361ee'
             });
+        }
+    }
+
+
+
+    // Função para copiar link diretamente do card
+    function copiarLinkCard(link, event) {
+        event.preventDefault();
+        event.stopPropagation(); // Impedir que o clique abra o link
+
+        navigator.clipboard.writeText(link).then(function() {
+            // Feedback visual usando SweetAlert2 (se disponível)
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Link copiado!',
+                    text: 'Link copiado para a área de transferência.',
+                    timer: 2000,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
+                });
+            } else {
+                // Fallback simples
+                const tempAlert = document.createElement('div');
+                tempAlert.style.cssText = 'position:fixed; top:20px; right:20px; background:#4361ee; color:white; padding:10px 20px; border-radius:8px; z-index:9999;';
+                tempAlert.innerText = 'Link copiado!';
+                document.body.appendChild(tempAlert);
+                setTimeout(() => tempAlert.remove(), 2000);
+            }
+        }).catch(function() {
+            alert('Erro ao copiar link. Tente novamente.');
+        });
+    }
+
+    // Opcional: Função para extrair nome do arquivo do link
+    function getFileNameFromLink(link) {
+        try {
+            const url = new URL(link);
+            // Se for Google Drive, extrair ID ou usar padrão
+            if (url.hostname.includes('drive.google.com')) {
+                return '📁 Google Drive';
+            }
+            // Extrair nome do arquivo da URL
+            const pathParts = url.pathname.split('/');
+            const fileName = pathParts[pathParts.length - 1];
+            return fileName || '📎 Anexo';
+        } catch {
+            return '📎 Link';
         }
     }
 </script>
