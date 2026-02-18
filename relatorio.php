@@ -42,9 +42,10 @@ $treinamentos_pendentes = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE s
 $treinamentos_resolvidos = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE status = 'Resolvido'")->fetchColumn();
 
 // 3. Consulta de treinamentos pendentes
-$sql = "SELECT t.*, c.fantasia as cliente_nome, c.servidor, c.vendedor 
-        FROM treinamentos t 
-        JOIN clientes c ON t.id_cliente = c.id_cliente 
+$sql = "SELECT t.*, c.fantasia as cliente_nome, c.servidor, COALESCE(co.nome, c.telefone_ddd) as contato_cliente
+        FROM treinamentos t
+        JOIN clientes c ON t.id_cliente = c.id_cliente
+        LEFT JOIN contatos co ON t.id_contato = co.id_contato
         WHERE t.status = 'PENDENTE'
         ORDER BY t.data_treinamento ASC 
         LIMIT 10";
@@ -52,6 +53,17 @@ $sql = "SELECT t.*, c.fantasia as cliente_nome, c.servidor, c.vendedor
 $proximos_atendimentos = $pdo->query($sql)->fetchAll();
 $hoje_data = date('Y-m-d');
 ?>
+
+<style>
+    .totalizador-card {
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .totalizador-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12) !important;
+    }
+</style>
 
 <div class="mb-4">
     <h2 class="fw-bold">Agendamentos</h2>
@@ -67,7 +79,7 @@ $hoje_data = date('Y-m-d');
 
 <div class="row g-4 mb-5">
     <div class="col-md-3">
-        <div class="card h-100 p-3 border-0 shadow-sm border-start border-primary border-4">
+        <div class="card totalizador-card h-100 p-3 border-0 shadow-sm border-start border-primary border-4">
             <div class="d-flex align-items-center">
                 <div class="bg-primary bg-opacity-10 p-3 rounded-3 me-3">
                     <i class="bi bi-building text-primary fs-3"></i>
@@ -80,7 +92,7 @@ $hoje_data = date('Y-m-d');
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card h-100 p-3 border-0 shadow-sm border-start border-info border-4">
+        <div class="card totalizador-card h-100 p-3 border-0 shadow-sm border-start border-info border-4">
             <div class="d-flex align-items-center">
                 <div class="bg-info bg-opacity-10 p-3 rounded-3 me-3">
                     <i class="bi bi-mortarboard text-info fs-3"></i>
@@ -93,7 +105,7 @@ $hoje_data = date('Y-m-d');
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card h-100 p-3 border-0 shadow-sm border-start border-warning border-4">
+        <div class="card totalizador-card h-100 p-3 border-0 shadow-sm border-start border-warning border-4">
             <div class="d-flex align-items-center">
                 <div class="bg-warning bg-opacity-10 p-3 rounded-3 me-3">
                     <i class="bi bi-clock-history text-warning fs-3"></i>
@@ -106,7 +118,7 @@ $hoje_data = date('Y-m-d');
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card h-100 p-3 border-0 shadow-sm border-start border-success border-4">
+        <div class="card totalizador-card h-100 p-3 border-0 shadow-sm border-start border-success border-4">
             <div class="d-flex align-items-center">
                 <div class="bg-success bg-opacity-10 p-3 rounded-3 me-3">
                     <i class="bi bi-check2-circle text-success fs-3"></i>
@@ -135,7 +147,7 @@ $hoje_data = date('Y-m-d');
                                 <th class="ps-4">Data Agendada</th>
                                 <th>Cliente</th>
                                 <th>Servidor</th>
-                                <th>Vendedor</th>
+                                <th>Contato do cliente</th>
                                 <th>Tema</th>
                                 <th class="text-center">Status</th>
                                 <th class="text-end pe-4">Ações</th>
@@ -163,10 +175,10 @@ $hoje_data = date('Y-m-d');
                                     </td>
                                     <td class="fw-bold"><?= htmlspecialchars($t['cliente_nome']) ?></td>
                                     <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($t['servidor'] ?? '---') ?></span></td>
-                                    <td><span class="small text-muted"><?= htmlspecialchars($t['vendedor'] ?? '---') ?></span></td>
-                                    <td><span class="small text-muted"><?= htmlspecialchars($t['tema']) ?></span></td>
+                                    <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($t['contato_cliente'] ?? '---') ?></span></td>
+                                    <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($t['tema']) ?></span></td>
                                     <td class="text-center">
-                                        <span class="badge bg-warning-subtle text-warning border border-warning">
+                                        <span class="badge bg-light text-dark border">
                                             <?= $t['status'] ?>
                                         </span>
                                     </td>
