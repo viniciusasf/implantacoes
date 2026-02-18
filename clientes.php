@@ -374,7 +374,8 @@ include 'header.php';
         min-height: 220px;
         margin: 0.5rem;
         margin-bottom: 1rem;
-
+        border-radius: 12px !important;
+        overflow: hidden;
         transition: all 0.3s ease;
     }
 

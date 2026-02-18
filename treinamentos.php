@@ -714,15 +714,16 @@ include 'header.php';
                     <label class="form-label small fw-bold text-muted">Tema</label>
                     <select name="tema" id="tema" class="form-select" required>
                         <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
-                        <option value="CADASTROS">CADASTROS</option>
-                        <option value="ORÇAMENTO DE VENDA">ORÇAMENTO DE VENDA</option>
-                        <option value="ENTRADA DE COMPRA">ENTRADA DE COMPRAS</option>
-                        <option value="FINANCEIRO">FINANCEIRO</option>
+                        <option value="CADASTROS">CADASTROS/ESTOQUE</option>
+                        <option value="ORÇAMENTO DE VENDA">VENDAS</option>
+                        <option value="ENTRADA DE COMPRA">COMPRAS</option>
+                        <option value="FATURAMENTO">FATURAMENTO/NF</option>
+                        <option value="FINANCEIRO/BOLETOS">FINANCEIRO/BOLETOS</option>
                         <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
-                        <option value="PDV">PDV</option>
-                        <option value="NOTA FISCAL">NOTA FISCAL</option>
+                        <option value="PDV">PDV</option>                
                         <option value="RELATÓRIOS">RELATÓRIOS</option>
-                        <option value="OUTROS">OUTROS</option>
+                        <option value="ATENDIMENTOS">ATENDIMENTOS</option>
+                        <option value="OUTROS">OUTROS</option>                        
                     </select>
                 </div>
 
