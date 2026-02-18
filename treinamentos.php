@@ -177,6 +177,16 @@ include 'header.php';
     .sortable-header:hover {
         background-color: rgba(0, 0, 0, 0.03);
     }
+
+    .totalizador-card {
+        transition: transform 0.25s ease, box-shadow 0.25s ease !important;
+        cursor: pointer;
+    }
+
+    .totalizador-card:hover {
+        transform: translateY(-5px) !important;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12) !important;
+    }
 </style>
 
 <div class="container-fluid py-4 bg-light min-vh-100">
@@ -258,7 +268,7 @@ include 'header.php';
     <!-- CARDS DE ESTATÍSTICAS -->
     <div class="row g-3 mb-4">
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm rounded-3 border-start border-warning border-4">
+            <div class="card totalizador-card border-0 shadow-sm rounded-3 border-start border-warning border-4">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
@@ -274,7 +284,7 @@ include 'header.php';
         </div>
 
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm rounded-3 border-start border-primary border-4">
+            <div class="card totalizador-card border-0 shadow-sm rounded-3 border-start border-primary border-4">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
@@ -290,7 +300,7 @@ include 'header.php';
         </div>
 
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm rounded-3 border-start border-danger border-4">
+            <div class="card totalizador-card border-0 shadow-sm rounded-3 border-start border-danger border-4">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
@@ -306,7 +316,7 @@ include 'header.php';
         </div>
 
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm rounded-3 border-start border-success border-4">
+            <div class="card totalizador-card border-0 shadow-sm rounded-3 border-start border-success border-4">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
@@ -878,8 +888,8 @@ include 'header.php';
                 const originalClass = icon.className;
                 icon.className = 'spinner-border spinner-border-sm';
 
-                // Você precisará criar um arquivo google_calendar_remove.php para esta função
-                fetch('google_calendar_remove.php?id_treinamento=' + id + '&event_id=' + eventId)
+                // Você precisará criar um arquivo google_calendar_delete.php para esta função
+                fetch('google_calendar_delete.php?id_treinamento=' + id + '&event_id=' + eventId)
                     .then(r => r.json())
                     .then(data => {
                         if (data.success) {

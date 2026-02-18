@@ -42,7 +42,7 @@ $treinamentos_pendentes = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE s
 $treinamentos_resolvidos = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE status = 'Resolvido'")->fetchColumn();
 
 // 3. Consulta de treinamentos pendentes
-$sql = "SELECT t.*, c.fantasia as cliente_nome, c.servidor, COALESCE(co.nome, c.telefone_ddd) as contato_cliente
+$sql = "SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.telefone_ddd as cliente_telefone
         FROM treinamentos t
         JOIN clientes c ON t.id_cliente = c.id_cliente
         LEFT JOIN contatos co ON t.id_contato = co.id_contato
@@ -56,11 +56,12 @@ $hoje_data = date('Y-m-d');
 
 <style>
     .totalizador-card {
-        transition: transform 0.25s ease, box-shadow 0.25s ease;
+        transition: transform 0.25s ease, box-shadow 0.25s ease !important;
+        cursor: pointer;
     }
 
     .totalizador-card:hover {
-        transform: translateY(-5px);
+        transform: translateY(-5px) !important;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12) !important;
     }
 </style>
@@ -147,7 +148,7 @@ $hoje_data = date('Y-m-d');
                                 <th class="ps-4">Data Agendada</th>
                                 <th>Cliente</th>
                                 <th>Servidor</th>
-                                <th>Contato do cliente</th>
+                                <th>Contato</th>
                                 <th>Tema</th>
                                 <th class="text-center">Status</th>
                                 <th class="text-end pe-4">Ações</th>
@@ -163,6 +164,19 @@ $hoje_data = date('Y-m-d');
                                     $data_treino = date('Y-m-d', strtotime($t['data_treinamento']));
                                     $e_hoje = ($data_treino == $hoje_data);
                                     $bg_class = $e_hoje ? 'table-info' : '';
+                                    $nome_contato = trim((string)($t['contato_nome'] ?? ''));
+                                    $telefone_contato = trim((string)($t['contato_telefone'] ?? ''));
+                                    $telefone_cliente = trim((string)($t['cliente_telefone'] ?? ''));
+                                    $telefone_exibicao = $telefone_contato !== '' ? $telefone_contato : $telefone_cliente;
+                                    if ($nome_contato !== '' && $telefone_exibicao !== '') {
+                                        $contato_exibicao = $nome_contato . ' - ' . $telefone_exibicao;
+                                    } elseif ($nome_contato !== '') {
+                                        $contato_exibicao = $nome_contato;
+                                    } elseif ($telefone_exibicao !== '') {
+                                        $contato_exibicao = $telefone_exibicao;
+                                    } else {
+                                        $contato_exibicao = '---';
+                                    }
                                 ?>
                                 <tr class="<?= $bg_class ?>">
                                     <td class="ps-4">
@@ -175,7 +189,7 @@ $hoje_data = date('Y-m-d');
                                     </td>
                                     <td class="fw-bold"><?= htmlspecialchars($t['cliente_nome']) ?></td>
                                     <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($t['servidor'] ?? '---') ?></span></td>
-                                    <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($t['contato_cliente'] ?? '---') ?></span></td>
+                                    <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($contato_exibicao) ?></span></td>
                                     <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($t['tema']) ?></span></td>
                                     <td class="text-center">
                                         <span class="badge bg-light text-dark border">
