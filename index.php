@@ -43,6 +43,7 @@ $total_concluidos = $pdo->query("SELECT COUNT(*) FROM clientes WHERE data_fim IS
 
 // Calcular total ativos
 $total_ativos = $total_clientes - $total_concluidos - $total_cancelados;
+$total_clientes_com_concluidos = $total_ativos + $total_concluidos;
 
 include 'header.php';
 ?>
@@ -151,7 +152,7 @@ include 'header.php';
         background-color: #f8f9fa;
     }
 
-    .table > :not(caption) > * > * {
+    .table> :not(caption)>*>* {
         padding: 1rem 1.25rem;
     }
 
@@ -185,7 +186,7 @@ include 'header.php';
 
     .stats-right .card.bg-light:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
     }
 
     /* Custom scrollbar */
@@ -218,11 +219,11 @@ include 'header.php';
             width: 100%;
             margin-bottom: 1rem;
         }
-        
+
         .stats-right .card-body {
             max-height: none !important;
         }
-        
+
         .table-responsive {
             max-height: none;
         }
@@ -248,15 +249,33 @@ include 'header.php';
 
     <!-- Cards de Estatísticas - 6 CARDS -->
     <div class="row g-4 mb-4">
+        <!-- Card Total com Concluidos -->
+        <div class="col-xl-2 col-md-4">
+            <div class="card stat-card border-start border-dark border-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted text-uppercase small fw-bold">Total c/ Concluidos</h6>
+                            <h2 class="fw-bold mb-0"><?= $total_clientes_com_concluidos ?></h2>
+                            <span class="text-muted small">Ativos + concluidos</span>
+                        </div>
+                        <div class="stat-icon bg-dark bg-opacity-10 text-dark">
+                            <i class="bi bi-people-fill"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Card Total Clientes -->
         <div class="col-xl-2 col-md-4">
             <div class="card stat-card border-start border-primary border-4">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h6 class="text-muted text-uppercase small fw-bold">Total Clientes</h6>
+                            <h6 class="text-muted text-uppercase small fw-bold">Total Clientes Ativos</h6>
                             <h2 class="fw-bold mb-0"><?= $total_clientes ?></h2>
-                            <span class="text-muted small">Cadastrados</span>
+                            <span class="text-muted small">Ativos</span>
                         </div>
                         <div class="stat-icon bg-primary bg-opacity-10 text-primary">
                             <i class="bi bi-people"></i>
@@ -320,6 +339,8 @@ include 'header.php';
             </div>
         </div>
 
+
+
         <!-- Card Clientes Cancelados -->
         <div class="col-xl-2 col-md-4">
             <div class="card stat-card border-start border-danger border-4">
@@ -333,29 +354,6 @@ include 'header.php';
                         <div class="stat-icon bg-danger bg-opacity-10 text-danger">
                             <i class="bi bi-x-circle"></i>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card Taxa Ativos -->
-        <div class="col-xl-2 col-md-4">
-            <div class="card stat-card border-start border-secondary border-4">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="text-muted text-uppercase small fw-bold">Taxa Ativos</h6>
-                            <h2 class="fw-bold mb-0">
-                                <?= $total_clientes > 0 ? round(($total_ativos / $total_clientes) * 100) : 0 ?>%
-                            </h2>
-                            <span class="text-muted small">Em implantação</span>
-                        </div>
-                        <div class="stat-icon bg-secondary bg-opacity-10 text-secondary">
-                            <i class="bi bi-graph-up"></i>
-                        </div>
-                    </div>
-                    <div class="progress progress-thin mt-3">
-                        <div class="progress-bar bg-secondary" style="width: <?= $total_clientes > 0 ? ($total_ativos / $total_clientes) * 100 : 0 ?>%"></div>
                     </div>
                 </div>
             </div>
@@ -728,8 +726,8 @@ include 'header.php';
                                     <span class="badge bg-primary rounded-pill"><?= round($percentage) ?>%</span>
                                 </div>
                                 <div class="progress">
-                                    <div class="progress-bar" 
-                                         style="width: <?= $percentage ?>%; background-color: var(--primary-color); opacity: <?= 1 - ($index * 0.15) ?>;">
+                                    <div class="progress-bar"
+                                        style="width: <?= $percentage ?>%; background-color: var(--primary-color); opacity: <?= 1 - ($index * 0.15) ?>;">
                                     </div>
                                 </div>
                                 <div class="d-flex justify-content-between mt-1">
@@ -761,8 +759,8 @@ include 'header.php';
                                     <span class="badge bg-success rounded-pill"><?= round($percentage) ?>%</span>
                                 </div>
                                 <div class="progress">
-                                    <div class="progress-bar" 
-                                         style="width: <?= $percentage ?>%; background-color: var(--success-color); opacity: <?= 1 - ($index * 0.15) ?>;">
+                                    <div class="progress-bar"
+                                        style="width: <?= $percentage ?>%; background-color: var(--success-color); opacity: <?= 1 - ($index * 0.15) ?>;">
                                     </div>
                                 </div>
                                 <div class="d-flex justify-content-between mt-1">
@@ -783,7 +781,7 @@ include 'header.php';
                             <i class="bi bi-pie-chart text-info me-2"></i>
                             Distribuição por Status
                         </h6>
-                        
+
                         <div class="row g-3 mb-4">
                             <div class="col-4">
                                 <div class="card bg-light border-0">
@@ -826,26 +824,26 @@ include 'header.php';
                                 <span class="small text-muted">Total: <?= $total_clientes ?> clientes</span>
                             </div>
                             <div class="progress" style="height: 20px;">
-                                <div class="progress-bar bg-success" 
-                                     style="width: <?= $total_clientes > 0 ? ($total_ativos / $total_clientes) * 100 : 0 ?>%"
-                                     data-bs-toggle="tooltip"
-                                     title="Ativos: <?= $total_ativos ?> clientes">
+                                <div class="progress-bar bg-success"
+                                    style="width: <?= $total_clientes > 0 ? ($total_ativos / $total_clientes) * 100 : 0 ?>%"
+                                    data-bs-toggle="tooltip"
+                                    title="Ativos: <?= $total_ativos ?> clientes">
                                     <?= $total_clientes > 0 && ($total_ativos / $total_clientes) > 0.1 ? round(($total_ativos / $total_clientes) * 100) . '%' : '' ?>
                                 </div>
-                                <div class="progress-bar bg-info" 
-                                     style="width: <?= $total_clientes > 0 ? ($total_concluidos / $total_clientes) * 100 : 0 ?>%"
-                                     data-bs-toggle="tooltip"
-                                     title="Concluídos: <?= $total_concluidos ?> clientes">
+                                <div class="progress-bar bg-info"
+                                    style="width: <?= $total_clientes > 0 ? ($total_concluidos / $total_clientes) * 100 : 0 ?>%"
+                                    data-bs-toggle="tooltip"
+                                    title="Concluídos: <?= $total_concluidos ?> clientes">
                                     <?= $total_clientes > 0 && ($total_concluidos / $total_clientes) > 0.1 ? round(($total_concluidos / $total_clientes) * 100) . '%' : '' ?>
                                 </div>
-                                <div class="progress-bar bg-danger" 
-                                     style="width: <?= $total_clientes > 0 ? ($total_cancelados / $total_clientes) * 100 : 0 ?>%"
-                                     data-bs-toggle="tooltip"
-                                     title="Cancelados: <?= $total_cancelados ?> clientes">
+                                <div class="progress-bar bg-danger"
+                                    style="width: <?= $total_clientes > 0 ? ($total_cancelados / $total_clientes) * 100 : 0 ?>%"
+                                    data-bs-toggle="tooltip"
+                                    title="Cancelados: <?= $total_cancelados ?> clientes">
                                     <?= $total_clientes > 0 && ($total_cancelados / $total_clientes) > 0.1 ? round(($total_cancelados / $total_clientes) * 100) . '%' : '' ?>
                                 </div>
                             </div>
-                            
+
                             <div class="d-flex justify-content-between mt-3">
                                 <div class="d-flex align-items-center">
                                     <div style="width: 12px; height: 12px; background-color: var(--success-color); border-radius: 2px; margin-right: 6px;"></div>

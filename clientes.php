@@ -340,7 +340,8 @@ include 'header.php';
         overflow: hidden;
     }
 
-    .status-card:hover {
+    .status-card:hover,
+    .client-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
     }
@@ -368,19 +369,13 @@ include 'header.php';
         flex: 1;
         max-height: calc(100vh - 400px);
     }
-
-    /* Hover reforça a separação visual */
-    .client-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 12px 28px rgba(67, 97, 238, 0.15);
-    }
-
     .client-card {
         height: auto;
         min-height: 220px;
         margin: 0.5rem;
         margin-bottom: 1rem;
 
+        transition: all 0.3s ease;
     }
 
     .client-card-body {
@@ -392,15 +387,7 @@ include 'header.php';
     }
 
     .client-card:hover {
-        transform: scale(1.02) translateY(-3px);
-        /* sobe um pouco */
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-        /* sombra mais forte + cor primária suave */
-        border-color: #4361ee;
-        /* borda fica na cor principal */
         z-index: 5;
-        /* garante que fique por cima de outros cards */
-
     }
 
 
