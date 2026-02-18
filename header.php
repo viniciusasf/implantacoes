@@ -67,6 +67,10 @@ $total_relatorios = 0; // Pode ser adaptado para contar relatórios pendentes, e
             overflow-x: hidden;
         }
 
+        .card {
+            border-radius: 12px !important;
+        }
+
         #sidebar {
             width: var(--sidebar-width);
             height: 100vh;
@@ -157,16 +161,6 @@ $total_relatorios = 0; // Pode ser adaptado para contar relatórios pendentes, e
             min-height: 100vh;
             transition: all 0.3s;
             padding: 2rem;
-        }
-
-        .top-nav {
-            background: #fff;
-            padding: 1rem 2rem;
-            margin: -2rem -2rem 2rem -2rem;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
         }
 
         .badge-notify {
@@ -319,11 +313,3 @@ $total_relatorios = 0; // Pode ser adaptado para contar relatórios pendentes, e
         </nav>
 
         <div id="content">
-            <div class="top-nav">
-                <div class="user-info d-flex align-items-center">
-                    <span class="me-2 fw-medium">Administrador</span>
-                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
-                        <i class="bi bi-person"></i>
-                    </div>
-                </div>
-            </div>
