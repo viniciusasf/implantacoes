@@ -361,31 +361,48 @@ include 'header.php';
     .client-cards-container {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 0.75rem;
+        gap: 2rem;
+        /* ← valor atual pequeno */
         padding: 0.5rem 0;
         overflow-y: auto;
         flex: 1;
         max-height: calc(100vh - 400px);
     }
 
+    /* Hover reforça a separação visual */
+    .client-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 28px rgba(67, 97, 238, 0.15);
+    }
+
     .client-card {
-        background: white;
-        border-radius: 10px;
-        border: 1px solid #e9ecef;
-        transition: all 0.3s;
-        position: relative;
-        overflow: hidden;
-        height: 240px;
-        /* AUMENTADO DE 200px PARA 240px */
-        display: flex;
-        flex-direction: column;
+        height: auto;
+        min-height: 220px;
+        margin: 0.5rem;
+        margin-bottom: 1rem;
+
+    }
+
+    .client-card-body {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        /* ← aqui está a mágica */
+        padding: 0.75rem;
+        /* um pouco mais de respiro */
     }
 
     .client-card:hover {
-        border-color: var(--primary-color);
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
-        transform: translateY(-2px);
+        transform: scale(1.02) translateY(-3px);
+        /* sobe um pouco */
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+        /* sombra mais forte + cor primária suave */
+        border-color: #4361ee;
+        /* borda fica na cor principal */
+        z-index: 5;
+        /* garante que fique por cima de outros cards */
+
     }
+
 
     .client-card.encerrado {
         opacity: 0.7;
@@ -473,6 +490,15 @@ include 'header.php';
         display: flex;
         gap: 0.25rem;
         flex-wrap: wrap;
+    }
+
+    .text-smart-truncate {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        /* ou 1 linha em campos muito curtos */
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .btn-action {
@@ -831,7 +857,20 @@ include 'header.php';
         transform: translateY(-1px);
     }
 
-    
+    /* Animação de fade-in */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+
+    }
 </style>
 
 <div class="container-fluid py-4">
@@ -1059,6 +1098,7 @@ include 'header.php';
                             </div>
                         <?php endif; ?>
 
+
                         <div class="client-card-header">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div style="flex: 1; min-width: 0;">
@@ -1115,19 +1155,20 @@ include 'header.php';
                                     </div>
                                 <?php endif; ?>
 
-                                
+
 
                                 <!-- No client-card-body, após as informações existentes -->
                                 <?php if (!empty($c['anexo'])): ?>
                                     <div class="mt-1 small text-muted"
-                                        style="background-color: #e7f3ff; font-size: 0.7rem;">                                        
+                                        style="background-color: #e7f3ff; font-size: 0.7rem;">
                                         <a href="<?= htmlspecialchars($c['anexo']) ?>"
                                             target="_blank"
+                                            rel="noopener noreferrer"
                                             class="text-decoration-none small"
                                             style="color: #4285F4; flex: 1;"
                                             data-bs-toggle="tooltip"
                                             data-bs-title="Abrir link do Google Drive">
-                                            <i class="bi bi-google"></i>                                            
+                                            <i class="bi bi-google"></i>
                                         </a>
                                         <span class="mx-1 text-muted">•</span>
                                         <button class="btn btn-sm btn-link text-primary p-0 small"
@@ -1142,17 +1183,7 @@ include 'header.php';
 
                             </div>
 
-                            <?php if ($c['emitir_nf'] == 'Sim'): ?>
-                                <div class="mt-2 p-1 rounded d-flex align-items-center"
-                                    style="background-color: <?= $c['configurado'] == 'Sim' ? '#d1e7dd' : '#fff3cd' ?>; font-size: 0.7rem;">
-                                    <i class="bi bi-receipt me-1" style="color: <?= $c['configurado'] == 'Sim' ? '#198754' : '#ffc107' ?>;"></i>
-                                    <span style="color: <?= $c['configurado'] == 'Sim' ? '#198754' : '#ffc107' ?>;">
-                                        NF:<?= $c['emitir_nf'] == 'Sim' ? 'S' : 'N' ?>
-                                        /
-                                        Config:<?= $c['configurado'] == 'Sim' ? 'S' : 'N' ?>
-                                    </span>
-                                </div>
-                            <?php endif; ?>
+
                         </div>
 
                         <div class="client-card-footer">
