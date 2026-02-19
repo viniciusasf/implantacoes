@@ -718,12 +718,12 @@ include 'header.php';
                         <option value="ORÇAMENTO DE VENDA">VENDAS</option>
                         <option value="ENTRADA DE COMPRA">COMPRAS</option>
                         <option value="FATURAMENTO">FATURAMENTO/NF</option>
-                        <option value="FINANCEIRO/BOLETOS">FINANCEIRO/BOLETOS</option>
+                        <option value="FINANCEIRO/CAIXA">FINANCEIRO/CAIXA</option>                        
                         <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
                         <option value="PDV">PDV</option>                
                         <option value="RELATÓRIOS">RELATÓRIOS</option>
                         <option value="ATENDIMENTOS">ATENDIMENTOS</option>
-                        <option value="OUTROS">OUTROS</option>                        
+                        <option value="DUVIDAS">DUVIDAS</option>                        
                     </select>
                 </div>
 

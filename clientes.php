@@ -367,7 +367,7 @@ include 'header.php';
         padding: 0.5rem 0;
         overflow-y: auto;
         flex: 1;
-        max-height: calc(100vh - 400px);
+        max-height: none;
     }
     .client-card {
         height: auto;
@@ -375,7 +375,7 @@ include 'header.php';
         margin: 0.5rem;
         margin-bottom: 1rem;
         border-radius: 12px !important;
-        overflow: hidden;
+        overflow: visible;
         transition: all 0.3s ease;
     }
 
@@ -407,7 +407,7 @@ include 'header.php';
     .client-card-body {
         padding: 0.5rem 0.75rem;
         flex: 1;
-        overflow: hidden;
+        overflow: visible;
     }
 
     .client-card-footer {
