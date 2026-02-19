@@ -66,7 +66,7 @@ try {
 
     $service = new Google\Service\Calendar($client);
     $event = new Google\Service\Calendar\Event([
-        'summary' => 'Treinamento: ' . $treinamento['cliente_nome'],
+        'summary' => '#' . $treinamento['id_treinamento'] . ' Treinamento: ' . $treinamento['cliente_nome'],
         'description' => "Tema: " . $treinamento['tema'] . "\nContato: " . $treinamento['contato_nome'],
         'start' => ['dateTime' => $startDate->format(DateTime::RFC3339), 'timeZone' => 'America/Sao_Paulo'],
         'end' => ['dateTime' => $endDate->format(DateTime::RFC3339), 'timeZone' => 'America/Sao_Paulo'],
