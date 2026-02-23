@@ -70,17 +70,46 @@ try {
         'description' => "Tema: " . $treinamento['tema'] . "\nContato: " . $treinamento['contato_nome'],
         'start' => ['dateTime' => $startDate->format(DateTime::RFC3339), 'timeZone' => 'America/Sao_Paulo'],
         'end' => ['dateTime' => $endDate->format(DateTime::RFC3339), 'timeZone' => 'America/Sao_Paulo'],
+        'conferenceData' => [
+            'createRequest' => [
+                'requestId' => 'treino-' . $treinamento['id_treinamento'] . '-' . time(),
+                'conferenceSolutionKey' => ['type' => 'hangoutsMeet']
+            ]
+        ],
         'reminders' => ['useDefault' => false, 'overrides' => [['method' => 'popup', 'minutes' => 5]]]
     ]);
 
-    $createdEvent = $service->events->insert('primary', $event);
+    $createdEvent = $service->events->insert('primary', $event, ['conferenceDataVersion' => 1]);
 
     // CAPTURA O ID GERADO PELO GOOGLE
     $google_id = $createdEvent->getId();
 
+    // Captura o link de convite (Meet). Fallback: link do evento.
+    $google_link = $createdEvent->getHangoutLink();
+    if (empty($google_link)) {
+        $conferenceData = $createdEvent->getConferenceData();
+        if ($conferenceData && $conferenceData->getEntryPoints()) {
+            foreach ($conferenceData->getEntryPoints() as $entryPoint) {
+                if ($entryPoint->getEntryPointType() === 'video' && !empty($entryPoint->getUri())) {
+                    $google_link = $entryPoint->getUri();
+                    break;
+                }
+            }
+        }
+    }
+    if (empty($google_link)) {
+        $google_link = $createdEvent->htmlLink;
+    }
+
+    // Se já existir um link curto calendar.app.google salvo manualmente, preserva.
+    $link_existente = trim((string)($treinamento['google_event_link'] ?? ''));
+    if ($link_existente !== '' && strpos($link_existente, 'calendar.app.google/') !== false) {
+        $google_link = $link_existente;
+    }
+
     // SALVA NO BANCO
     $stmtUpdate = $pdo->prepare("UPDATE treinamentos SET google_event_id = ?, google_event_link = ? WHERE id_treinamento = ?");
-    $stmtUpdate->execute([$google_id, $createdEvent->htmlLink, $id_treinamento]);
+    $stmtUpdate->execute([$google_id, $google_link, $id_treinamento]);
 
     unset($_SESSION['sync_training_id']);
 

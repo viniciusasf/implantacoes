@@ -134,12 +134,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $tema = $_POST['tema'];
     $status = $_POST['status'];
     $data_treinamento = !empty($_POST['data_treinamento']) ? $_POST['data_treinamento'] : null;
-    // NOVO: Google Agenda Link
-    $google_event_link = !empty($_POST['google_event_link']) ? $_POST['google_event_link'] : null;
+    $has_google_event_link = array_key_exists('google_event_link', $_POST);
+    $google_event_link = $has_google_event_link && !empty($_POST['google_event_link']) ? $_POST['google_event_link'] : null;
 
     if (isset($_POST['id_treinamento']) && !empty($_POST['id_treinamento'])) {
-        $stmt = $pdo->prepare("UPDATE treinamentos SET id_cliente=?, id_contato=?, tema=?, status=?, data_treinamento=?, google_event_link=? WHERE id_treinamento=?");
-        $stmt->execute([$id_cliente, $id_contato, $tema, $status, $data_treinamento, $google_event_link, $_POST['id_treinamento']]);
+        if ($has_google_event_link) {
+            $stmt = $pdo->prepare("UPDATE treinamentos SET id_cliente=?, id_contato=?, tema=?, status=?, data_treinamento=?, google_event_link=? WHERE id_treinamento=?");
+            $stmt->execute([$id_cliente, $id_contato, $tema, $status, $data_treinamento, $google_event_link, $_POST['id_treinamento']]);
+        } else {
+            $stmt = $pdo->prepare("UPDATE treinamentos SET id_cliente=?, id_contato=?, tema=?, status=?, data_treinamento=? WHERE id_treinamento=?");
+            $stmt->execute([$id_cliente, $id_contato, $tema, $status, $data_treinamento, $_POST['id_treinamento']]);
+        }
         $msg = "Treinamento atualizado com sucesso";
     } else {
         $stmt = $pdo->prepare("INSERT INTO treinamentos (id_cliente, id_contato, tema, status, data_treinamento, google_event_link) VALUES (?, ?, ?, ?, ?, ?)");
@@ -853,6 +858,7 @@ include 'header.php';
                         </select>
                     </div>
                 </div>
+
             </div>
             <div class="modal-footer border-0 p-4">
                 <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Fechar</button>
@@ -950,6 +956,7 @@ include 'header.php';
             alert('Não há link para copiar. Cole primeiro o link do Google Agenda.');
         }
     }
+
 
     // 1. Modal Observação
     document.querySelectorAll('.view-obs-btn').forEach(btn => {

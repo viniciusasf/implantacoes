@@ -1,8 +1,8 @@
-<?php
+﻿<?php
 require_once 'config.php';
 
-// 1. LÓGICA DE PROCESSAMENTO: Encerrar treinamento com Observação
-// Deve vir antes de qualquer saída HTML
+// 1. LÃ“GICA DE PROCESSAMENTO: Encerrar treinamento com ObservaÃ§Ã£o
+// Deve vir antes de qualquer saÃ­da HTML
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirmar_encerramento'])) {
     $id = $_POST['id_treinamento'];
     $obs = $_POST['observacoes'];
@@ -16,9 +16,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirmar_encerramento
     exit;
 }
 
-// Consulta para clientes sem interação há mais de 3 dias
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['salvar_link_google'])) {
+    $id = $_POST['id_treinamento'] ?? null;
+    $google_event_link = trim((string)($_POST['google_event_link'] ?? ''));
+
+    if (!empty($id)) {
+        $stmt = $pdo->prepare("UPDATE treinamentos SET google_event_link = ? WHERE id_treinamento = ?");
+        $stmt->execute([$google_event_link !== '' ? $google_event_link : null, $id]);
+    }
+
+    header("Location: relatorio.php?msg=" . urlencode("Link do Google Agenda salvo com sucesso"));
+    exit;
+}
+
+// Consulta para clientes sem interaÃ§Ã£o hÃ¡ mais de 3 dias
 $sql_inatividade = "
-    SELECT c.id_cliente, c.fantasia, MAX(t.data_treinamento) as última_data, c.data_inicio
+    SELECT c.id_cliente, c.fantasia, MAX(t.data_treinamento) as Ãºltima_data, c.data_inicio
     FROM clientes c
     LEFT JOIN treinamentos t ON c.id_cliente = t.id_cliente
     WHERE (c.data_fim IS NULL OR c.data_fim = '0000-00-00')
@@ -29,13 +42,13 @@ $sql_inatividade = "
     HAVING 
         (MAX(t.data_treinamento) < DATE_SUB(CURDATE(), INTERVAL 3 DAY)) OR 
         (MAX(t.data_treinamento) IS NULL AND c.data_inicio < DATE_SUB(CURDATE(), INTERVAL 3 DAY))
-    ORDER BY última_data ASC";
+    ORDER BY Ãºltima_data ASC";
 
 $clientes_inativos = $pdo->query($sql_inatividade)->fetchAll();
 
 include 'header.php';
 
-// 2. Buscar estatísticas para os cards
+// 2. Buscar estatÃ­sticas para os cards
 $total_clientes = $pdo->query("SELECT COUNT(*) FROM clientes WHERE (data_fim IS NULL OR data_fim = '0000-00-00')")->fetchColumn();
 $total_treinamentos = $pdo->query("SELECT COUNT(*) FROM treinamentos")->fetchColumn();
 $treinamentos_pendentes = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE status = 'PENDENTE'")->fetchColumn();
@@ -68,7 +81,7 @@ $hoje_data = date('Y-m-d');
 
 <div class="mb-4">
     <h2 class="fw-bold">Agendamentos</h2>
-    <p class="text-muted">Gestão de Agendamentos.</p>
+    <p class="text-muted">GestÃ£o de Agendamentos.</p>
 </div>
 
 <?php if (isset($_GET['msg'])): ?>
@@ -137,7 +150,7 @@ $hoje_data = date('Y-m-d');
     <div class="col-lg-12">
         <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
-                <h5 class="mb-0 fw-bold text-dark">Próximos Atendimentos (Pendentes)</h5>
+                <h5 class="mb-0 fw-bold text-dark">PrÃ³ximos Atendimentos (Pendentes)</h5>
                 <a href="treinamentos.php" class="btn btn-sm btn-light text-primary fw-bold">Ver todos</a>
             </div>
             <div class="card-body p-0">
@@ -151,7 +164,7 @@ $hoje_data = date('Y-m-d');
                                 <th>Contato</th>
                                 <th>Tema</th>
                                 <th class="text-center">Status</th>
-                                <th class="text-end pe-4">Ações</th>
+                                <th class="text-end pe-4">AÃ§Ãµes</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -168,6 +181,26 @@ $hoje_data = date('Y-m-d');
                                     $telefone_contato = trim((string)($t['contato_telefone'] ?? ''));
                                     $telefone_cliente = trim((string)($t['cliente_telefone'] ?? ''));
                                     $telefone_exibicao = $telefone_contato !== '' ? $telefone_contato : $telefone_cliente;
+                                    $telefone_whatsapp = preg_replace('/\D+/', '', $telefone_exibicao);
+                                    if ($telefone_whatsapp !== '') {
+                                        if (strpos($telefone_whatsapp, '55') !== 0 && (strlen($telefone_whatsapp) === 10 || strlen($telefone_whatsapp) === 11)) {
+                                            $telefone_whatsapp = '55' . $telefone_whatsapp;
+                                        }
+                                        if (strlen($telefone_whatsapp) < 12 || strlen($telefone_whatsapp) > 13) {
+                                            $telefone_whatsapp = '';
+                                        }
+                                    }
+                                    $mensagem_whatsapp = implode("\n", [
+                                        "Treinamento GestãoPRO:# *" . $t['id_treinamento'] . "*",
+                                        //"Empresa: *" . $t['cliente_nome'] . "*",
+                                        "Data: *" . date('d/m/Y H:i', strtotime($t['data_treinamento'])) . "*",
+                                        "Tema: *" . $t['tema'] . "*",
+                                        "Contato: *" . ($nome_contato !== '' ? $nome_contato : '---') . "*",
+                                        "Link Google Meet: *" . trim((string)($t['google_event_link'] ?? '')) . "*"
+                                    ]);
+                                    $link_whatsapp = $telefone_whatsapp !== ''
+                                        ? 'https://wa.me/' . $telefone_whatsapp . '?text=' . rawurlencode($mensagem_whatsapp)
+                                        : '';
                                     if ($nome_contato !== '' && $telefone_exibicao !== '') {
                                         $contato_exibicao = $nome_contato . ' - ' . $telefone_exibicao;
                                     } elseif ($nome_contato !== '') {
@@ -197,6 +230,23 @@ $hoje_data = date('Y-m-d');
                                         </span>
                                     </td>
                                     <td class="text-end pe-4">
+                                        <?php if ($link_whatsapp !== ''): ?>
+                                        <a href="<?= htmlspecialchars($link_whatsapp) ?>"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="btn btn-sm btn-outline-success me-1"
+                                           title="Enviar WhatsApp">
+                                            <i class="bi bi-whatsapp"></i>
+                                        </a>
+                                        <?php endif; ?>
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-primary me-1 open-google-link-modal"
+                                                data-id="<?= $t['id_treinamento'] ?>"
+                                                data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>"
+                                                data-google-link="<?= htmlspecialchars((string)($t['google_event_link'] ?? '')) ?>"
+                                                title="Gerenciar link Google Meet">
+                                            <i class="bi bi-calendar-check"></i>
+                                        </button>
                                         <button type="button" 
                                                 class="btn btn-sm btn-outline-success open-finish-modal"
                                                 data-id="<?= $t['id_treinamento'] ?>"
@@ -228,18 +278,65 @@ $hoje_data = date('Y-m-d');
                 <input type="hidden" name="confirmar_encerramento" value="1">
                 
                 <div class="mb-3 p-3 bg-light rounded-3">
-                    <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">Informações:</div>
+                    <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">InformaÃ§Ãµes:</div>
                     <div class="fw-bold text-primary" id="modal_cliente_info"></div>
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted text-uppercase">O que ficou acordado com o cliente?</label>
-                    <textarea name="observacoes" class="form-control" rows="4" placeholder="Descreva os detalhes da sessão..." required></textarea>
+                    <textarea name="observacoes" class="form-control" rows="4" placeholder="Descreva os detalhes da sessÃ£o..." required></textarea>
                 </div>
             </div>
             <div class="modal-footer border-0 p-4">
                 <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
                 <button type="submit" class="btn btn-success px-4 fw-bold shadow-sm">Encerrar e Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="modalGoogleLink" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <div class="modal-header border-0 px-4 pt-4">
+                <h5 class="fw-bold text-dark"><i class="bi bi-calendar-event me-2 text-primary"></i>Link Google Meet</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4">
+                <input type="hidden" name="id_treinamento" id="google_modal_id_treinamento">
+                <input type="hidden" name="salvar_link_google" value="1">
+
+                <div class="mb-3 p-3 bg-light rounded-3">
+                    <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">Treinamento:</div>
+                    <div class="fw-bold text-primary" id="google_modal_cliente_info"></div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Convidar por Link</label>
+                    <input type="url"
+                           name="google_event_link"
+                           id="google_event_link_relatorio"
+                           class="form-control"
+                           placeholder="https://calendar.app.google/...">
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="gerarLinkCurtoRelatorio()">
+                        <i class="bi bi-magic me-1"></i>Gerar link curto
+                    </button>
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="colarLinkCurtoRelatorio()">
+                        <i class="bi bi-clipboard-check me-1"></i>Colar
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copiarLinkRelatorio()">
+                        <i class="bi bi-clipboard me-1"></i>Copiar
+                    </button>
+                </div>
+                <div class="form-text mt-2">
+                    Use preferencialmente o link curto <code>https://calendar.app.google/...</code>.
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-4">
+                <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">Salvar Link</button>
             </div>
         </form>
     </div>
@@ -259,6 +356,66 @@ $hoje_data = date('Y-m-d');
             myModal.show();
         });
     });
+
+    document.querySelectorAll('.open-google-link-modal').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('google_modal_id_treinamento').value = this.dataset.id;
+            document.getElementById('google_modal_cliente_info').innerText = this.dataset.cliente;
+            document.getElementById('google_event_link_relatorio').value = this.dataset.googleLink || '';
+            new bootstrap.Modal(document.getElementById('modalGoogleLink')).show();
+        });
+    });
+
+    function gerarLinkCurtoRelatorio() {
+        const input = document.getElementById('google_event_link_relatorio');
+        const link = input ? input.value.trim() : '';
+
+        if (!link) {
+            alert('Primeiro informe ou sincronize o link do evento Google.');
+            return;
+        }
+
+        window.open(link, '_blank', 'noopener');
+
+        if (!link.includes('calendar.app.google/')) {
+            alert('No Google Agenda, use "Convidar por link", copie o link curto e depois clique em "Colar".');
+        }
+    }
+
+    async function colarLinkCurtoRelatorio() {
+        const input = document.getElementById('google_event_link_relatorio');
+        if (!input) return;
+
+        try {
+            const texto = (await navigator.clipboard.readText()).trim();
+            if (!texto) {
+                alert('A Ã¡rea de transferÃªncia estÃ¡ vazia.');
+                return;
+            }
+            if (!texto.startsWith('http://') && !texto.startsWith('https://')) {
+                alert('O conteÃºdo copiado nÃ£o parece um link vÃ¡lido.');
+                return;
+            }
+            input.value = texto;
+        } catch (error) {
+            alert('NÃ£o foi possÃ­vel ler a Ã¡rea de transferÃªncia. Cole manualmente no campo.');
+        }
+    }
+
+    function copiarLinkRelatorio() {
+        const input = document.getElementById('google_event_link_relatorio');
+        const link = input ? input.value.trim() : '';
+
+        if (!link) {
+            alert('NÃ£o hÃ¡ link preenchido para copiar.');
+            return;
+        }
+
+        navigator.clipboard.writeText(link)
+            .then(() => alert('Link copiado com sucesso.'))
+            .catch(() => alert('NÃ£o foi possÃ­vel copiar automaticamente. Copie manualmente.'));
+    }
 </script>
 
 <?php include 'footer.php'; ?>
+
