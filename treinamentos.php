@@ -20,6 +20,10 @@ $total_hoje = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE DATE(data_tre
 
 // --- FILTRO POR CLIENTE ---
 $filtro_cliente = isset($_GET['filtro_cliente']) ? trim($_GET['filtro_cliente']) : '';
+$data_inicio_export = isset($_GET['data_inicio']) ? trim($_GET['data_inicio']) : '';
+$data_fim_export = (isset($_GET['data_fim']) && trim($_GET['data_fim']) !== '') ? trim($_GET['data_fim']) : date('Y-m-d');
+$erro_exportacao = '';
+$filtros_ativos = !empty($filtro_cliente) || !empty($data_inicio_export) || (isset($_GET['data_fim']) && trim($_GET['data_fim']) !== '');
 $where_conditions = [];
 $params = []; // Array para parâmetros posicionais
 
@@ -29,6 +33,90 @@ if (!empty($filtro_cliente)) {
 }
 
 $where_sql = !empty($where_conditions) ? "WHERE " . implode(" AND ", $where_conditions) : "";
+
+// Exportação XLS de treinamentos resolvidos por período
+if (isset($_GET['exportar_xls'])) {
+    if (empty($data_inicio_export) || empty($data_fim_export)) {
+        $erro_exportacao = "Informe data início e data fim para exportar.";
+    } else {
+        $data_inicio_obj = DateTime::createFromFormat('Y-m-d', $data_inicio_export);
+        $data_fim_obj = DateTime::createFromFormat('Y-m-d', $data_fim_export);
+
+        $data_inicio_valida = $data_inicio_obj && $data_inicio_obj->format('Y-m-d') === $data_inicio_export;
+        $data_fim_valida = $data_fim_obj && $data_fim_obj->format('Y-m-d') === $data_fim_export;
+
+        if (!$data_inicio_valida || !$data_fim_valida) {
+            $erro_exportacao = "Datas inválidas para exportação.";
+        } else {
+            $data_inicio_sql = $data_inicio_obj->format('Y-m-d') . ' 00:00:00';
+            $data_fim_sql = $data_fim_obj->format('Y-m-d') . ' 23:59:59';
+
+            if ($data_inicio_sql > $data_fim_sql) {
+                $erro_exportacao = "A data início não pode ser maior que a data fim.";
+            } else {
+                $sql_export = "
+                    SELECT
+                        t.data_treinamento,
+                        c.fantasia,
+                        c.vendedor,
+                        co.nome AS nome_contato,
+                        t.tema,
+                        t.observacoes
+                    FROM treinamentos t
+                    LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
+                    LEFT JOIN contatos co ON t.id_contato = co.id_contato
+                    WHERE UPPER(t.status) = 'RESOLVIDO'
+                      AND (c.data_fim IS NULL OR c.data_fim = '0000-00-00')
+                      AND t.data_treinamento BETWEEN ? AND ?
+                ";
+
+                $params_export = [$data_inicio_sql, $data_fim_sql];
+
+                if (!empty($filtro_cliente)) {
+                    $sql_export .= " AND c.fantasia LIKE ?";
+                    $params_export[] = "%{$filtro_cliente}%";
+                }
+
+                $sql_export .= " ORDER BY t.data_treinamento ASC";
+
+                $stmt_export = $pdo->prepare($sql_export);
+                $stmt_export->execute($params_export);
+                $dados_export = $stmt_export->fetchAll(PDO::FETCH_ASSOC);
+
+                $nome_arquivo = 'relatorio_treinamentos_' . date('Ymd_His') . '.xls';
+                header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
+                header('Content-Disposition: attachment; filename="' . $nome_arquivo . '"');
+                header('Pragma: no-cache');
+                header('Expires: 0');
+
+                echo "\xEF\xBB\xBF";
+                echo "<table border='1'>";
+                echo "<tr>";
+                echo "<th>data_treinamento</th>";
+                echo "<th>fantasia</th>";
+                echo "<th>vendedor</th>";
+                echo "<th>nome_contato</th>";
+                echo "<th>tema</th>";
+                echo "<th>observacoes</th>";
+                echo "</tr>";
+
+                foreach ($dados_export as $linha) {
+                    echo "<tr>";
+                    echo "<td>" . htmlspecialchars(!empty($linha['data_treinamento']) ? date('d/m/Y H:i', strtotime($linha['data_treinamento'])) : '', ENT_QUOTES, 'UTF-8') . "</td>";
+                    echo "<td>" . htmlspecialchars($linha['fantasia'] ?? '', ENT_QUOTES, 'UTF-8') . "</td>";
+                    echo "<td>" . htmlspecialchars($linha['vendedor'] ?? '', ENT_QUOTES, 'UTF-8') . "</td>";
+                    echo "<td>" . htmlspecialchars($linha['nome_contato'] ?? '', ENT_QUOTES, 'UTF-8') . "</td>";
+                    echo "<td>" . htmlspecialchars($linha['tema'] ?? '', ENT_QUOTES, 'UTF-8') . "</td>";
+                    echo "<td>" . htmlspecialchars($linha['observacoes'] ?? '', ENT_QUOTES, 'UTF-8') . "</td>";
+                    echo "</tr>";
+                }
+
+                echo "</table>";
+                exit;
+            }
+        }
+    }
+}
 
 // Lógica para Deletar
 if (isset($_GET['delete'])) {
@@ -207,8 +295,8 @@ include 'header.php';
         <div class="col-12">
             <div class="card border-0 shadow-sm rounded-3">
                 <div class="card-body p-3">
-                    <form method="GET" action="" class="row g-3 align-items-center">
-                        <div class="col-md-8">
+                    <form method="GET" action="" class="row g-3 align-items-end">
+                        <div class="col-md-4">
                             <div class="input-group">
                                 <span class="input-group-text bg-white border-end-0">
                                     <i class="bi bi-search text-muted"></i>
@@ -224,12 +312,31 @@ include 'header.php';
                                 <input type="hidden" name="direcao" value="<?= htmlspecialchars($direcao) ?>">
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted mb-1">Data início</label>
+                            <input type="date"
+                                name="data_inicio"
+                                class="form-control"
+                                value="<?= htmlspecialchars($data_inicio_export) ?>"
+                                style="height: 45px;">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted mb-1">Data fim</label>
+                            <input type="date"
+                                name="data_fim"
+                                class="form-control"
+                                value="<?= htmlspecialchars($data_fim_export) ?>"
+                                style="height: 45px;">
+                        </div>
+                        <div class="col-md-2">
                             <div class="d-grid gap-2 d-md-flex">
                                 <button type="submit" class="btn btn-primary flex-grow-1 d-flex align-items-center justify-content-center" style="height: 45px;">
                                     <i class="bi bi-funnel me-2"></i>Filtrar
                                 </button>
-                                <?php if (!empty($filtro_cliente)): ?>
+                                <button type="submit" name="exportar_xls" value="1" class="btn btn-success flex-grow-1 d-flex align-items-center justify-content-center" style="height: 45px;">
+                                    <i class="bi bi-file-earmark-excel me-2"></i>exportar xls
+                                </button>
+                                <?php if ($filtros_ativos): ?>
                                     <a href="treinamentos.php" class="btn btn-outline-secondary d-flex align-items-center" style="height: 45px;">
                                         <i class="bi bi-x-lg me-2"></i>Limpar
                                     </a>
@@ -237,6 +344,12 @@ include 'header.php';
                             </div>
                         </div>
                     </form>
+
+                    <?php if (!empty($erro_exportacao)): ?>
+                        <div class="mt-3 alert alert-warning py-2 mb-0">
+                            <i class="bi bi-exclamation-triangle me-2"></i><?= htmlspecialchars($erro_exportacao) ?>
+                        </div>
+                    <?php endif; ?>
 
                     <?php if (!empty($filtro_cliente)): ?>
                         <div class="mt-3 alert alert-info py-2">
@@ -918,7 +1031,10 @@ include 'header.php';
             document.getElementById('tema').value = this.dataset.tema;
             document.getElementById('status').value = this.dataset.status;
             document.getElementById('data_treinamento').value = this.dataset.data;
-            document.getElementById('google_event_link').value = this.dataset.googleLink || '';
+            const googleEventLinkInput = document.getElementById('google_event_link');
+            if (googleEventLinkInput) {
+                googleEventLinkInput.value = this.dataset.googleLink || '';
+            }
 
             filterContatos(this.dataset.cliente, this.dataset.contato);
             new bootstrap.Modal(document.getElementById('modalTreinamento')).show();
