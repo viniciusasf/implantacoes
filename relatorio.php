@@ -1,6 +1,71 @@
 ﻿<?php
 require_once 'config.php';
 
+function treinamentosTemColuna(PDO $pdo, $coluna, $forceRefresh = false)
+{
+    static $cache = [];
+    if (!$forceRefresh && isset($cache[$coluna])) {
+        return $cache[$coluna];
+    }
+
+    try {
+        $stmt = $pdo->prepare("SHOW COLUMNS FROM treinamentos LIKE ?");
+        $stmt->execute([$coluna]);
+        $cache[$coluna] = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $cache[$coluna] = false;
+    }
+
+    return $cache[$coluna];
+}
+
+function garantirColunaGoogleAgenda(PDO $pdo)
+{
+    if (treinamentosTemColuna($pdo, 'google_agenda_link')) {
+        return true;
+    }
+
+    $comandos = [
+        "ALTER TABLE treinamentos ADD COLUMN google_agenda_link VARCHAR(500) NULL AFTER google_event_link",
+        "ALTER TABLE treinamentos ADD COLUMN google_agenda_link VARCHAR(500) NULL",
+        "ALTER TABLE treinamentos ADD COLUMN IF NOT EXISTS google_agenda_link VARCHAR(500) NULL"
+    ];
+
+    foreach ($comandos as $sql) {
+        try {
+            $pdo->exec($sql);
+            break;
+        } catch (Throwable $e) {
+            // tenta próximo comando
+        }
+    }
+
+    return treinamentosTemColuna($pdo, 'google_agenda_link', true);
+}
+
+function salvarGoogleAgendaLink(PDO $pdo, $idTreinamento, $linkAgenda)
+{
+    $valor = $linkAgenda !== '' ? $linkAgenda : null;
+
+    try {
+        $stmt = $pdo->prepare("UPDATE treinamentos SET google_agenda_link = ? WHERE id_treinamento = ?");
+        $stmt->execute([$valor, $idTreinamento]);
+        return [true, null];
+    } catch (Throwable $e) {
+        if (!garantirColunaGoogleAgenda($pdo)) {
+            return [false, "não foi possível criar/usar a coluna google_agenda_link."];
+        }
+
+        try {
+            $stmt = $pdo->prepare("UPDATE treinamentos SET google_agenda_link = ? WHERE id_treinamento = ?");
+            $stmt->execute([$valor, $idTreinamento]);
+            return [true, null];
+        } catch (Throwable $e2) {
+            return [false, $e2->getMessage()];
+        }
+    }
+}
+
 // 1. LÃ“GICA DE PROCESSAMENTO: Encerrar treinamento com ObservaÃ§Ã£o
 // Deve vir antes de qualquer saÃ­da HTML
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirmar_encerramento'])) {
@@ -18,14 +83,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirmar_encerramento
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['salvar_link_google'])) {
     $id = $_POST['id_treinamento'] ?? null;
-    $google_event_link = trim((string)($_POST['google_event_link'] ?? ''));
+    $google_agenda_link = trim((string)($_POST['google_event_link'] ?? ''));
+    $mensagem_retorno = "Link do Google Agenda salvo com sucesso";
 
     if (!empty($id)) {
-        $stmt = $pdo->prepare("UPDATE treinamentos SET google_event_link = ? WHERE id_treinamento = ?");
-        $stmt->execute([$google_event_link !== '' ? $google_event_link : null, $id]);
+        [$salvou, $erro] = salvarGoogleAgendaLink($pdo, $id, $google_agenda_link);
+        if (!$salvou) {
+            $mensagem_retorno = "Link Google Agenda não salvo: " . $erro;
+        }
     }
 
-    header("Location: relatorio.php?msg=" . urlencode("Link do Google Agenda salvo com sucesso"));
+    header("Location: relatorio.php?msg=" . urlencode($mensagem_retorno));
     exit;
 }
 
@@ -191,22 +259,33 @@ $hoje_data = date('Y-m-d');
                                         }
                                     }
                                     $google_meet_link = trim((string)($t['google_event_link'] ?? ''));
+                                    $google_agenda_link = trim((string)($t['google_agenda_link'] ?? ''));
                                     $nome_whatsapp = $nome_contato !== '' ? $nome_contato : $t['cliente_nome'];
                                     $data_treinamento_formatada = date('d/m/Y', strtotime($t['data_treinamento']));
                                     $horario_treinamento_formatado = date('H:i', strtotime($t['data_treinamento']));
-                                    $mensagem_whatsapp = implode("\n", [
+                                    $linhas_mensagem_whatsapp = [
                                         "Olá, " . $nome_whatsapp . "!",
                                         "",
-                                        "Treinamento Agendado com Sucesso!",
-                                        "*Data: " . $data_treinamento_formatada . "*",
-                                        "*Horário: " . $horario_treinamento_formatado . "*",
-                                        "Tema: " . $t['tema'],
-                                        "Link Google Meet: " . ($google_meet_link !== '' ? $google_meet_link : 'não informado'),
+                                        "_" . "\u{2705}" . " Treinamento GestãoPRO agendado com sucesso!_",
+                                        "*" . "\u{1F4C5}" . " Data: " . $data_treinamento_formatada . "*",
+                                        "*" . "\u{1F552}" . " Horário: " . $horario_treinamento_formatado . "*",
+                                        "\u{1F3AF}" . " Tema: " . $t['tema'],
                                         "",
-                                        "Caso precise *alterar a Data/Horário* ou tenha alguma dúvida, me envie uma mensagem.",
+                                        "\u{1F4BB}" . " Acesse a reunião pelo Google Meet:",
+                                        ($google_meet_link !== '' ? $google_meet_link : 'não informado'),
+                                    ];
+                                    if ($google_agenda_link !== '') {
+                                        $linhas_mensagem_whatsapp[] = "";
+                                        $linhas_mensagem_whatsapp[] = "\u{1F4C6} Adicione ao Google Agenda:";
+                                        $linhas_mensagem_whatsapp[] = $google_agenda_link;
+                                    }
+                                    $linhas_mensagem_whatsapp = array_merge($linhas_mensagem_whatsapp, [
                                         "",
-                                        "Agradeço e nos vemos em breve!"
+                                        "Caso precise alterar a data ou o horário ou tenha alguma dúvida, é só me enviar uma mensagem.",
+                                        "",
+                                        "Agradeço e nos vemos em breve! " . "\u{1F44B}"
                                     ]);
+                                    $mensagem_whatsapp = implode("\n", $linhas_mensagem_whatsapp);
                                     if (!preg_match('//u', $mensagem_whatsapp)) {
                                         if (function_exists('mb_convert_encoding')) {
                                             $mensagem_whatsapp = mb_convert_encoding($mensagem_whatsapp, 'UTF-8', 'Windows-1252,ISO-8859-1,UTF-8');
@@ -257,8 +336,8 @@ $hoje_data = date('Y-m-d');
                                                 class="btn btn-sm btn-outline-primary me-1 open-google-link-modal"
                                                 data-id="<?= $t['id_treinamento'] ?>"
                                                 data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>"
-                                                data-google-link="<?= htmlspecialchars((string)($t['google_event_link'] ?? '')) ?>"
-                                                title="Gerenciar link Google Meet">
+                                                data-google-link="<?= htmlspecialchars((string)($t['google_agenda_link'] ?? '')) ?>"
+                                                title="Gerenciar link Google Agenda">
                                             <i class="bi bi-calendar-check"></i>
                                         </button>
                                         <button type="button" 
@@ -313,7 +392,7 @@ $hoje_data = date('Y-m-d');
     <div class="modal-dialog modal-dialog-centered">
         <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
             <div class="modal-header border-0 px-4 pt-4">
-                <h5 class="fw-bold text-dark"><i class="bi bi-calendar-event me-2 text-primary"></i>Link Google Meet</h5>
+                <h5 class="fw-bold text-dark"><i class="bi bi-calendar-event me-2 text-primary"></i>Link Google Agenda</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body px-4">
@@ -326,12 +405,12 @@ $hoje_data = date('Y-m-d');
                 </div>
 
                 <div class="mb-2">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Link Google Meet</label>
+                    <label class="form-label small fw-bold text-muted text-uppercase">Convite Google Agenda</label>
                     <input type="url"
                            name="google_event_link"
                            id="google_event_link_relatorio"
                            class="form-control"
-                           placeholder="https://meet.google.com/...">
+                           placeholder="https://calendar.app.google/...">
                 </div>
                 <div class="d-flex gap-2 flex-wrap">
                     <button type="button" class="btn btn-outline-primary btn-sm" onclick="gerarLinkCurtoRelatorio()">
@@ -345,7 +424,7 @@ $hoje_data = date('Y-m-d');
                     </button>
                 </div>
                 <div class="form-text mt-2">
-                    Informe o link do Google Meet que será enviado no WhatsApp.
+                    Cole manualmente o link "Convidar por link" do Google Agenda.
                 </div>
             </div>
             <div class="modal-footer border-0 p-4">

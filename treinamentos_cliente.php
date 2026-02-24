@@ -1066,6 +1066,50 @@ include 'header.php';
 </div>
 
 <script>
+    function normalizarTema(valor) {
+        return String(valor || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toUpperCase();
+    }
+
+    function definirTemaNoModal(valorTema) {
+        const selectTema = document.getElementById('tema');
+        if (!selectTema) return;
+
+        const temaOriginal = String(valorTema || '').trim();
+        if (!temaOriginal) {
+            selectTema.selectedIndex = 0;
+            return;
+        }
+
+        const temaNormalizado = normalizarTema(temaOriginal);
+        let opcaoEncontrada = null;
+
+        for (const option of selectTema.options) {
+            if (
+                option.value === temaOriginal ||
+                normalizarTema(option.value) === temaNormalizado ||
+                normalizarTema(option.textContent) === temaNormalizado
+            ) {
+                opcaoEncontrada = option;
+                break;
+            }
+        }
+
+        if (!opcaoEncontrada) {
+            const novaOpcao = document.createElement('option');
+            novaOpcao.value = temaOriginal;
+            novaOpcao.textContent = temaOriginal;
+            selectTema.appendChild(novaOpcao);
+            opcaoEncontrada = novaOpcao;
+        }
+
+        selectTema.value = opcaoEncontrada.value;
+    }
+
     // Inicializar tooltips
     document.addEventListener('DOMContentLoaded', function() {
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
@@ -1106,7 +1150,7 @@ include 'header.php';
             document.getElementById('data_treinamento').value = dataFormatada;
         }
 
-        document.getElementById('tema').value = button.dataset.tema || 'INSTALAÇÃO SISTEMA';
+        definirTemaNoModal(button.dataset.tema);
         document.getElementById('status').value = button.dataset.status || 'PENDENTE';
         document.getElementById('id_contato').value = button.dataset.id_contato || '';
         document.getElementById('google_event_link').value = button.dataset.google_event_link || '';
@@ -1171,7 +1215,7 @@ include 'header.php';
                 document.getElementById('data_treinamento').value = localDateTime;
 
                 modalTitle.innerText = 'Agendar Treinamento';
-                document.getElementById('tema').value = 'INSTALAÇÃO SISTEMA';
+                definirTemaNoModal('');
                 document.getElementById('status').value = 'PENDENTE';
                 document.getElementById('id_contato').value = '';
                 document.getElementById('google_event_link').value = '';
@@ -1189,3 +1233,4 @@ include 'header.php';
 </script>
 
 <?php include 'footer.php'; ?>
+

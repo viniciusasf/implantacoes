@@ -4,6 +4,24 @@ date_default_timezone_set('America/Sao_Paulo');
 
 require_once 'config.php';
 
+function treinamentosTemColuna(PDO $pdo, $coluna, $forceRefresh = false)
+{
+    static $cache = [];
+    if (!$forceRefresh && isset($cache[$coluna])) {
+        return $cache[$coluna];
+    }
+
+    try {
+        $stmt = $pdo->prepare("SHOW COLUMNS FROM treinamentos LIKE ?");
+        $stmt->execute([$coluna]);
+        $cache[$coluna] = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $cache[$coluna] = false;
+    }
+
+    return $cache[$coluna];
+}
+
 function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
 {
     try {
@@ -237,20 +255,46 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $status = $_POST['status'];
     $data_treinamento = !empty($_POST['data_treinamento']) ? $_POST['data_treinamento'] : null;
     $has_google_event_link = array_key_exists('google_event_link', $_POST);
+    $has_google_agenda_link = array_key_exists('google_agenda_link', $_POST);
     $google_event_link = $has_google_event_link && !empty($_POST['google_event_link']) ? trim($_POST['google_event_link']) : null;
+    $google_agenda_link = $has_google_agenda_link && !empty($_POST['google_agenda_link']) ? trim($_POST['google_agenda_link']) : null;
+    $tem_coluna_google_agenda = treinamentosTemColuna($pdo, 'google_agenda_link');
 
     if (isset($_POST['id_treinamento']) && !empty($_POST['id_treinamento'])) {
+        $campos_update = [
+            "id_cliente=?",
+            "id_contato=?",
+            "tema=?",
+            "status=?",
+            "data_treinamento=?"
+        ];
+        $params_update = [$id_cliente, $id_contato, $tema, $status, $data_treinamento];
+
         if ($has_google_event_link) {
-            $stmt = $pdo->prepare("UPDATE treinamentos SET id_cliente=?, id_contato=?, tema=?, status=?, data_treinamento=?, google_event_link=? WHERE id_treinamento=?");
-            $stmt->execute([$id_cliente, $id_contato, $tema, $status, $data_treinamento, $google_event_link, $_POST['id_treinamento']]);
-        } else {
-            $stmt = $pdo->prepare("UPDATE treinamentos SET id_cliente=?, id_contato=?, tema=?, status=?, data_treinamento=? WHERE id_treinamento=?");
-            $stmt->execute([$id_cliente, $id_contato, $tema, $status, $data_treinamento, $_POST['id_treinamento']]);
+            $campos_update[] = "google_event_link=?";
+            $params_update[] = $google_event_link;
         }
+        if ($has_google_agenda_link && $tem_coluna_google_agenda) {
+            $campos_update[] = "google_agenda_link=?";
+            $params_update[] = $google_agenda_link;
+        }
+
+        $params_update[] = $_POST['id_treinamento'];
+        $stmt = $pdo->prepare("UPDATE treinamentos SET " . implode(", ", $campos_update) . " WHERE id_treinamento=?");
+        $stmt->execute($params_update);
         $msg = "Treinamento atualizado com sucesso";
     } else {
-        $stmt = $pdo->prepare("INSERT INTO treinamentos (id_cliente, id_contato, tema, status, data_treinamento, google_event_link) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$id_cliente, $id_contato, $tema, $status, $data_treinamento, $google_event_link]);
+        $colunas_insert = ["id_cliente", "id_contato", "tema", "status", "data_treinamento", "google_event_link"];
+        $params_insert = [$id_cliente, $id_contato, $tema, $status, $data_treinamento, $google_event_link];
+
+        if ($has_google_agenda_link && $tem_coluna_google_agenda) {
+            $colunas_insert[] = "google_agenda_link";
+            $params_insert[] = $google_agenda_link;
+        }
+
+        $placeholders = implode(", ", array_fill(0, count($colunas_insert), "?"));
+        $stmt = $pdo->prepare("INSERT INTO treinamentos (" . implode(", ", $colunas_insert) . ") VALUES ($placeholders)");
+        $stmt->execute($params_insert);
         $novo_id_treinamento = (int)$pdo->lastInsertId();
 
         $syncResult = ['success' => false];
@@ -657,6 +701,8 @@ include 'header.php';
                         $timestamp_atual = $data_atual->getTimestamp();
 
                         foreach ($treinamentos as $t):
+                            $link_google_agenda = trim((string)($t['google_agenda_link'] ?? ''));
+                            $link_google_agenda_exibicao = $link_google_agenda !== '' ? $link_google_agenda : trim((string)($t['google_event_link'] ?? ''));
                             // LÓGICA CORRIGIDA PARA VERIFICAR VENCIMENTO
                             $isVencido = false;
 
@@ -698,10 +744,10 @@ include 'header.php';
                                     </span>
                                 </td>
                                 <td>
-                                    <?php if (!empty($t['google_event_link'])): ?>
+                                    <?php if ($link_google_agenda_exibicao !== ''): ?>
                                         <div class="d-flex gap-1">
                                             <!-- Botão para abrir link -->
-                                            <a href="<?= htmlspecialchars($t['google_event_link']) ?>"
+                                            <a href="<?= htmlspecialchars($link_google_agenda_exibicao) ?>"
                                                 target="_blank"
                                                 class="btn btn-sm btn-outline-primary open-link-btn btn-google-link"
                                                 data-bs-toggle="tooltip"
@@ -714,7 +760,7 @@ include 'header.php';
                                                 class="btn btn-sm btn-outline-success copy-link-btn btn-google-link"
                                                 data-bs-toggle="tooltip"
                                                 data-bs-title="Copiar link do Google Agenda"
-                                                onclick="copiarLinkAgenda('<?= htmlspecialchars($t['google_event_link']) ?>', '<?= htmlspecialchars($t['cliente_nome']) ?>')">
+                                                onclick="copiarLinkAgenda('<?= htmlspecialchars($link_google_agenda_exibicao) ?>', '<?= htmlspecialchars($t['cliente_nome']) ?>')">
                                                 <i class="bi bi-clipboard"></i>
                                             </button>
                                         </div>
@@ -776,8 +822,7 @@ include 'header.php';
                                             data-contato="<?= $t['id_contato'] ?>"
                                             data-tema="<?= htmlspecialchars($t['tema']) ?>"
                                             data-status="<?= $t['status'] ?>"
-                                            data-data="<?= $t['data_treinamento'] ? date('Y-m-d\TH:i', strtotime($t['data_treinamento'])) : '' ?>"
-                                            data-google-link="<?= !empty($t['google_event_link']) ? htmlspecialchars($t['google_event_link']) : '' ?>">
+                                            data-data="<?= $t['data_treinamento'] ? date('Y-m-d\TH:i', strtotime($t['data_treinamento'])) : '' ?>">
                                             <i class="bi bi-pencil"></i>
                                         </button>
 
@@ -1152,10 +1197,6 @@ include 'header.php';
             document.getElementById('tema').value = this.dataset.tema;
             document.getElementById('status').value = this.dataset.status;
             document.getElementById('data_treinamento').value = this.dataset.data;
-            const googleEventLinkInput = document.getElementById('google_event_link');
-            if (googleEventLinkInput) {
-                googleEventLinkInput.value = this.dataset.googleLink || '';
-            }
 
             filterContatos(this.dataset.cliente, this.dataset.contato);
             new bootstrap.Modal(document.getElementById('modalTreinamento')).show();
