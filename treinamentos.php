@@ -4,6 +4,108 @@ date_default_timezone_set('America/Sao_Paulo');
 
 require_once 'config.php';
 
+function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
+{
+    try {
+        $autoloadPath = __DIR__ . '/vendor/autoload.php';
+        $credentialsPath = __DIR__ . '/credentials.json';
+        $tokenPath = __DIR__ . '/token.json';
+
+        if (!file_exists($autoloadPath) || !file_exists($credentialsPath)) {
+            return ['success' => false, 'message' => 'Integração Google não configurada.'];
+        }
+
+        require_once $autoloadPath;
+
+        if (!file_exists($tokenPath)) {
+            return ['success' => false, 'message' => 'Token Google ausente.'];
+        }
+
+        $tokenData = json_decode(file_get_contents($tokenPath), true);
+        if (!is_array($tokenData)) {
+            return ['success' => false, 'message' => 'Token Google inválido.'];
+        }
+
+        $client = new Google\Client();
+        $client->setAuthConfig($credentialsPath);
+        $client->addScope(Google\Service\Calendar::CALENDAR);
+        $client->setAccessType('offline');
+        $client->setAccessToken($tokenData);
+
+        if ($client->isAccessTokenExpired()) {
+            $refreshToken = $client->getRefreshToken();
+            if (empty($refreshToken)) {
+                return ['success' => false, 'message' => 'Token expirado sem refresh token.'];
+            }
+
+            $novoToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
+            if (isset($novoToken['error'])) {
+                return ['success' => false, 'message' => 'Falha ao renovar token Google.'];
+            }
+
+            file_put_contents($tokenPath, json_encode($client->getAccessToken()));
+        }
+
+        $stmt = $pdo->prepare("SELECT t.*, c.fantasia as cliente_nome, co.nome as contato_nome
+                               FROM treinamentos t
+                               LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
+                               LEFT JOIN contatos co ON t.id_contato = co.id_contato
+                               WHERE t.id_treinamento = ?");
+        $stmt->execute([$idTreinamento]);
+        $treinamento = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$treinamento || empty($treinamento['data_treinamento'])) {
+            return ['success' => false, 'message' => 'Treinamento inválido para sincronização.'];
+        }
+
+        $service = new Google\Service\Calendar($client);
+        $startDate = new DateTime($treinamento['data_treinamento'], new DateTimeZone('America/Sao_Paulo'));
+        $endDate = clone $startDate;
+        $endDate->modify('+60 minutes');
+
+        $event = new Google\Service\Calendar\Event([
+            'summary' => '#' . $treinamento['id_treinamento'] . ' Treinamento: ' . ($treinamento['cliente_nome'] ?? 'Cliente'),
+            'description' => "Tema: " . ($treinamento['tema'] ?? '') . "\nContato: " . ($treinamento['contato_nome'] ?? ''),
+            'start' => ['dateTime' => $startDate->format(DateTime::RFC3339), 'timeZone' => 'America/Sao_Paulo'],
+            'end' => ['dateTime' => $endDate->format(DateTime::RFC3339), 'timeZone' => 'America/Sao_Paulo'],
+            'conferenceData' => [
+                'createRequest' => [
+                    'requestId' => 'treino-' . $treinamento['id_treinamento'] . '-' . time(),
+                    'conferenceSolutionKey' => ['type' => 'hangoutsMeet']
+                ]
+            ]
+        ]);
+
+        $createdEvent = $service->events->insert('primary', $event, ['conferenceDataVersion' => 1]);
+
+        $googleEventId = $createdEvent->getId();
+        $googleMeetLink = $createdEvent->getHangoutLink();
+
+        if (empty($googleMeetLink)) {
+            $conferenceData = $createdEvent->getConferenceData();
+            if ($conferenceData && $conferenceData->getEntryPoints()) {
+                foreach ($conferenceData->getEntryPoints() as $entryPoint) {
+                    if ($entryPoint->getEntryPointType() === 'video' && !empty($entryPoint->getUri())) {
+                        $googleMeetLink = $entryPoint->getUri();
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (empty($googleMeetLink)) {
+            $googleMeetLink = $createdEvent->htmlLink;
+        }
+
+        $stmtUpdate = $pdo->prepare("UPDATE treinamentos SET google_event_id = ?, google_event_link = ? WHERE id_treinamento = ?");
+        $stmtUpdate->execute([$googleEventId, $googleMeetLink, $idTreinamento]);
+
+        return ['success' => true, 'message' => 'Google Meet criado com sucesso.'];
+    } catch (Throwable $e) {
+        return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
 // --- LÓGICA DE ALERTA: CLIENTES SEM AGENDAMENTO (PRÓXIMOS 3 DIAS) ---
 $sql_alerta = "SELECT fantasia FROM clientes 
                WHERE (data_fim IS NULL OR data_fim = '0000-00-00') 
@@ -135,7 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $status = $_POST['status'];
     $data_treinamento = !empty($_POST['data_treinamento']) ? $_POST['data_treinamento'] : null;
     $has_google_event_link = array_key_exists('google_event_link', $_POST);
-    $google_event_link = $has_google_event_link && !empty($_POST['google_event_link']) ? $_POST['google_event_link'] : null;
+    $google_event_link = $has_google_event_link && !empty($_POST['google_event_link']) ? trim($_POST['google_event_link']) : null;
 
     if (isset($_POST['id_treinamento']) && !empty($_POST['id_treinamento'])) {
         if ($has_google_event_link) {
@@ -149,7 +251,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     } else {
         $stmt = $pdo->prepare("INSERT INTO treinamentos (id_cliente, id_contato, tema, status, data_treinamento, google_event_link) VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->execute([$id_cliente, $id_contato, $tema, $status, $data_treinamento, $google_event_link]);
-        $msg = "Treinamento adicionado com sucesso";
+        $novo_id_treinamento = (int)$pdo->lastInsertId();
+
+        $syncResult = ['success' => false];
+        if ($google_event_link === null || $google_event_link === '') {
+            $syncResult = sincronizarGoogleMeetAutomatico($pdo, $novo_id_treinamento);
+        }
+
+        if (!empty($syncResult['success'])) {
+            $msg = "Treinamento adicionado e sincronizado com Google Meet";
+        } elseif (!empty($syncResult['message'])) {
+            $msg = "Treinamento adicionado. Link Google Meet não gerado automaticamente: " . $syncResult['message'];
+        } else {
+            $msg = "Treinamento adicionado com sucesso";
+        }
     }
     header("Location: treinamentos.php?msg=" . urlencode($msg) . "&tipo=success");
     exit;
@@ -832,13 +947,12 @@ include 'header.php';
                     <label class="form-label small fw-bold text-muted">Tema</label>
                     <select name="tema" id="tema" class="form-select" required>
                         <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
-                        <option value="CADASTROS">CADASTROS/ESTOQUE</option>
-                        <option value="ORÇAMENTO DE VENDA">VENDAS</option>
-                        <option value="ENTRADA DE COMPRA">COMPRAS</option>
-                        <option value="FATURAMENTO">FATURAMENTO/NF</option>
+                        <option value="CADASTROS/ESTOQUE">CADASTROS/ESTOQUE</option>
+                        <option value="VENDAS">VENDAS</option>
+                        <option value="COMPRAS">COMPRAS</option>
+                        <option value="FATURAMENTO/NF">FATURAMENTO/NF</option>
                         <option value="FINANCEIRO/CAIXA">FINANCEIRO/CAIXA</option>                        
-                        <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
-                        <option value="PDV">PDV</option>                
+                        <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>                
                         <option value="RELATÓRIOS">RELATÓRIOS</option>
                         <option value="ATENDIMENTOS">ATENDIMENTOS</option>
                         <option value="DUVIDAS">DUVIDAS</option>                        

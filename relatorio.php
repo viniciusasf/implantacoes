@@ -150,7 +150,7 @@ $hoje_data = date('Y-m-d');
     <div class="col-lg-12">
         <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
-                <h5 class="mb-0 fw-bold text-dark">PrÃ³ximos Atendimentos (Pendentes)</h5>
+                <h5 class="mb-0 fw-bold text-dark">Próximos Atendimentos (Pendentes)</h5>
                 <a href="treinamentos.php" class="btn btn-sm btn-light text-primary fw-bold">Ver todos</a>
             </div>
             <div class="card-body p-0">
@@ -164,7 +164,7 @@ $hoje_data = date('Y-m-d');
                                 <th>Contato</th>
                                 <th>Tema</th>
                                 <th class="text-center">Status</th>
-                                <th class="text-end pe-4">AÃ§Ãµes</th>
+                                <th class="text-end pe-4">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -190,17 +190,34 @@ $hoje_data = date('Y-m-d');
                                             $telefone_whatsapp = '';
                                         }
                                     }
+                                    $google_meet_link = trim((string)($t['google_event_link'] ?? ''));
+                                    $nome_whatsapp = $nome_contato !== '' ? $nome_contato : $t['cliente_nome'];
+                                    $data_treinamento_formatada = date('d/m/Y', strtotime($t['data_treinamento']));
+                                    $horario_treinamento_formatado = date('H:i', strtotime($t['data_treinamento']));
                                     $mensagem_whatsapp = implode("\n", [
-                                        "Treinamento GestãoPRO:# *" . $t['id_treinamento'] . "*",
-                                        //"Empresa: *" . $t['cliente_nome'] . "*",
-                                        "Data: *" . date('d/m/Y H:i', strtotime($t['data_treinamento'])) . "*",
-                                        "Tema: *" . $t['tema'] . "*",
-                                        "Contato: *" . ($nome_contato !== '' ? $nome_contato : '---') . "*",
-                                        "Link Google Meet: *" . trim((string)($t['google_event_link'] ?? '')) . "*"
+                                        "Olá, " . $nome_whatsapp . "!",
+                                        "",
+                                        "Treinamento Agendado com Sucesso!",
+                                        "*Data: " . $data_treinamento_formatada . "*",
+                                        "*Horário: " . $horario_treinamento_formatado . "*",
+                                        "Tema: " . $t['tema'],
+                                        "Link Google Meet: " . ($google_meet_link !== '' ? $google_meet_link : 'não informado'),
+                                        "",
+                                        "Caso precise *alterar a Data/Horário* ou tenha alguma dúvida, me envie uma mensagem.",
+                                        "",
+                                        "Agradeço e nos vemos em breve!"
                                     ]);
-                                    $link_whatsapp = $telefone_whatsapp !== ''
-                                        ? 'https://wa.me/' . $telefone_whatsapp . '?text=' . rawurlencode($mensagem_whatsapp)
-                                        : '';
+                                    if (!preg_match('//u', $mensagem_whatsapp)) {
+                                        if (function_exists('mb_convert_encoding')) {
+                                            $mensagem_whatsapp = mb_convert_encoding($mensagem_whatsapp, 'UTF-8', 'Windows-1252,ISO-8859-1,UTF-8');
+                                        } elseif (function_exists('iconv')) {
+                                            $convertida = @iconv('Windows-1252', 'UTF-8//IGNORE', $mensagem_whatsapp);
+                                            if ($convertida !== false) {
+                                                $mensagem_whatsapp = $convertida;
+                                            }
+                                        }
+                                    }
+                                    $mensagem_whatsapp_attr = htmlspecialchars($mensagem_whatsapp, ENT_QUOTES, 'UTF-8');
                                     if ($nome_contato !== '' && $telefone_exibicao !== '') {
                                         $contato_exibicao = $nome_contato . ' - ' . $telefone_exibicao;
                                     } elseif ($nome_contato !== '') {
@@ -230,15 +247,12 @@ $hoje_data = date('Y-m-d');
                                         </span>
                                     </td>
                                     <td class="text-end pe-4">
-                                        <?php if ($link_whatsapp !== ''): ?>
-                                        <a href="<?= htmlspecialchars($link_whatsapp) ?>"
-                                           target="_blank"
-                                           rel="noopener noreferrer"
-                                           class="btn btn-sm btn-outline-success me-1"
-                                           title="Enviar WhatsApp">
+                                        <button type="button"
+                                           class="btn btn-sm btn-outline-success me-1 copy-whatsapp-message"
+                                           data-message="<?= $mensagem_whatsapp_attr ?>"
+                                           title="Copiar mensagem para WhatsApp">
                                             <i class="bi bi-whatsapp"></i>
-                                        </a>
-                                        <?php endif; ?>
+                                        </button>
                                         <button type="button"
                                                 class="btn btn-sm btn-outline-primary me-1 open-google-link-modal"
                                                 data-id="<?= $t['id_treinamento'] ?>"
@@ -278,7 +292,7 @@ $hoje_data = date('Y-m-d');
                 <input type="hidden" name="confirmar_encerramento" value="1">
                 
                 <div class="mb-3 p-3 bg-light rounded-3">
-                    <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">InformaÃ§Ãµes:</div>
+                    <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">Informações:</div>
                     <div class="fw-bold text-primary" id="modal_cliente_info"></div>
                 </div>
 
@@ -312,12 +326,12 @@ $hoje_data = date('Y-m-d');
                 </div>
 
                 <div class="mb-2">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Convidar por Link</label>
+                    <label class="form-label small fw-bold text-muted text-uppercase">Link Google Meet</label>
                     <input type="url"
                            name="google_event_link"
                            id="google_event_link_relatorio"
                            class="form-control"
-                           placeholder="https://calendar.app.google/...">
+                           placeholder="https://meet.google.com/...">
                 </div>
                 <div class="d-flex gap-2 flex-wrap">
                     <button type="button" class="btn btn-outline-primary btn-sm" onclick="gerarLinkCurtoRelatorio()">
@@ -331,7 +345,7 @@ $hoje_data = date('Y-m-d');
                     </button>
                 </div>
                 <div class="form-text mt-2">
-                    Use preferencialmente o link curto <code>https://calendar.app.google/...</code>.
+                    Informe o link do Google Meet que será enviado no WhatsApp.
                 </div>
             </div>
             <div class="modal-footer border-0 p-4">
@@ -363,6 +377,24 @@ $hoje_data = date('Y-m-d');
             document.getElementById('google_modal_cliente_info').innerText = this.dataset.cliente;
             document.getElementById('google_event_link_relatorio').value = this.dataset.googleLink || '';
             new bootstrap.Modal(document.getElementById('modalGoogleLink')).show();
+        });
+    });
+
+    document.querySelectorAll('.copy-whatsapp-message').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const mensagem = this.dataset.message || '';
+
+            if (!mensagem.trim()) {
+                alert('Não há mensagem para copiar.');
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(mensagem);
+                alert('Mensagem copiada. Agora cole no WhatsApp do cliente.');
+            } catch (error) {
+                alert('Não foi possível copiar automaticamente. Copie manualmente.');
+            }
         });
     });
 
@@ -418,4 +450,3 @@ $hoje_data = date('Y-m-d');
 </script>
 
 <?php include 'footer.php'; ?>
-
