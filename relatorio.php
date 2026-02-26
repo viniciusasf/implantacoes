@@ -66,18 +66,268 @@ function salvarGoogleAgendaLink(PDO $pdo, $idTreinamento, $linkAgenda)
     }
 }
 
+function garantirColunaMarcacaoPendencia(PDO $pdo)
+{
+    if (treinamentosTemColuna($pdo, 'tipo_pendencia_encerramento')) {
+        return true;
+    }
+
+    $comandos = [
+        "ALTER TABLE treinamentos ADD COLUMN tipo_pendencia_encerramento VARCHAR(20) NULL AFTER observacoes",
+        "ALTER TABLE treinamentos ADD COLUMN tipo_pendencia_encerramento VARCHAR(20) NULL",
+        "ALTER TABLE treinamentos ADD COLUMN IF NOT EXISTS tipo_pendencia_encerramento VARCHAR(20) NULL"
+    ];
+
+    foreach ($comandos as $sql) {
+        try {
+            $pdo->exec($sql);
+            break;
+        } catch (Throwable $e) {
+            // tenta proximo comando
+        }
+    }
+
+    return treinamentosTemColuna($pdo, 'tipo_pendencia_encerramento', true);
+}
+
+function garantirTabelaPendenciasTreinamentos(PDO $pdo)
+{
+    $sql = "CREATE TABLE IF NOT EXISTS pendencias_treinamentos (
+        id_pendencia INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        id_treinamento INT NOT NULL,
+        id_cliente INT NULL,
+        status_pendencia VARCHAR(20) NOT NULL DEFAULT 'ABERTA',
+        observacao_finalizacao TEXT NULL,
+        referencia_chamado VARCHAR(255) NULL,
+        observacao_conclusao TEXT NULL,
+        data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        data_atualizacao DATETIME NULL,
+        data_conclusao DATETIME NULL,
+        UNIQUE KEY uq_pendencia_treinamento (id_treinamento),
+        KEY idx_status_pendencia (status_pendencia),
+        KEY idx_cliente_pendencia (id_cliente)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+
+    try {
+        $pdo->exec($sql);
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+function criarServicoGoogleCalendarStatus()
+{
+    $autoloadPath = __DIR__ . '/vendor/autoload.php';
+    $credentialsPath = __DIR__ . '/credentials.json';
+    $tokenPath = __DIR__ . '/token.json';
+
+    if (!file_exists($autoloadPath) || !file_exists($credentialsPath) || !file_exists($tokenPath)) {
+        return [null, 'integracao_google_nao_configurada'];
+    }
+
+    require_once $autoloadPath;
+
+    $tokenData = json_decode(file_get_contents($tokenPath), true);
+    if (!is_array($tokenData)) {
+        return [null, 'token_google_invalido'];
+    }
+
+    try {
+        $client = new Google\Client();
+        $client->setAuthConfig($credentialsPath);
+        $client->addScope(Google\Service\Calendar::CALENDAR);
+        $client->setAccessType('offline');
+        $client->setAccessToken($tokenData);
+
+        if ($client->isAccessTokenExpired()) {
+            $refreshToken = $client->getRefreshToken();
+            if (empty($refreshToken)) {
+                return [null, 'token_expirado_sem_refresh'];
+            }
+
+            $novoToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
+            if (isset($novoToken['error'])) {
+                return [null, 'falha_renovar_token'];
+            }
+            file_put_contents($tokenPath, json_encode($client->getAccessToken()));
+        }
+
+        return [new Google\Service\Calendar($client), null];
+    } catch (Throwable $e) {
+        return [null, 'erro_inicializar_google'];
+    }
+}
+
+function obterStatusConvitesGoogle(array $treinamentos)
+{
+    $statusPorTreinamento = [];
+    $itensComEvento = [];
+
+    foreach ($treinamentos as $t) {
+        $idTreinamento = (int)($t['id_treinamento'] ?? 0);
+        if ($idTreinamento <= 0) {
+            continue;
+        }
+
+        $googleEventId = trim((string)($t['google_event_id'] ?? ''));
+        if ($googleEventId === '') {
+            $statusPorTreinamento[$idTreinamento] = [
+                'tipo' => 'sem_evento',
+                'label' => 'Sem evento',
+                'badge' => 'bg-secondary'
+            ];
+            continue;
+        }
+
+        $statusPorTreinamento[$idTreinamento] = [
+            'tipo' => 'pendente_verificacao',
+            'label' => 'Verificando',
+            'badge' => 'bg-light text-dark border'
+        ];
+        $itensComEvento[$idTreinamento] = $googleEventId;
+    }
+
+    if (empty($itensComEvento)) {
+        return $statusPorTreinamento;
+    }
+
+    [$service, $erroServico] = criarServicoGoogleCalendarStatus();
+    if (!$service) {
+        foreach ($itensComEvento as $idTreinamento => $googleEventId) {
+            $statusPorTreinamento[$idTreinamento] = [
+                'tipo' => 'erro',
+                'label' => 'Sem validacao',
+                'badge' => 'bg-warning text-dark'
+            ];
+        }
+        return $statusPorTreinamento;
+    }
+
+    foreach ($itensComEvento as $idTreinamento => $googleEventId) {
+        try {
+            $evento = $service->events->get('primary', $googleEventId);
+            $attendees = $evento->getAttendees();
+            $qtdConvidados = is_array($attendees) ? count($attendees) : 0;
+
+            if ($qtdConvidados > 0) {
+                $statusPorTreinamento[$idTreinamento] = [
+                    'tipo' => 'enviado',
+                    'label' => 'Enviado (' . $qtdConvidados . ')',
+                    'badge' => 'bg-success'
+                ];
+            } else {
+                $statusPorTreinamento[$idTreinamento] = [
+                    'tipo' => 'nao_enviado',
+                    'label' => 'Nao enviado',
+                    'badge' => 'bg-danger'
+                ];
+            }
+        } catch (Throwable $e) {
+            $codigo = (int)$e->getCode();
+            if ($codigo === 404) {
+                $statusPorTreinamento[$idTreinamento] = [
+                    'tipo' => 'evento_inexistente',
+                    'label' => 'Evento nao existe',
+                    'badge' => 'bg-danger'
+                ];
+            } else {
+                $statusPorTreinamento[$idTreinamento] = [
+                    'tipo' => 'erro',
+                    'label' => 'Erro validacao',
+                    'badge' => 'bg-warning text-dark'
+                ];
+            }
+        }
+    }
+
+    return $statusPorTreinamento;
+}
+
 // 1. LÃ“GICA DE PROCESSAMENTO: Encerrar treinamento com ObservaÃ§Ã£o
 // Deve vir antes de qualquer saÃ­da HTML
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirmar_encerramento'])) {
-    $id = $_POST['id_treinamento'];
-    $obs = $_POST['observacoes'];
+    $id = (int)($_POST['id_treinamento'] ?? 0);
+    $obs = trim((string)($_POST['observacoes'] ?? ''));
+    $temPendencia = trim((string)($_POST['tem_pendencia'] ?? ''));
+    $referenciaChamado = trim((string)($_POST['referencia_chamado'] ?? ''));
+    $tipoPendencia = null;
+    if ($temPendencia === 'sim') {
+        $tipoPendencia = 'COM_PENDENCIA';
+    } elseif ($temPendencia === 'nao') {
+        $tipoPendencia = 'SEM_PENDENCIA';
+    }
     $data_hoje = date('Y-m-d H:i:s');
-    
-    // Esta query requer que a coluna 'observacoes' exista na tabela 'treinamentos'
-    $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', data_treinamento_encerrado = ?, observacoes = ? WHERE id_treinamento = ?");
-    $stmt->execute([$data_hoje, $obs, $id]);
-    
-    header("Location: index.php?msg=Treinamento encerrado com sucesso");
+
+    if ($id <= 0 || $obs === '' || $tipoPendencia === null) {
+        header("Location: relatorio.php?msg=" . urlencode("Preencha os campos obrigatorios para encerrar o treinamento."));
+        exit;
+    }
+
+    $colunaMarcacaoDisponivel = garantirColunaMarcacaoPendencia($pdo);
+    $tabelaPendenciasDisponivel = garantirTabelaPendenciasTreinamentos($pdo);
+    $mensagemRetorno = "Treinamento encerrado com sucesso.";
+
+    try {
+        $pdo->beginTransaction();
+
+        if ($colunaMarcacaoDisponivel) {
+            $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', data_treinamento_encerrado = ?, observacoes = ?, tipo_pendencia_encerramento = ? WHERE id_treinamento = ?");
+            $stmt->execute([$data_hoje, $obs, $tipoPendencia, $id]);
+        } else {
+            $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', data_treinamento_encerrado = ?, observacoes = ? WHERE id_treinamento = ?");
+            $stmt->execute([$data_hoje, $obs, $id]);
+        }
+
+        $stmtCliente = $pdo->prepare("SELECT id_cliente FROM treinamentos WHERE id_treinamento = ?");
+        $stmtCliente->execute([$id]);
+        $idCliente = (int)($stmtCliente->fetchColumn() ?: 0);
+
+        if ($tipoPendencia === 'COM_PENDENCIA' && $tabelaPendenciasDisponivel) {
+            $stmtPendencia = $pdo->prepare(
+                "INSERT INTO pendencias_treinamentos
+                    (id_treinamento, id_cliente, status_pendencia, observacao_finalizacao, referencia_chamado, observacao_conclusao, data_criacao, data_atualizacao, data_conclusao)
+                 VALUES (?, ?, 'ABERTA', ?, ?, NULL, ?, NULL, NULL)
+                 ON DUPLICATE KEY UPDATE
+                    id_cliente = VALUES(id_cliente),
+                    status_pendencia = 'ABERTA',
+                    observacao_finalizacao = VALUES(observacao_finalizacao),
+                    referencia_chamado = VALUES(referencia_chamado),
+                    observacao_conclusao = NULL,
+                    data_atualizacao = VALUES(data_criacao),
+                    data_conclusao = NULL"
+            );
+            $stmtPendencia->execute([
+                $id,
+                $idCliente > 0 ? $idCliente : null,
+                $obs,
+                $referenciaChamado !== '' ? $referenciaChamado : null,
+                $data_hoje
+            ]);
+        } elseif ($tipoPendencia === 'SEM_PENDENCIA' && $tabelaPendenciasDisponivel) {
+            $stmtPendencia = $pdo->prepare(
+                "UPDATE pendencias_treinamentos
+                 SET status_pendencia = 'CONCLUIDA',
+                     data_conclusao = ?,
+                     data_atualizacao = ?,
+                     observacao_conclusao = COALESCE(observacao_conclusao, 'Encerrado sem pendencia no treinamento.')
+                 WHERE id_treinamento = ? AND status_pendencia = 'ABERTA'"
+            );
+            $stmtPendencia->execute([$data_hoje, $data_hoje, $id]);
+        } elseif (!$tabelaPendenciasDisponivel && $tipoPendencia === 'COM_PENDENCIA') {
+            $mensagemRetorno = "Treinamento encerrado, mas nao foi possivel registrar a pendencia (tabela indisponivel).";
+        }
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        header("Location: relatorio.php?msg=" . urlencode("Erro ao encerrar treinamento: " . $e->getMessage()));
+        exit;
+    }
+
+    header("Location: relatorio.php?msg=" . urlencode($mensagemRetorno));
     exit;
 }
 
@@ -132,6 +382,7 @@ $sql = "SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_n
         LIMIT 10";
 
 $proximos_atendimentos = $pdo->query($sql)->fetchAll();
+$status_convites = obterStatusConvitesGoogle($proximos_atendimentos);
 $hoje_data = date('Y-m-d');
 ?>
 
@@ -219,7 +470,10 @@ $hoje_data = date('Y-m-d');
         <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
                 <h5 class="mb-0 fw-bold text-dark">Próximos Atendimentos (Pendentes)</h5>
-                <a href="treinamentos.php" class="btn btn-sm btn-light text-primary fw-bold">Ver todos</a>
+                <div class="d-flex gap-2">
+                    <a href="pendencias_treinamentos.php" class="btn btn-sm btn-outline-danger fw-bold">Pendencias de Treinamentos</a>
+                    <a href="treinamentos.php" class="btn btn-sm btn-light text-primary fw-bold">Ver todos</a>
+                </div>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -232,13 +486,14 @@ $hoje_data = date('Y-m-d');
                                 <th>Contato</th>
                                 <th>Tema</th>
                                 <th class="text-center">Status</th>
+                                <th class="text-center">Convite</th>
                                 <th class="text-end pe-4">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($proximos_atendimentos)): ?>
                                 <tr>
-                                    <td colspan="7" class="text-center py-4 text-muted">Nenhum treinamento pendente.</td>
+                                    <td colspan="8" class="text-center py-4 text-muted">Nenhum treinamento pendente.</td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($proximos_atendimentos as $t): 
@@ -306,6 +561,11 @@ $hoje_data = date('Y-m-d');
                                     } else {
                                         $contato_exibicao = '---';
                                     }
+                                    $id_treinamento_linha = (int)($t['id_treinamento'] ?? 0);
+                                    $convite_status = $status_convites[$id_treinamento_linha] ?? [
+                                        'label' => 'Sem validacao',
+                                        'badge' => 'bg-warning text-dark'
+                                    ];
                                 ?>
                                 <tr class="<?= $bg_class ?>">
                                     <td class="ps-4">
@@ -323,6 +583,11 @@ $hoje_data = date('Y-m-d');
                                     <td class="text-center">
                                         <span class="badge bg-light text-dark border">
                                             <?= $t['status'] ?>
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge <?= htmlspecialchars($convite_status['badge']) ?>">
+                                            <?= htmlspecialchars($convite_status['label']) ?>
                                         </span>
                                     </td>
                                     <td class="text-end pe-4">
@@ -363,7 +628,7 @@ $hoje_data = date('Y-m-d');
     <div class="modal-dialog modal-dialog-centered">
         <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
             <div class="modal-header border-0 px-4 pt-4">
-                <h5 class="fw-bold text-dark"><i class="bi bi-journal-check me-2 text-success"></i>Finalizar Atendimento</h5>
+                <h5 class="fw-bold text-dark"><i class="bi bi-journal-check me-2 text-success"></i>Finalizar Treinamento</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body px-4">
@@ -379,6 +644,22 @@ $hoje_data = date('Y-m-d');
                     <label class="form-label small fw-bold text-muted text-uppercase">O que ficou acordado com o cliente?</label>
                     <textarea name="observacoes" class="form-control" rows="4" placeholder="Descreva os detalhes da sessÃ£o..." required></textarea>
                 </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase d-block">Pendencias relacionadas a este encerramento</label>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input pendencia-opcao" type="radio" name="tem_pendencia" id="tem_pendencia_nao" value="nao" required>
+                        <label class="form-check-label" for="tem_pendencia_nao">Sem pendencia</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input pendencia-opcao" type="radio" name="tem_pendencia" id="tem_pendencia_sim" value="sim" required>
+                        <label class="form-check-label" for="tem_pendencia_sim">Com pendencia</label>
+                    </div>
+                </div>
+                <div class="mb-2 d-none" id="referencia_chamado_wrapper">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Referencia do chamado externo (opcional)</label>
+                    <input type="text" class="form-control" name="referencia_chamado" id="referencia_chamado" maxlength="255" placeholder="Ex: SUP-12345, DEV-90210">
+                </div>
+                <div class="form-text">A marcacao com/sem pendencia e obrigatoria para concluir o treinamento.</div>
             </div>
             <div class="modal-footer border-0 p-4">
                 <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
@@ -436,6 +717,24 @@ $hoje_data = date('Y-m-d');
 </div>
 
 <script>
+    function atualizarCampoReferenciaPendencia() {
+        const radioComPendencia = document.getElementById('tem_pendencia_sim');
+        const wrapper = document.getElementById('referencia_chamado_wrapper');
+        const input = document.getElementById('referencia_chamado');
+        if (!radioComPendencia || !wrapper || !input) return;
+
+        if (radioComPendencia.checked) {
+            wrapper.classList.remove('d-none');
+        } else {
+            wrapper.classList.add('d-none');
+            input.value = '';
+        }
+    }
+
+    document.querySelectorAll('.pendencia-opcao').forEach(radio => {
+        radio.addEventListener('change', atualizarCampoReferenciaPendencia);
+    });
+
     document.querySelectorAll('.open-finish-modal').forEach(btn => {
         btn.addEventListener('click', function() {
             const id = this.dataset.id;
@@ -444,6 +743,12 @@ $hoje_data = date('Y-m-d');
             
             document.getElementById('modal_id_treinamento').value = id;
             document.getElementById('modal_cliente_info').innerText = cliente + " | " + tema;
+            document.querySelectorAll('.pendencia-opcao').forEach(radio => {
+                radio.checked = false;
+            });
+            const referenciaInput = document.getElementById('referencia_chamado');
+            if (referenciaInput) referenciaInput.value = '';
+            atualizarCampoReferenciaPendencia();
             
             const myModal = new bootstrap.Modal(document.getElementById('modalEncerrar'));
             myModal.show();

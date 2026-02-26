@@ -22,6 +22,110 @@ function treinamentosTemColuna(PDO $pdo, $coluna, $forceRefresh = false)
     return $cache[$coluna];
 }
 
+function obterColunaEmailContato(PDO $pdo)
+{
+    $candidatas = ['email', 'email_contato', 'e_mail'];
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM contatos");
+        $colunas = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $e) {
+        return null;
+    }
+
+    $mapa = [];
+    foreach ($colunas as $colunaReal) {
+        $mapa[strtolower((string)$colunaReal)] = (string)$colunaReal;
+    }
+    foreach ($candidatas as $coluna) {
+        $chave = strtolower($coluna);
+        if (isset($mapa[$chave])) {
+            return $mapa[$chave];
+        }
+    }
+
+    return null;
+}
+
+function extrairEmailsValidos($valor)
+{
+    $valor = trim((string)$valor);
+    if ($valor === '') {
+        return [];
+    }
+
+    $partes = preg_split('/[,\s;]+/', $valor);
+    $emails = [];
+    foreach ($partes as $parte) {
+        $email = trim($parte);
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $emails[] = $email;
+        }
+    }
+
+    return $emails;
+}
+
+function normalizarDataTreinamento($valor)
+{
+    $valor = trim((string)$valor);
+    if ($valor === '') {
+        return null;
+    }
+
+    $timezone = new DateTimeZone('America/Sao_Paulo');
+    $formatos = ['Y-m-d\TH:i', 'Y-m-d H:i:s', 'Y-m-d H:i'];
+
+    foreach ($formatos as $formato) {
+        $dt = DateTime::createFromFormat($formato, $valor, $timezone);
+        if ($dt instanceof DateTime) {
+            return $dt->format('Y-m-d H:i:s');
+        }
+    }
+
+    try {
+        $dt = new DateTime($valor, $timezone);
+        return $dt->format('Y-m-d H:i:s');
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+function obterConvidadosCliente(PDO $pdo, $idCliente)
+{
+    $colunaEmailContato = obterColunaEmailContato($pdo);
+    if (!$colunaEmailContato) {
+        return [];
+    }
+
+    $stmt = $pdo->prepare("SELECT nome, `{$colunaEmailContato}` as contato_email FROM contatos WHERE id_cliente = ? ORDER BY nome ASC");
+    $stmt->execute([$idCliente]);
+    $contatos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $convidados = [];
+    $emailsUnicos = [];
+
+    foreach ($contatos as $contato) {
+        $nome = trim((string)($contato['nome'] ?? ''));
+        $emails = extrairEmailsValidos($contato['contato_email'] ?? '');
+
+        foreach ($emails as $email) {
+            $emailKey = strtolower($email);
+            if (isset($emailsUnicos[$emailKey])) {
+                continue;
+            }
+            $emailsUnicos[$emailKey] = true;
+
+            $convidado = ['email' => $email];
+            if ($nome !== '') {
+                $convidado['displayName'] = $nome;
+            }
+            $convidados[] = $convidado;
+        }
+    }
+
+    return $convidados;
+}
+
 function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
 {
     try {
@@ -81,20 +185,56 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
         $endDate = clone $startDate;
         $endDate->modify('+60 minutes');
 
-        $event = new Google\Service\Calendar\Event([
+        $convidados = obterConvidadosCliente($pdo, (int)$treinamento['id_cliente']);
+        $descricaoConvidados = 'Sem e-mail cadastrado';
+        if (!empty($convidados)) {
+            $itensDescricao = [];
+            foreach ($convidados as $convidado) {
+                $displayName = trim((string)($convidado['displayName'] ?? ''));
+                $email = trim((string)($convidado['email'] ?? ''));
+                if ($email === '') {
+                    continue;
+                }
+                $itensDescricao[] = $displayName !== '' ? ($displayName . ' (' . $email . ')') : $email;
+            }
+            if (!empty($itensDescricao)) {
+                $descricaoConvidados = implode(', ', $itensDescricao);
+            }
+        }
+
+        $eventData = [
             'summary' => '#' . $treinamento['id_treinamento'] . ' Treinamento: ' . ($treinamento['cliente_nome'] ?? 'Cliente'),
-            'description' => "Tema: " . ($treinamento['tema'] ?? '') . "\nContato: " . ($treinamento['contato_nome'] ?? ''),
-            'start' => ['dateTime' => $startDate->format(DateTime::RFC3339), 'timeZone' => 'America/Sao_Paulo'],
-            'end' => ['dateTime' => $endDate->format(DateTime::RFC3339), 'timeZone' => 'America/Sao_Paulo'],
+            'description' => "Tema: " . ($treinamento['tema'] ?? '') . "\nConvidados: " . $descricaoConvidados,
+            'start' => ['dateTime' => $startDate->format('Y-m-d\TH:i:s'), 'timeZone' => 'America/Sao_Paulo'],
+            'end' => ['dateTime' => $endDate->format('Y-m-d\TH:i:s'), 'timeZone' => 'America/Sao_Paulo'],
             'conferenceData' => [
                 'createRequest' => [
                     'requestId' => 'treino-' . $treinamento['id_treinamento'] . '-' . time(),
                     'conferenceSolutionKey' => ['type' => 'hangoutsMeet']
                 ]
             ]
-        ]);
+        ];
 
-        $createdEvent = $service->events->insert('primary', $event, ['conferenceDataVersion' => 1]);
+        if (!empty($convidados)) {
+            $eventData['attendees'] = $convidados;
+        }
+
+        $event = new Google\Service\Calendar\Event($eventData);
+        $googleEventIdExistente = trim((string)($treinamento['google_event_id'] ?? ''));
+
+        if ($googleEventIdExistente !== '') {
+            $eventDataUpdate = $eventData;
+            unset($eventDataUpdate['conferenceData']);
+            $eventUpdate = new Google\Service\Calendar\Event($eventDataUpdate);
+
+            try {
+                $createdEvent = $service->events->patch('primary', $googleEventIdExistente, $eventUpdate, ['sendUpdates' => 'all']);
+            } catch (Throwable $e) {
+                $createdEvent = $service->events->insert('primary', $event, ['conferenceDataVersion' => 1, 'sendUpdates' => 'all']);
+            }
+        } else {
+            $createdEvent = $service->events->insert('primary', $event, ['conferenceDataVersion' => 1, 'sendUpdates' => 'all']);
+        }
 
         $googleEventId = $createdEvent->getId();
         $googleMeetLink = $createdEvent->getHangoutLink();
@@ -253,7 +393,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $id_contato = $_POST['id_contato'];
     $tema = $_POST['tema'];
     $status = $_POST['status'];
-    $data_treinamento = !empty($_POST['data_treinamento']) ? $_POST['data_treinamento'] : null;
+    $data_treinamento = !empty($_POST['data_treinamento']) ? normalizarDataTreinamento($_POST['data_treinamento']) : null;
     $has_google_event_link = array_key_exists('google_event_link', $_POST);
     $has_google_agenda_link = array_key_exists('google_agenda_link', $_POST);
     $google_event_link = $has_google_event_link && !empty($_POST['google_event_link']) ? trim($_POST['google_event_link']) : null;
@@ -1045,9 +1185,8 @@ include 'header.php';
         const dataTreinamentoInput = document.getElementById('data_treinamento');
         if (dataTreinamentoInput && !dataTreinamentoInput.value) {
             const now = new Date();
-            // Ajustar para o timezone do Brasil
-            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-            dataTreinamentoInput.value = now.toISOString().slice(0, 16);
+            const pad = (n) => String(n).padStart(2, '0');
+            dataTreinamentoInput.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
         }
     });
 
@@ -1216,8 +1355,8 @@ include 'header.php';
 
         // Resetar data/hora para agora
         const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-        document.getElementById('data_treinamento').value = now.toISOString().slice(0, 16);
+        const pad = (n) => String(n).padStart(2, '0');
+        document.getElementById('data_treinamento').value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
     });
 </script>
 

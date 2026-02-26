@@ -14,17 +14,21 @@ if (isset($_GET['delete'])) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $id_cliente = $_POST['id_cliente'];
     $nome = $_POST['nome'];
+    $email = isset($_POST['email']) ? trim($_POST['email']) : null;
+    if ($email === '') {
+        $email = null;
+    }
     $cargo = $_POST['cargo'];
     $telefone = $_POST['telefone_ddd'];
     $observacao = $_POST['observacao'];
     
     if (isset($_POST['id_contato']) && !empty($_POST['id_contato'])) {
-        $stmt = $pdo->prepare("UPDATE contatos SET id_cliente=?, nome=?, cargo=?, telefone_ddd=?, observacao=? WHERE id_contato=?");
-        $stmt->execute([$id_cliente, $nome, $cargo, $telefone, $observacao, $_POST['id_contato']]);
+        $stmt = $pdo->prepare("UPDATE contatos SET id_cliente=?, nome=?, email=?, cargo=?, telefone_ddd=?, observacao=? WHERE id_contato=?");
+        $stmt->execute([$id_cliente, $nome, $email, $cargo, $telefone, $observacao, $_POST['id_contato']]);
         $msg = "Contato atualizado com sucesso";
     } else {
-        $stmt = $pdo->prepare("INSERT INTO contatos (id_cliente, nome, cargo, telefone_ddd, observacao) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$id_cliente, $nome, $cargo, $telefone, $observacao]);
+        $stmt = $pdo->prepare("INSERT INTO contatos (id_cliente, nome, email, cargo, telefone_ddd, observacao) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$id_cliente, $nome, $email, $cargo, $telefone, $observacao]);
         $msg = "Contato adicionado com sucesso";
     }
     header("Location: contatos.php?msg=" . urlencode($msg) . "&tipo=success");
@@ -60,12 +64,12 @@ $params = [];
 $params_contagem = [];
 
 if (!empty($filtro)) {
-    $sql_base .= " AND (cl.fantasia LIKE ? OR c.nome LIKE ? OR c.cargo LIKE ?)";
-    $sql_contagem .= " AND (cl.fantasia LIKE ? OR c.nome LIKE ? OR c.cargo LIKE ?)";
+    $sql_base .= " AND (cl.fantasia LIKE ? OR c.nome LIKE ? OR c.email LIKE ? OR c.cargo LIKE ?)";
+    $sql_contagem .= " AND (cl.fantasia LIKE ? OR c.nome LIKE ? OR c.email LIKE ? OR c.cargo LIKE ?)";
     
     $param_value = "%$filtro%";
-    $params = [$param_value, $param_value, $param_value];
-    $params_contagem = [$param_value, $param_value, $param_value];
+    $params = [$param_value, $param_value, $param_value, $param_value];
+    $params_contagem = [$param_value, $param_value, $param_value, $param_value];
 }
 
 // Executar contagem
@@ -270,6 +274,12 @@ include 'header.php';
                                     <i class="bi bi-person-circle text-primary me-2"></i>
                                     <?php echo htmlspecialchars($c['nome']); ?>
                                 </div>
+                                <?php if (!empty($c['email'])): ?>
+                                    <span class="text-muted small d-flex align-items-center mt-1">
+                                        <i class="bi bi-envelope me-1"></i>
+                                        <?php echo htmlspecialchars($c['email']); ?>
+                                    </span>
+                                <?php endif; ?>
                                 <span class="text-muted x-small d-block">ID: #<?php echo $c['id_contato']; ?></span>
                             </td>
                             <td>
@@ -304,6 +314,7 @@ include 'header.php';
                                             data-id="<?php echo $c['id_contato']; ?>"
                                             data-cliente="<?php echo $c['id_cliente']; ?>"
                                             data-nome="<?php echo htmlspecialchars($c['nome']); ?>"
+                                            data-email="<?php echo htmlspecialchars($c['email']); ?>"
                                             data-cargo="<?php echo htmlspecialchars($c['cargo']); ?>"
                                             data-telefone="<?php echo htmlspecialchars($c['telefone_ddd']); ?>"
                                             data-obs="<?php echo htmlspecialchars($c['observacao']); ?>"
@@ -382,7 +393,7 @@ include 'header.php';
 <div class="modal fade" id="modalContato" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow">
-            <form method="POST">
+            <form method="POST" id="formContato">
                 <div class="modal-header border-bottom-0 pb-0">
                     <h5 class="fw-bold d-flex align-items-center" id="modalTitle">
                         <i class="bi bi-person-plus me-2"></i>Novo Contato
@@ -417,6 +428,12 @@ include 'header.php';
                             <i class="bi bi-person me-1"></i>Nome Completo
                         </label>
                         <input type="text" name="nome" id="nome" class="form-control" required placeholder="Ex: João Silva">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small d-flex align-items-center">
+                            <i class="bi bi-envelope me-1"></i>E-mail
+                        </label>
+                        <input type="email" name="email" id="email" class="form-control" placeholder="contato@empresa.com.br">
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
@@ -473,6 +490,7 @@ document.querySelectorAll('.edit-btn').forEach(btn => {
         document.getElementById('id_contato').value = this.dataset.id;
         document.getElementById('id_cliente').value = this.dataset.cliente;
         document.getElementById('nome').value = this.dataset.nome;
+        document.getElementById('email').value = this.dataset.email || '';
         document.getElementById('cargo').value = this.dataset.cargo;
         document.getElementById('telefone_ddd').value = maskPhone(this.dataset.telefone);
         document.getElementById('observacao').value = this.dataset.obs;
@@ -481,7 +499,7 @@ document.querySelectorAll('.edit-btn').forEach(btn => {
 
 document.getElementById('modalContato').addEventListener('hidden.bs.modal', function () {
     document.getElementById('modalTitle').innerHTML = '<i class="bi bi-person-plus me-2"></i>Novo Contato';
-    document.querySelector('form').reset();
+    document.getElementById('formContato').reset();
     document.getElementById('id_contato').value = '';
 });
 

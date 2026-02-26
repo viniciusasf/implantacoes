@@ -1,12 +1,37 @@
 <?php
 require_once 'config.php';
 
+function normalizarDataTreinamento($valor)
+{
+    $valor = trim((string)$valor);
+    if ($valor === '') {
+        return null;
+    }
+
+    $timezone = new DateTimeZone('America/Sao_Paulo');
+    $formatos = ['Y-m-d\TH:i', 'Y-m-d H:i:s', 'Y-m-d H:i'];
+
+    foreach ($formatos as $formato) {
+        $dt = DateTime::createFromFormat($formato, $valor, $timezone);
+        if ($dt instanceof DateTime) {
+            return $dt->format('Y-m-d H:i:s');
+        }
+    }
+
+    try {
+        $dt = new DateTime($valor, $timezone);
+        return $dt->format('Y-m-d H:i:s');
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $id_cliente = $_POST['id_cliente'];
     $id_treinamento = $_POST['id_treinamento'] ?? null;
     $id_contato = $_POST['id_contato'] ?? null;
     $tema = $_POST['tema'];
-    $data_treinamento = $_POST['data_treinamento'];
+    $data_treinamento = normalizarDataTreinamento($_POST['data_treinamento'] ?? '');
     $status = $_POST['status'] ?? 'PENDENTE';
     $google_event_link = $_POST['google_event_link'] ?? '';
     $observacoes = $_POST['observacoes'] ?? '';

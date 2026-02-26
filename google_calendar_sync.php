@@ -12,6 +12,79 @@ function returnResponse($success, $message, $data = [])
     die(json_encode(array_merge(['success' => $success, 'message' => $message], $data)));
 }
 
+function obterColunaEmailContato(PDO $pdo)
+{
+    $candidatas = ['email', 'email_contato', 'e_mail'];
+    $stmt = $pdo->query("SHOW COLUMNS FROM contatos");
+    $colunas = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $mapa = [];
+    foreach ($colunas as $colunaReal) {
+        $mapa[strtolower((string)$colunaReal)] = (string)$colunaReal;
+    }
+    foreach ($candidatas as $coluna) {
+        $chave = strtolower($coluna);
+        if (isset($mapa[$chave])) {
+            return $mapa[$chave];
+        }
+    }
+    return null;
+}
+
+function extrairEmailsValidos($valor)
+{
+    $valor = trim((string)$valor);
+    if ($valor === '') {
+        return [];
+    }
+
+    $partes = preg_split('/[,\s;]+/', $valor);
+    $emails = [];
+    foreach ($partes as $parte) {
+        $email = trim($parte);
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $emails[] = $email;
+        }
+    }
+
+    return $emails;
+}
+
+function obterConvidadosCliente(PDO $pdo, $idCliente)
+{
+    $colunaEmailContato = obterColunaEmailContato($pdo);
+    if (!$colunaEmailContato) {
+        return [];
+    }
+
+    $stmt = $pdo->prepare("SELECT nome, `{$colunaEmailContato}` as contato_email FROM contatos WHERE id_cliente = ? ORDER BY nome ASC");
+    $stmt->execute([$idCliente]);
+    $contatos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $convidados = [];
+    $emailsUnicos = [];
+
+    foreach ($contatos as $contato) {
+        $nome = trim((string)($contato['nome'] ?? ''));
+        $emails = extrairEmailsValidos($contato['contato_email'] ?? '');
+
+        foreach ($emails as $email) {
+            $emailKey = strtolower($email);
+            if (isset($emailsUnicos[$emailKey])) {
+                continue;
+            }
+            $emailsUnicos[$emailKey] = true;
+
+            $convidado = ['email' => $email];
+            if ($nome !== '') {
+                $convidado['displayName'] = $nome;
+            }
+            $convidados[] = $convidado;
+        }
+    }
+
+    return $convidados;
+}
+
 try {
     $client = new Google\Client();
     $client->setAuthConfig('credentials.json');
@@ -52,24 +125,40 @@ try {
     if (!$id_treinamento)
         returnResponse(false, "ID do treinamento não encontrado na sessão.");
 
-    $stmt = $pdo->prepare("SELECT t.*, c.fantasia as cliente_nome, co.nome as contato_nome, co.telefone_ddd as contato_tel 
-                           FROM treinamentos t 
-                           LEFT JOIN clientes c ON t.id_cliente = c.id_cliente 
-                           LEFT JOIN contatos co ON t.id_contato = co.id_contato 
+    $stmt = $pdo->prepare("SELECT t.*, c.fantasia as cliente_nome, co.nome as contato_nome, co.telefone_ddd as contato_tel
+                           FROM treinamentos t
+                           LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
+                           LEFT JOIN contatos co ON t.id_contato = co.id_contato
                            WHERE t.id_treinamento = ?");
     $stmt->execute([$id_treinamento]);
     $treinamento = $stmt->fetch();
+
+    $convidados = obterConvidadosCliente($pdo, (int)$treinamento['id_cliente']);
+    $descricaoConvidados = 'Sem e-mail cadastrado';
+    if (!empty($convidados)) {
+        $itensDescricao = [];
+        foreach ($convidados as $convidado) {
+            $displayName = trim((string)($convidado['displayName'] ?? ''));
+            $email = trim((string)($convidado['email'] ?? ''));
+            if ($email === '') {
+                continue;
+            }
+            $itensDescricao[] = $displayName !== '' ? ($displayName . ' (' . $email . ')') : $email;
+        }
+        if (!empty($itensDescricao)) {
+            $descricaoConvidados = implode(', ', $itensDescricao);
+        }
+    }
 
     $startDate = new DateTime($treinamento['data_treinamento'], new DateTimeZone('America/Sao_Paulo'));
     $endDate = clone $startDate;
     $endDate->modify('+60 minutes');
 
-    $service = new Google\Service\Calendar($client);
-    $event = new Google\Service\Calendar\Event([
+    $eventData = [
         'summary' => '#' . $treinamento['id_treinamento'] . ' Treinamento: ' . $treinamento['cliente_nome'],
-        'description' => "Tema: " . $treinamento['tema'] . "\nContato: " . $treinamento['contato_nome'],
-        'start' => ['dateTime' => $startDate->format(DateTime::RFC3339), 'timeZone' => 'America/Sao_Paulo'],
-        'end' => ['dateTime' => $endDate->format(DateTime::RFC3339), 'timeZone' => 'America/Sao_Paulo'],
+        'description' => "Tema: " . $treinamento['tema'] . "\nConvidados: " . $descricaoConvidados,
+        'start' => ['dateTime' => $startDate->format('Y-m-d\TH:i:s'), 'timeZone' => 'America/Sao_Paulo'],
+        'end' => ['dateTime' => $endDate->format('Y-m-d\TH:i:s'), 'timeZone' => 'America/Sao_Paulo'],
         'conferenceData' => [
             'createRequest' => [
                 'requestId' => 'treino-' . $treinamento['id_treinamento'] . '-' . time(),
@@ -77,9 +166,29 @@ try {
             ]
         ],
         'reminders' => ['useDefault' => false, 'overrides' => [['method' => 'popup', 'minutes' => 5]]]
-    ]);
+    ];
 
-    $createdEvent = $service->events->insert('primary', $event, ['conferenceDataVersion' => 1]);
+    if (!empty($convidados)) {
+        $eventData['attendees'] = $convidados;
+    }
+
+    $service = new Google\Service\Calendar($client);
+    $event = new Google\Service\Calendar\Event($eventData);
+    $googleEventIdExistente = trim((string)($treinamento['google_event_id'] ?? ''));
+
+    if ($googleEventIdExistente !== '') {
+        $eventDataUpdate = $eventData;
+        unset($eventDataUpdate['conferenceData']);
+        $eventUpdate = new Google\Service\Calendar\Event($eventDataUpdate);
+
+        try {
+            $createdEvent = $service->events->patch('primary', $googleEventIdExistente, $eventUpdate, ['sendUpdates' => 'all']);
+        } catch (Exception $e) {
+            $createdEvent = $service->events->insert('primary', $event, ['conferenceDataVersion' => 1, 'sendUpdates' => 'all']);
+        }
+    } else {
+        $createdEvent = $service->events->insert('primary', $event, ['conferenceDataVersion' => 1, 'sendUpdates' => 'all']);
+    }
 
     // CAPTURA O ID GERADO PELO GOOGLE
     $google_id = $createdEvent->getId();

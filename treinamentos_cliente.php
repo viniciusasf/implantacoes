@@ -1141,7 +1141,8 @@ include 'header.php';
             } else {
                 const dataObj = new Date(dataOriginal);
                 if (!isNaN(dataObj)) {
-                    dataFormatada = dataObj.toISOString().slice(0, 16);
+                    const pad = (n) => String(n).padStart(2, '0');
+                    dataFormatada = `${dataObj.getFullYear()}-${pad(dataObj.getMonth() + 1)}-${pad(dataObj.getDate())}T${pad(dataObj.getHours())}:${pad(dataObj.getMinutes())}`;
                 }
             }
         }
@@ -1208,10 +1209,8 @@ include 'header.php';
                 const roundedMinutes = Math.ceil(now.getMinutes() / 30) * 30;
                 now.setMinutes(roundedMinutes);
                 now.setSeconds(0);
-
-                const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-                    .toISOString()
-                    .slice(0, 16);
+                const pad = (n) => String(n).padStart(2, '0');
+                const localDateTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
                 document.getElementById('data_treinamento').value = localDateTime;
 
                 modalTitle.innerText = 'Agendar Treinamento';

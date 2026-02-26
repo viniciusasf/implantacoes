@@ -37,6 +37,15 @@ $total_treinamentos_pendentes = $pdo->query($sql_treinamentos_pendentes)->fetchC
 
 // 7. CONTADOR DE RELATÓRIOS (opcional - pode ser usado para notificações futuras)
 $total_relatorios = 0; // Pode ser adaptado para contar relatórios pendentes, etc.
+
+// 8. CONTADOR DE PENDENCIAS DE TREINAMENTOS ENCERRADOS
+$total_pendencias_treinamentos = 0;
+try {
+    $sql_pendencias_treinamentos = "SELECT COUNT(*) FROM pendencias_treinamentos WHERE status_pendencia = 'ABERTA'";
+    $total_pendencias_treinamentos = (int)$pdo->query($sql_pendencias_treinamentos)->fetchColumn();
+} catch (Throwable $e) {
+    $total_pendencias_treinamentos = 0;
+}
 ?>
 
 <head>
@@ -255,6 +264,15 @@ $total_relatorios = 0; // Pode ser adaptado para contar relatórios pendentes, e
                     </a>
                 </li>
 
+                <li class="<?= $current_page == 'pendencias_treinamentos.php' ? 'active' : '' ?>">
+                    <a href="pendencias_treinamentos.php">
+                        <span><i class="bi bi-journal-x"></i> Acompanhamentos</span>
+                        <?php if ($total_pendencias_treinamentos > 0): ?>
+                            <span class="badge rounded-pill bg-danger badge-notify"><?= $total_pendencias_treinamentos ?></span>
+                        <?php endif; ?>
+                    </a>
+                </li>
+
                 <li class="<?= $current_page == 'clientes.php' ? 'active' : '' ?>">
                     <a href="clientes.php">
                         <span><i class="bi bi-building"></i> Clientes</span>
@@ -292,6 +310,7 @@ $total_relatorios = 0; // Pode ser adaptado para contar relatórios pendentes, e
                         <?php endif; ?>
                     </a>
                 </li>
+
 
                 <li class="<?= $current_page == 'tarefas.php' ? 'active' : '' ?>">
                     <a href="tarefas.php">
