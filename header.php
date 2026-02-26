@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-br">
 
 <?php
-require_once 'config.php'; // Garante a conexão para as consultas do header
+require_once 'config.php'; // Garante a conexÃ£o para as consultas do header
 
-// 1. LÓGICA DO CONTADOR DE PENDÊNCIAS (Clientes parados há > 3 dias)
+// 1. LÃ“GICA DO CONTADOR DE PENDÃŠNCIAS (Clientes parados hÃ¡ > 3 dias)
 $sql_count_pendencias = "
     SELECT c.id_cliente
     FROM clientes c
@@ -17,13 +17,13 @@ $sql_count_pendencias = "
 $res_pendencias = $pdo->query($sql_count_pendencias);
 $total_pendencias = $res_pendencias ? $res_pendencias->rowCount() : 0;
 
-// 2. CONTADOR DE CLIENTES ATIVOS (Em implantação)
+// 2. CONTADOR DE CLIENTES ATIVOS (Em implantaÃ§Ã£o)
 $total_clientes = $pdo->query("SELECT COUNT(*) FROM clientes WHERE (data_fim IS NULL OR data_fim = '0000-00-00')")->fetchColumn();
 
 // 3. CONTADOR DE CONTATOS TOTAIS
 $total_contatos = $pdo->query("SELECT COUNT(*) FROM contatos")->fetchColumn();
 
-// 4. CONTADOR DE AGENDAMENTOS PARA HOJE (Apenas os que ainda estão PENDENTES)
+// 4. CONTADOR DE AGENDAMENTOS PARA HOJE (Apenas os que ainda estÃ£o PENDENTES)
 $total_hoje = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE DATE(data_treinamento) = CURDATE() AND status = 'PENDENTE'")->fetchColumn();
 
 // 5. CONTADOR DE TAREFAS PENDENTES (para o menu Tarefas)
@@ -31,12 +31,12 @@ $sql_tarefas = "SELECT COUNT(*) FROM tarefas WHERE status = 'pendente' OR status
 $total_tarefas = $pdo->query($sql_tarefas)->fetchColumn();
 
 // 6. CONTADOR PARA DASHBOARD - TREINAMENTOS COM STATUS PENDENTES
-// Contar todos os treinamentos com status 'PENDENTE' (não importa a data)
+// Contar todos os treinamentos com status 'PENDENTE' (nÃ£o importa a data)
 $sql_treinamentos_pendentes = "SELECT COUNT(*) FROM treinamentos WHERE status = 'PENDENTE'";
 $total_treinamentos_pendentes = $pdo->query($sql_treinamentos_pendentes)->fetchColumn();
 
-// 7. CONTADOR DE RELATÓRIOS (opcional - pode ser usado para notificações futuras)
-$total_relatorios = 0; // Pode ser adaptado para contar relatórios pendentes, etc.
+// 7. CONTADOR DE RELATÃ“RIOS (opcional - pode ser usado para notificaÃ§Ãµes futuras)
+$total_relatorios = 0; // Pode ser adaptado para contar relatÃ³rios pendentes, etc.
 
 // 8. CONTADOR DE PENDENCIAS DE TREINAMENTOS ENCERRADOS
 $total_pendencias_treinamentos = 0;
@@ -66,7 +66,7 @@ try {
             --dashboard-color: #10b981;
             /* Cor para Dashboard */
             --report-color: #8b5cf6;
-            /* Cor para Relatórios */
+            /* Cor para RelatÃ³rios */
         }
 
         body {
@@ -146,7 +146,7 @@ try {
             font-weight: 600;
         }
 
-        /* Cor específica para o item de Dashboard (antigo relatorio.php) */
+        /* Cor especÃ­fica para o item de Dashboard (antigo relatorio.php) */
         #sidebar ul li a[href="index.php"] i {
             color: var(--dashboard-color);
         }
@@ -155,7 +155,7 @@ try {
             border-left-color: var(--dashboard-color);
         }
 
-        /* Cor específica para o item de Relatórios (antigo index.php) */
+        /* Cor especÃ­fica para o item de RelatÃ³rios (antigo index.php) */
         #sidebar ul li a[href="relatorio.php"] i {
             color: var(--report-color);
         }
@@ -186,7 +186,7 @@ try {
             color: white;
         }
 
-        /* Badge para Relatórios (antigo index.php) */
+        /* Badge para RelatÃ³rios (antigo index.php) */
         .badge-report {
             background-color: var(--report-color);
             color: white;
@@ -197,6 +197,15 @@ try {
             height: 1px;
             background: rgba(255, 255, 255, 0.1);
             margin: 1rem 1.5rem;
+        }
+
+        .menu-group-title {
+            padding: 0.75rem 1.5rem 0.35rem;
+            font-size: 0.66rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(255, 255, 255, 0.58);
+            font-weight: 700;
         }
 
         @media (max-width: 768px) {
@@ -247,31 +256,29 @@ try {
             <ul class="list-unstyled components">
                 <?php $current_page = basename($_SERVER['PHP_SELF']); ?>
 
-                <!-- Dashboard (antigo relatorio.php) -->
-                <li class="<?= $current_page == 'index.php' ? 'active' : '' ?>">
-                    <a href="index.php">
-                        <span><i class="bi bi-grid-1x2"></i> Dashboard</span>
-                        <!-- Se quiser adicionar contadores futuros no dashboard -->
-                    </a>
-                </li>
-                <!-- Relatórios (antigo index.php) -->
+                <li class="menu-group-title">Operacao</li>
+
                 <li class="<?= $current_page == 'relatorio.php' ? 'active' : '' ?>">
                     <a href="relatorio.php">
-                        <span><i class="bi bi-bar-chart-line"></i> Agendamentos</span>
+                        <span><i class="bi bi-bar-chart-line"></i> Treinamentos</span>
                         <?php if ($total_treinamentos_pendentes > 0): ?>
                             <span class="badge rounded-pill badge-dashboard badge-notify" title="Treinamentos pendentes"><?= $total_treinamentos_pendentes ?></span>
                         <?php endif; ?>
                     </a>
                 </li>
 
-                <li class="<?= $current_page == 'pendencias_treinamentos.php' ? 'active' : '' ?>">
-                    <a href="pendencias_treinamentos.php">
-                        <span><i class="bi bi-journal-x"></i> Acompanhamentos</span>
-                        <?php if ($total_pendencias_treinamentos > 0): ?>
-                            <span class="badge rounded-pill bg-danger badge-notify"><?= $total_pendencias_treinamentos ?></span>
+                <li class="<?= $current_page == 'treinamentos.php' ? 'active' : '' ?>">
+                    <a href="treinamentos.php">
+                        <span><i class="bi bi-mortarboard"></i> Agendamentos</span>
+                        <?php if ($total_hoje > 0): ?>
+                            <span class="badge rounded-pill bg-info text-dark badge-notify" title="Para hoje"><?= $total_hoje ?></span>
                         <?php endif; ?>
                     </a>
-                </li>
+                </li>                                
+
+                <div class="menu-separator"></div>
+
+                <li class="menu-group-title">Relacionamento</li>
 
                 <li class="<?= $current_page == 'clientes.php' ? 'active' : '' ?>">
                     <a href="clientes.php">
@@ -287,44 +294,32 @@ try {
                     </a>
                 </li>
 
-                <li class="<?= $current_page == 'treinamentos.php' ? 'active' : '' ?>">
-                    <a href="treinamentos.php">
-                        <span><i class="bi bi-mortarboard"></i> Treinamentos</span>
-                        <?php if ($total_hoje > 0): ?>
-                            <span class="badge rounded-pill bg-info text-dark badge-notify" title="Para hoje"><?= $total_hoje ?></span>
-                        <?php endif; ?>
+                <div class="menu-separator"></div>
+
+                <li class="menu-group-title">Gestao</li>
+
+                <li class="<?= $current_page == 'index.php' ? 'active' : '' ?>">
+                    <a href="index.php">
+                        <span><i class="bi bi-grid-1x2"></i> Dashboard</span>
                     </a>
                 </li>
 
-
-                <!-- Separador visual para agrupar item de suporte -->
-                <div class="menu-separator"></div>
-
-
-
                 <li class="<?= $current_page == 'pendencias.php' ? 'active' : '' ?>">
                     <a href="pendencias.php">
-                        <span><i class="bi bi-exclamation-octagon"></i> Pendências</span>
+                        <span><i class="bi bi-exclamation-octagon"></i> Pendencias</span>
                         <?php if ($total_pendencias > 0): ?>
                             <span class="badge rounded-pill bg-danger badge-notify"><?= $total_pendencias ?></span>
                         <?php endif; ?>
                     </a>
                 </li>
 
+                <div class="menu-separator"></div>
 
-                <li class="<?= $current_page == 'tarefas.php' ? 'active' : '' ?>">
-                    <a href="tarefas.php">
-                        <span><i class="bi bi-list-check"></i> Tarefas</span>
-                        <?php if ($total_tarefas > 0): ?>
-                            <span class="badge rounded-pill bg-warning text-dark badge-notify"><?= $total_tarefas ?></span>
-                        <?php endif; ?>
-                    </a>
-                </li>
-
+                <li class="menu-group-title">Apoio</li>
 
                 <li class="<?= $current_page == 'orientacoes.php' ? 'active' : '' ?>">
                     <a href="orientacoes.php">
-                        <span><i class="bi bi-question-circle"></i> Orientações</span>
+                        <span><i class="bi bi-question-circle"></i> Orientacoes</span>
                     </a>
                 </li>
 
