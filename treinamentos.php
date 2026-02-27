@@ -324,6 +324,9 @@ $filtros_ativos = !empty($filtro_cliente) || !empty($data_inicio_export) || (iss
 $where_conditions = [];
 $params = []; // Array para parâmetros posicionais
 
+// A tabela desta tela deve exibir apenas treinamentos pendentes.
+$where_conditions[] = "UPPER(t.status) = 'PENDENTE'";
+
 if (!empty($filtro_cliente)) {
     $where_conditions[] = "c.fantasia LIKE ?";
     $params[] = "%{$filtro_cliente}%";

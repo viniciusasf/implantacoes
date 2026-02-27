@@ -436,7 +436,7 @@ $hoje_data = date('Y-m-d');
 
 <div class="mb-4">
     <h3 class="page-title fw-bold"><i class="bi bi-calendar2-week me-2 text-primary"></i>Agendamentos</h3>
-    <p class="text-muted">GestÃ£o de Agendamentos.</p>
+    <p class="text-muted">Gestão de Agendamentos.</p>
 </div>
 
 <?php if (isset($_GET['msg'])): ?>
@@ -682,7 +682,7 @@ $hoje_data = date('Y-m-d');
 
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted text-uppercase">O que ficou acordado com o cliente?</label>
-                    <textarea name="observacoes" class="form-control" rows="4" placeholder="Descreva os detalhes da sessÃ£o..." required></textarea>
+                    <textarea name="observacoes" class="form-control" rows="4" placeholder="Descreva os detalhes da sessão..." required></textarea>
                 </div>
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted text-uppercase d-block">Pendencias relacionadas a este encerramento</label>

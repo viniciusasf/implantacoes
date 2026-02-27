@@ -937,7 +937,7 @@ include 'header.php';
         <div class="row align-items-center">
             <div class="col-md-6">
                 <h3 class="page-title fw-bold mb-2"><i class="bi bi-people-fill me-2"></i>Gestão de Clientes</h3>
-                <p class="mb-0 opacity-75">Gerencie todos os clientes em implantaÃ§Ã£o</p>
+                <p class="mb-0 opacity-75">Gerencie todos os clientes em implantação</p>
             </div>
             <div class="col-md-6">
                 <div class="d-flex justify-content-end align-items-center gap-3">
@@ -1039,10 +1039,10 @@ include 'header.php';
     <div class="row g-3 mb-4">
         <?php
         $status_data = [
-            ['id' => 'integracao', 'label' => 'IntegraÃ§Ã£o', 'count' => $integracao, 'color' => '#0dcaf0', 'icon' => 'bi-rocket-takeoff', 'days' => '0-30d'],
+            ['id' => 'integracao', 'label' => 'Integração', 'count' => $integracao, 'color' => '#0dcaf0', 'icon' => 'bi-rocket-takeoff', 'days' => '0-30d'],
             ['id' => 'operacional', 'label' => 'Operacional', 'count' => $operacional, 'color' => '#0d6efd', 'icon' => 'bi-gear', 'days' => '31-70d'],
-            ['id' => 'finalizacao', 'label' => 'FinalizaÃ§Ã£o', 'count' => $finalizacao, 'color' => '#ffc107', 'icon' => 'bi-flag', 'days' => '71-91d'],
-            ['id' => 'critico', 'label' => 'CrÃ­tico', 'count' => $critico, 'color' => '#dc3545', 'icon' => 'bi-exclamation-triangle', 'days' => '> 91d']
+            ['id' => 'finalizacao', 'label' => 'Finalização', 'count' => $finalizacao, 'color' => '#ffc107', 'icon' => 'bi-flag', 'days' => '71-91d'],
+            ['id' => 'critico', 'label' => 'Crí­tico', 'count' => $critico, 'color' => '#dc3545', 'icon' => 'bi-exclamation-triangle', 'days' => '> 91d']
         ];
 
         // Adicionar card para encerrados somente se estiverem sendo mostrados
