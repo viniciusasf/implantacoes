@@ -624,12 +624,61 @@ include 'header.php';
         transform: translateY(-5px) !important;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12) !important;
     }
+
+    .page-title {
+        font-size: 1.6rem;
+        letter-spacing: 0.2px;
+    }
+
+    .training-search-container {
+        position: relative;
+    }
+
+    .training-search-container .form-control {
+        height: 45px;
+        border-radius: 10px;
+        border: 2px solid #e9ecef;
+        padding-left: 45px;
+        transition: all 0.3s;
+    }
+
+    .training-search-container .form-control:focus {
+        border-color: #4361ee;
+        box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+    }
+
+    .training-search-container .search-icon {
+        position: absolute;
+        left: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+        z-index: 10;
+    }
+
+    .filter-input {
+        height: 45px;
+        border-radius: 10px;
+        border: 2px solid #e9ecef;
+        transition: all 0.3s;
+    }
+
+    .filter-input:focus {
+        border-color: #4361ee;
+        box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+    }
+
+    .filter-btn {
+        height: 45px;
+        border-radius: 10px;
+        font-weight: 600;
+    }
 </style>
 
 <div class="container-fluid py-4 bg-light min-vh-100">
     <div class="row align-items-center mb-4">
         <div class="col">
-            <h4 class="fw-bold text-dark mb-1">Agenda de Treinamentos</h4>
+            <h3 class="page-title fw-bold text-dark mb-1"><i class="bi bi-calendar2-week me-2 text-primary"></i>Agenda de Treinamentos</h3>
             <p class="text-muted small">Gestão de capacitação técnica dos clientes</p>
         </div>
         <div class="col-auto">
@@ -667,16 +716,14 @@ include 'header.php';
                 <div class="card-body p-3">
                     <form method="GET" action="" class="row g-3 align-items-end">
                         <div class="col-md-4">
-                            <div class="input-group">
-                                <span class="input-group-text bg-white border-end-0">
-                                    <i class="bi bi-search text-muted"></i>
-                                </span>
+                            <div class="training-search-container">
+                                <i class="bi bi-search search-icon"></i>
                                 <input type="text"
                                     name="filtro_cliente"
-                                    class="form-control border-start-0"
+                                    class="form-control"
                                     placeholder="Buscar por nome do cliente..."
                                     value="<?= htmlspecialchars($filtro_cliente) ?>"
-                                    style="height: 45px;">
+                                    autocomplete="off">
                                 <!-- Parâmetros de ordenação e paginação ocultos -->
                                 <input type="hidden" name="ordenacao" value="<?= htmlspecialchars($ordenacao) ?>">
                                 <input type="hidden" name="direcao" value="<?= htmlspecialchars($direcao) ?>">
@@ -686,28 +733,26 @@ include 'header.php';
                             <label class="form-label small fw-bold text-muted mb-1">Data início</label>
                             <input type="date"
                                 name="data_inicio"
-                                class="form-control"
-                                value="<?= htmlspecialchars($data_inicio_export) ?>"
-                                style="height: 45px;">
+                                class="form-control filter-input"
+                                value="<?= htmlspecialchars($data_inicio_export) ?>">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small fw-bold text-muted mb-1">Data fim</label>
                             <input type="date"
                                 name="data_fim"
-                                class="form-control"
-                                value="<?= htmlspecialchars($data_fim_export) ?>"
-                                style="height: 45px;">
+                                class="form-control filter-input"
+                                value="<?= htmlspecialchars($data_fim_export) ?>">
                         </div>
                         <div class="col-md-2">
                             <div class="d-grid gap-2 d-md-flex">
-                                <button type="submit" class="btn btn-primary flex-grow-1 d-flex align-items-center justify-content-center" style="height: 45px;">
+                                <button type="submit" class="btn btn-primary filter-btn flex-grow-1 d-flex align-items-center justify-content-center">
                                     <i class="bi bi-funnel me-2"></i>Filtrar
                                 </button>
-                                <button type="submit" name="exportar_xls" value="1" class="btn btn-success flex-grow-1 d-flex align-items-center justify-content-center" style="height: 45px;">
-                                    <i class="bi bi-file-earmark-excel me-2"></i>exportar xls
+                                <button type="submit" name="exportar_xls" value="1" class="btn btn-success filter-btn flex-grow-1 d-flex align-items-center justify-content-center">
+                                    <i class="bi bi-file-earmark-excel me-2"></i>Exportar XLS
                                 </button>
                                 <?php if ($filtros_ativos): ?>
-                                    <a href="treinamentos.php" class="btn btn-outline-secondary d-flex align-items-center" style="height: 45px;">
+                                    <a href="treinamentos.php" class="btn btn-outline-secondary filter-btn d-flex align-items-center">
                                         <i class="bi bi-x-lg me-2"></i>Limpar
                                     </a>
                                 <?php endif; ?>
