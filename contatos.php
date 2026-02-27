@@ -100,12 +100,128 @@ $clientes = $pdo->query("SELECT id_cliente, fantasia FROM clientes
 include 'header.php';
 ?>
 
+<style>
+    .page-title {
+        font-size: 1.6rem;
+        letter-spacing: 0.2px;
+    }
+
+    .contacts-search-container {
+        position: relative;
+    }
+
+    .contacts-search-container .form-control {
+        height: 45px;
+        border-radius: 10px;
+        border: 2px solid #e9ecef;
+        padding-left: 45px;
+        transition: all 0.3s;
+    }
+
+    .contacts-search-container .form-control:focus {
+        border-color: #4361ee;
+        box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+    }
+
+    .contacts-search-container .search-icon {
+        position: absolute;
+        left: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6c757d;
+        z-index: 10;
+    }
+
+    .filter-btn {
+        height: 45px;
+        border-radius: 10px;
+        font-weight: 600;
+    }
+
+    .contacts-modal {
+        border-radius: 14px;
+    }
+
+    .contacts-modal .form-label {
+        color: #6c757d;
+        font-weight: 700;
+    }
+
+    .contacts-modal .form-control,
+    .contacts-modal .form-select {
+        border-radius: 10px;
+        border: 2px solid #e9ecef;
+        min-height: 44px;
+        transition: all 0.25s;
+    }
+
+    .contacts-modal .form-control:focus,
+    .contacts-modal .form-select:focus {
+        border-color: #4361ee;
+        box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+    }
+
+    .contacts-modal textarea.form-control {
+        min-height: 96px;
+    }
+
+    .contacts-list-card {
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
+    .contacts-list-card .card-header {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+    }
+
+    .contacts-table thead th {
+        background-color: #f8f9fa;
+        color: #6c757d;
+        font-weight: 700;
+        text-transform: uppercase;
+        font-size: 0.75rem;
+        letter-spacing: 0.5px;
+        border-top: none;
+    }
+
+    .contacts-table thead th a {
+        color: #495057 !important;
+    }
+
+    .contacts-table tbody tr {
+        transition: background-color 0.2s;
+    }
+
+    .contacts-table tbody tr:hover {
+        background-color: #f8fbff;
+    }
+
+    .contact-action-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .contacts-empty-state {
+        padding: 4rem 2rem;
+        text-align: center;
+    }
+
+    .contacts-empty-state i {
+        font-size: 3rem;
+    }
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h2 class="fw-bold mb-0">Contatos</h2>
+        <h3 class="page-title fw-bold mb-0"><i class="bi bi-person-lines-fill me-2 text-primary"></i>Contatos</h3>
         <p class="text-muted small mb-0">Gerencie as pessoas de contato em cada cliente.</p>
     </div>
-    <button class="btn btn-primary shadow-sm d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#modalContato">
+    <button class="btn btn-primary shadow-sm d-flex align-items-center filter-btn" data-bs-toggle="modal" data-bs-target="#modalContato">
         <i class="bi bi-plus-lg me-2"></i>Novo Contato
     </button>
 </div>
@@ -138,24 +254,22 @@ include 'header.php';
     <div class="card-body py-3">
         <form method="GET" class="row g-3 align-items-center">
             <div class="col-md-10">
-                <div class="input-group">
-                    <span class="input-group-text bg-white border-end-0">
-                        <i class="bi bi-search text-muted"></i>
-                    </span>
+                <div class="contacts-search-container">
+                    <i class="bi bi-search search-icon"></i>
                     <input type="text" 
                            name="filtro" 
-                           class="form-control border-start-0 ps-0" 
+                           class="form-control" 
                            placeholder="Buscar por cliente, nome do contato ou cargo..."
                            value="<?php echo htmlspecialchars($filtro); ?>"
                            autocomplete="off">
                 </div>
             </div>
             <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-primary flex-fill d-flex align-items-center justify-content-center">
+                <button type="submit" class="btn btn-primary filter-btn flex-fill d-flex align-items-center justify-content-center">
                     <i class="bi bi-search me-2"></i>Buscar
                 </button>
                 <?php if (!empty($filtro)): ?>
-                    <a href="contatos.php" class="btn btn-outline-secondary d-flex align-items-center" title="Limpar filtro">
+                    <a href="contatos.php" class="btn btn-outline-secondary filter-btn d-flex align-items-center" title="Limpar filtro">
                         <i class="bi bi-x-lg"></i>
                     </a>
                 <?php endif; ?>
@@ -164,7 +278,7 @@ include 'header.php';
     </div>
 </div>
 
-<div class="card shadow-sm border-0">
+<div class="card shadow-sm border-0 contacts-list-card">
     <div class="card-header bg-white border-0 py-3">
         <div class="row align-items-center">
             <div class="col-md-6">
@@ -205,7 +319,7 @@ include 'header.php';
     
     <div class="card-body p-0">
         <?php if (empty($contatos)): ?>
-            <div class="text-center py-5">
+            <div class="contacts-empty-state">
                 <i class="bi bi-person-x fs-1 text-muted d-block mb-3"></i>
                 <p class="text-muted mb-3">
                     <?php echo !empty($filtro) ? 
@@ -213,18 +327,18 @@ include 'header.php';
                         'Nenhum contato cadastrado ainda. Comece adicionando o primeiro!'; ?>
                 </p>
                 <?php if (!empty($filtro)): ?>
-                    <a href="contatos.php" class="btn btn-outline-primary">
+                    <a href="contatos.php" class="btn btn-outline-primary filter-btn">
                         <i class="bi bi-arrow-counterclockwise me-1"></i>Limpar filtro
                     </a>
                 <?php else: ?>
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalContato">
+                    <button class="btn btn-primary filter-btn" data-bs-toggle="modal" data-bs-target="#modalContato">
                         <i class="bi bi-plus-lg me-1"></i>Adicionar Contato
                     </button>
                 <?php endif; ?>
             </div>
         <?php else: ?>
             <div class="table-responsive table-scroll-container" style="max-height: 500px;">
-                <table class="table table-hover align-middle mb-0">
+                <table class="table table-hover align-middle mb-0 contacts-table">
                     <thead class="table-light">
                         <tr>
                             <th class="ps-4 py-3 border-bottom-0">
@@ -309,8 +423,8 @@ include 'header.php';
                                 <?php endif; ?>
                             </td>
                             <td class="text-end pe-4">
-                                <div class="btn-group" role="group">
-                                    <button class="btn btn-sm btn-outline-primary edit-btn me-1" 
+                                <div class="d-inline-flex gap-1" role="group">
+                                    <button class="btn btn-sm btn-outline-primary edit-btn contact-action-btn" 
                                             data-id="<?php echo $c['id_contato']; ?>"
                                             data-cliente="<?php echo $c['id_cliente']; ?>"
                                             data-nome="<?php echo htmlspecialchars($c['nome']); ?>"
@@ -323,7 +437,7 @@ include 'header.php';
                                         <i class="bi bi-pencil-square"></i>
                                     </button>
                                     <a href="contatos.php?delete=<?php echo $c['id_contato']; ?>&pagina=<?php echo $pagina; ?>&filtro=<?php echo urlencode($filtro); ?>" 
-                                       class="btn btn-sm btn-outline-danger" 
+                                       class="btn btn-sm btn-outline-danger contact-action-btn" 
                                        onclick="return confirm('Tem certeza que deseja excluir o contato \\'<?php echo addslashes($c['nome']); ?>\\'?')"
                                        title="Excluir contato">
                                         <i class="bi bi-trash"></i>
@@ -392,15 +506,15 @@ include 'header.php';
 <!-- Modal Contato -->
 <div class="modal fade" id="modalContato" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
+        <div class="modal-content border-0 shadow-lg contacts-modal">
             <form method="POST" id="formContato">
-                <div class="modal-header border-bottom-0 pb-0">
+                <div class="modal-header border-0 px-4 pt-4">
                     <h5 class="fw-bold d-flex align-items-center" id="modalTitle">
                         <i class="bi bi-person-plus me-2"></i>Novo Contato
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body px-4 pt-2">
                     <input type="hidden" name="id_contato" id="id_contato">
                     <div class="mb-3">
                         <label class="form-label fw-semibold small d-flex align-items-center">
@@ -456,11 +570,11 @@ include 'header.php';
                         <textarea name="observacao" id="observacao" class="form-control" rows="3" placeholder="Informações adicionais sobre este contato..."></textarea>
                     </div>
                 </div>
-                <div class="modal-footer border-top-0">
-                    <button type="button" class="btn btn-light fw-bold d-flex align-items-center" data-bs-dismiss="modal">
+                <div class="modal-footer border-0 p-4 gap-2">
+                    <button type="button" class="btn btn-light fw-bold px-4 d-flex align-items-center" data-bs-dismiss="modal">
                         <i class="bi bi-x-lg me-1"></i>Cancelar
                     </button>
-                    <button type="submit" class="btn btn-primary px-4 d-flex align-items-center" <?php echo empty($clientes) ? 'disabled' : ''; ?>>
+                    <button type="submit" class="btn btn-primary fw-bold px-4 d-flex align-items-center" <?php echo empty($clientes) ? 'disabled' : ''; ?>>
                         <i class="bi bi-check-lg me-1"></i>Salvar Contato
                     </button>
                 </div>

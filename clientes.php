@@ -1,34 +1,86 @@
-<?php
+﻿<?php
 date_default_timezone_set('America/Sao_Paulo');
 require_once 'config.php';
 
-// 1. DEFINIR VARIÁVEIS COM VALORES PADRÃO
+// 1. DEFINIR VARIÃVEIS COM VALORES PADRÃƒO
 $view_mode = isset($_GET['view']) ? $_GET['view'] : 'cards';
 $filtro = isset($_GET['filtro']) ? trim($_GET['filtro']) : '';
 $estagio = isset($_GET['estagio']) ? $_GET['estagio'] : '';
 $busca = isset($_GET['busca']) ? trim($_GET['busca']) : '';
 $mostrar_encerrados = isset($_GET['mostrar_encerrados']) ? $_GET['mostrar_encerrados'] : '0';
 
-// 2. Lógica para Ações Rápidas: Concluir e Cancelar
+function encerrarImplantacaoCliente(PDO $pdo, $idCliente, $cancelada = false)
+{
+    $idCliente = (int)$idCliente;
+    if ($idCliente <= 0) {
+        return;
+    }
+
+    $dataAtual = date('Y-m-d');
+    $dataHoraAtual = date('Y-m-d H:i:s');
+
+    $pdo->beginTransaction();
+    try {
+        if ($cancelada) {
+            $stmtCliente = $pdo->prepare(
+                "UPDATE clientes
+                 SET data_fim = ?,
+                     observacao = CONCAT(IFNULL(observacao, ''), ' [IMPLANTACAO CANCELADA EM ', CURDATE(), ']'),
+                     status_tratativa = 'pendente',
+                     data_inicio_tratativa = NULL
+                 WHERE id_cliente = ?"
+            );
+            $stmtCliente->execute([$dataAtual, $idCliente]);
+        } else {
+            $stmtCliente = $pdo->prepare(
+                "UPDATE clientes
+                 SET data_fim = ?,
+                     status_tratativa = 'pendente',
+                     data_inicio_tratativa = NULL
+                 WHERE id_cliente = ?"
+            );
+            $stmtCliente->execute([$dataAtual, $idCliente]);
+        }
+
+        // Fecha treinamentos pendentes para remover o cliente dos fluxos de atendimento.
+        $observacaoFechamento = $cancelada
+            ? '[Encerrado automaticamente por cancelamento da implantacao em ' . $dataAtual . ']'
+            : '[Encerrado automaticamente por conclusao da implantacao em ' . $dataAtual . ']';
+
+        $stmtTreinamentos = $pdo->prepare(
+            "UPDATE treinamentos
+             SET status = 'Resolvido',
+                 data_treinamento_encerrado = ?,
+                 observacoes = CONCAT(IFNULL(observacoes, ''), CASE WHEN IFNULL(observacoes, '') = '' THEN '' ELSE ' ' END, ?)
+             WHERE id_cliente = ?
+               AND status = 'PENDENTE'"
+        );
+        $stmtTreinamentos->execute([$dataHoraAtual, $observacaoFechamento, $idCliente]);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
+// 2. Logica para Acoes Rapidas: Concluir e Cancelar
 if (isset($_GET['concluir'])) {
     $id = $_GET['concluir'];
-    $data_atual = date('Y-m-d');
-    $stmt = $pdo->prepare("UPDATE clientes SET data_fim = ? WHERE id_cliente = ?");
-    $stmt->execute([$data_atual, $id]);
+    encerrarImplantacaoCliente($pdo, $id, false);
     header("Location: clientes.php?msg=Implantacao+concluida+com+sucesso&view=" . $view_mode);
     exit;
 }
 
 if (isset($_GET['cancelar'])) {
     $id = $_GET['cancelar'];
-    $data_atual = date('Y-m-d');
-    $stmt = $pdo->prepare("UPDATE clientes SET data_fim = ?, observacao = CONCAT(IFNULL(observacao, ''), ' [IMPLANTAÇÃO CANCELADA EM ', CURDATE(), ']') WHERE id_cliente = ?");
-    $stmt->execute([$data_atual, $id]);
+    encerrarImplantacaoCliente($pdo, $id, true);
     header("Location: clientes.php?msg=Implantacao+cancelada+com+sucesso&view=" . $view_mode);
     exit;
 }
-
-// 3. Lógica para Deletar
+// 3. LÃ³gica para Deletar
 if (isset($_GET['delete'])) {
     $id = $_GET['delete'];
     $stmt = $pdo->prepare("DELETE FROM clientes WHERE id_cliente = ?");
@@ -37,7 +89,7 @@ if (isset($_GET['delete'])) {
     exit;
 }
 
-// 4. Lógica para Adicionar/Editar - ATUALIZADO COM NOVOS CAMPOS
+// 4. LÃ³gica para Adicionar/Editar - ATUALIZADO COM NOVOS CAMPOS
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $fantasia = $_POST['fantasia'];
     $servidor = $_POST['servidor'];
@@ -46,8 +98,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $data_inicio = $_POST['data_inicio'];
     $data_fim = (!empty($_POST['data_fim']) && $_POST['data_fim'] !== '0000-00-00') ? $_POST['data_fim'] : null;
     $observacao = $_POST['observacao'] ?? '';
-    $emitir_nf = $_POST['emitir_nf'] ?? 'Não';
-    $configurado = $_POST['configurado'] ?? 'Não';
+    $emitir_nf = $_POST['emitir_nf'] ?? 'NÃ£o';
+    $configurado = $_POST['configurado'] ?? 'NÃ£o';
 
     // NOVOS CAMPOS
     $num_licencas = $_POST['num_licencas'] ?? 0;
@@ -99,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     exit;
 }
 
-// 5. Consulta de Dados e Filtros - FILTRAR CLIENTES NÃO ENCERRADOS
+// 5. Consulta de Dados e Filtros - FILTRAR CLIENTES NÃƒO ENCERRADOS
 $sql = "SELECT c.*, 
                COUNT(t.id_treinamento) as total_treinamentos,
                MAX(t.data_treinamento) as ultimo_treinamento,
@@ -109,7 +161,7 @@ $sql = "SELECT c.*,
         WHERE 1=1";
 $params = [];
 
-// Por padrão, não mostrar clientes com implantação encerrada
+// Por padrÃ£o, nÃ£o mostrar clientes com implantaÃ§Ã£o encerrada
 if ($mostrar_encerrados != '1') {
     $sql .= " AND (c.data_fim IS NULL OR c.data_fim = '0000-00-00')";
 }
@@ -132,7 +184,7 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $todos_clientes = $stmt->fetchAll();
 
-// 6. Lógica de Contagem para os CARDS - SOMENTE CLIENTES ATIVOS
+// 6. LÃ³gica de Contagem para os CARDS - SOMENTE CLIENTES ATIVOS
 $integracao = 0;
 $operacional = 0;
 $finalizacao = 0;
@@ -140,13 +192,13 @@ $critico = 0;
 $encerrados = 0;
 $clientes_filtrados = [];
 
-// Estatísticas adicionais
+// EstatÃ­sticas adicionais
 $clientes_com_treinamentos = 0;
 $clientes_em_atraso = 0;
 $clientes_sem_treinamentos = 0;
 
 foreach ($todos_clientes as $cl) {
-    // Verificar se o cliente está encerrado
+    // Verificar se o cliente estÃ¡ encerrado
     $cliente_encerrado = false;
     if (!empty($cl['data_fim']) && $cl['data_fim'] !== '0000-00-00') {
         $data_fim = trim($cl['data_fim']);
@@ -158,13 +210,13 @@ foreach ($todos_clientes as $cl) {
     // Contar clientes encerrados
     if ($cliente_encerrado) {
         $encerrados++;
-        // Se não estamos mostrando encerrados, pular para o próximo
+        // Se nÃ£o estamos mostrando encerrados, pular para o prÃ³ximo
         if ($mostrar_encerrados != '1') {
             continue;
         }
     }
 
-    // Estatísticas de treinamentos
+    // EstatÃ­sticas de treinamentos
     if ($cl['total_treinamentos'] > 0) {
         $clientes_com_treinamentos++;
     } else {
@@ -195,7 +247,7 @@ foreach ($todos_clientes as $cl) {
         $status_cl = "encerrado";
     }
 
-    // Adiciona à lista filtrada se passar pelo filtro de estágio
+    // Adiciona Ã  lista filtrada se passar pelo filtro de estÃ¡gio
     if (empty($estagio) || $estagio == $status_cl) {
         $clientes_filtrados[] = $cl;
     }
@@ -237,6 +289,11 @@ include 'header.php';
         border-radius: 12px;
         margin-bottom: 1rem;
         box-shadow: 0 4px 20px rgba(67, 97, 238, 0.15);
+    }
+
+    .page-title {
+        font-size: 1.6rem;
+        letter-spacing: 0.2px;
     }
 
     .header-stats {
@@ -363,7 +420,7 @@ include 'header.php';
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         gap: 2rem;
-        /* ← valor atual pequeno */
+        /* â† valor atual pequeno */
         padding: 0.5rem 0;
         overflow-y: auto;
         flex: 1;
@@ -382,7 +439,7 @@ include 'header.php';
     .client-card-body {
         flex: 1 1 auto;
         overflow-y: auto;
-        /* ← aqui está a mágica */
+        /* â† aqui estÃ¡ a mÃ¡gica */
         padding: 0.75rem;
         /* um pouco mais de respiro */
     }
@@ -473,7 +530,7 @@ include 'header.php';
         font-size: 0.65rem;
     }
 
-    /* BOTÕES DE AÇÃO */
+    /* BOTÃ•ES DE AÃ‡ÃƒO */
     .action-buttons {
         display: flex;
         gap: 0.25rem;
@@ -539,7 +596,7 @@ include 'header.php';
         color: white;
     }
 
-    /* BOTÕES CONCLUIR E CANCELAR */
+    /* BOTÃ•ES CONCLUIR E CANCELAR */
     .btn-action.concluir {
         background-color: #198754;
         color: white;
@@ -608,7 +665,7 @@ include 'header.php';
         z-index: 10;
     }
 
-    /* BOTÕES NA TABELA */
+    /* BOTÃ•ES NA TABELA */
     .table-container .action-buttons {
         gap: 0.5rem;
     }
@@ -632,7 +689,7 @@ include 'header.php';
         margin-bottom: 1.5rem;
     }
 
-    /* ANIMAÇÕES */
+    /* ANIMAÃ‡Ã•ES */
     @keyframes fadeIn {
         from {
             opacity: 0;
@@ -673,13 +730,26 @@ include 'header.php';
         border-color: var(--primary-color);
     }
 
-    /* BOTÃO NOVO CLIENTE */
+    /* BOTÃƒO NOVO CLIENTE */
     .btn-novo-cliente {
         border-radius: 10px;
         height: 45px;
         display: flex;
         align-items: center;
         justify-content: center;
+    }
+
+    .client-modal .form-control,
+    .client-modal .form-select {
+        border-radius: 10px;
+        border: 2px solid #e9ecef;
+        transition: all 0.25s;
+    }
+
+    .client-modal .form-control:focus,
+    .client-modal .form-select:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
     }
 
     /* TOGGLE ENCERRADOS */
@@ -694,7 +764,7 @@ include 'header.php';
         font-weight: 500;
     }
 
-    /* BOTÕES DE AÇÃO NA TABELA */
+    /* BOTÃ•ES DE AÃ‡ÃƒO NA TABELA */
     .table-container .action-buttons {
         display: flex;
         gap: 0.5rem;
@@ -778,14 +848,14 @@ include 'header.php';
         color: white;
     }
 
-    /* CÉLULA DE AÇÕES NA TABELA */
+    /* CÃ‰LULA DE AÃ‡Ã•ES NA TABELA */
     .table td.text-center.pe-4 {
         vertical-align: middle;
         padding-top: 12px;
         padding-bottom: 12px;
     }
 
-    /* CORREÇÕES PARA BOTÕES */
+    /* CORREÃ‡Ã•ES PARA BOTÃ•ES */
     a.btn-action {
         display: inline-flex !important;
         align-items: center !important;
@@ -823,7 +893,7 @@ include 'header.php';
         text-decoration: underline !important;
     }
 
-    /* Botão de copiar nos cards */
+    /* BotÃ£o de copiar nos cards */
     .client-card .btn-copy-link {
         opacity: 0.6;
         transition: opacity 0.2s;
@@ -845,7 +915,7 @@ include 'header.php';
         transform: translateY(-1px);
     }
 
-    /* Animação de fade-in */
+    /* AnimaÃ§Ã£o de fade-in */
     @keyframes fadeInUp {
         from {
             opacity: 0;
@@ -862,12 +932,12 @@ include 'header.php';
 </style>
 
 <div class="container-fluid py-4">
-    <!-- HEADER COM ESTATÍSTICAS -->
+    <!-- HEADER COM ESTATÃSTICAS -->
     <div class="main-header">
         <div class="row align-items-center">
             <div class="col-md-6">
-                <h4 class="fw-bold mb-2"><i class="bi bi-people-fill me-2"></i>Gestão de Clientes</h4>
-                <p class="mb-0 opacity-75">Gerencie todos os clientes em implantação</p>
+                <h3 class="page-title fw-bold mb-2"><i class="bi bi-people-fill me-2"></i>Gestão de Clientes</h3>
+                <p class="mb-0 opacity-75">Gerencie todos os clientes em implantaÃ§Ã£o</p>
             </div>
             <div class="col-md-6">
                 <div class="d-flex justify-content-end align-items-center gap-3">
@@ -922,7 +992,7 @@ include 'header.php';
                     <?php endif; ?>
                 </div>
 
-                <!-- BOTÃO NOVO CLIENTE -->
+                <!-- BOTÃƒO NOVO CLIENTE -->
                 <button class="btn btn-primary fw-bold px-4 btn-novo-cliente"
                     data-bs-toggle="modal"
                     data-bs-target="#modalCliente">
@@ -946,18 +1016,18 @@ include 'header.php';
 
         <div class="col-md-4">
             <div class="d-flex justify-content-end align-items-center gap-3">
-                <!-- TOGGLE DE VISUALIZAÇÃO -->
+                <!-- TOGGLE DE VISUALIZAÃ‡ÃƒO -->
                 <div class="view-toggle">
                     <button class="view-toggle-btn <?= $view_mode == 'cards' ? 'active' : '' ?>"
                         onclick="changeViewMode('cards')"
                         data-bs-toggle="tooltip"
-                        data-bs-title="Visualização em cards">
+                        data-bs-title="VisualizaÃ§Ã£o em cards">
                         <i class="bi bi-grid-3x3-gap"></i>
                     </button>
                     <button class="view-toggle-btn <?= $view_mode == 'list' ? 'active' : '' ?>"
                         onclick="changeViewMode('list')"
                         data-bs-toggle="tooltip"
-                        data-bs-title="Visualização em lista">
+                        data-bs-title="VisualizaÃ§Ã£o em lista">
                         <i class="bi bi-list"></i>
                     </button>
                 </div>
@@ -969,15 +1039,15 @@ include 'header.php';
     <div class="row g-3 mb-4">
         <?php
         $status_data = [
-            ['id' => 'integracao', 'label' => 'Integração', 'count' => $integracao, 'color' => '#0dcaf0', 'icon' => 'bi-rocket-takeoff', 'days' => '0-30d'],
+            ['id' => 'integracao', 'label' => 'IntegraÃ§Ã£o', 'count' => $integracao, 'color' => '#0dcaf0', 'icon' => 'bi-rocket-takeoff', 'days' => '0-30d'],
             ['id' => 'operacional', 'label' => 'Operacional', 'count' => $operacional, 'color' => '#0d6efd', 'icon' => 'bi-gear', 'days' => '31-70d'],
-            ['id' => 'finalizacao', 'label' => 'Finalização', 'count' => $finalizacao, 'color' => '#ffc107', 'icon' => 'bi-flag', 'days' => '71-91d'],
-            ['id' => 'critico', 'label' => 'Crítico', 'count' => $critico, 'color' => '#dc3545', 'icon' => 'bi-exclamation-triangle', 'days' => '> 91d']
+            ['id' => 'finalizacao', 'label' => 'FinalizaÃ§Ã£o', 'count' => $finalizacao, 'color' => '#ffc107', 'icon' => 'bi-flag', 'days' => '71-91d'],
+            ['id' => 'critico', 'label' => 'CrÃ­tico', 'count' => $critico, 'color' => '#dc3545', 'icon' => 'bi-exclamation-triangle', 'days' => '> 91d']
         ];
 
         // Adicionar card para encerrados somente se estiverem sendo mostrados
         if ($mostrar_encerrados == '1') {
-            $status_data[] = ['id' => 'encerrado', 'label' => 'Encerrados', 'count' => $encerrados, 'color' => '#6c757d', 'icon' => 'bi-archive', 'days' => 'Concluído'];
+            $status_data[] = ['id' => 'encerrado', 'label' => 'Encerrados', 'count' => $encerrados, 'color' => '#6c757d', 'icon' => 'bi-archive', 'days' => 'ConcluÃ­do'];
         }
 
         foreach ($status_data as $s): ?>
@@ -1004,9 +1074,9 @@ include 'header.php';
         <?php endforeach; ?>
     </div>
 
-    <!-- CONTEÚDO PRINCIPAL (CARDS OU TABELA) -->
+    <!-- CONTEÃšDO PRINCIPAL (CARDS OU TABELA) -->
     <?php if ($view_mode == 'cards'): ?>
-        <!-- VISUALIZAÇÃO EM CARDS -->
+        <!-- VISUALIZAÃ‡ÃƒO EM CARDS -->
         <div class="client-cards-container">
             <?php if (empty($clientes_filtrados)): ?>
                 <div class="col-12">
@@ -1014,7 +1084,7 @@ include 'header.php';
                         <i class="bi bi-people empty-state-icon"></i>
                         <?php if (!empty($busca)): ?>
                             <h5 class="fw-bold mb-2">Nenhum cliente encontrado</h5>
-                            <p class="mb-3">Não foram encontrados clientes com "<?= htmlspecialchars($busca) ?>"</p>
+                            <p class="mb-3">NÃ£o foram encontrados clientes com "<?= htmlspecialchars($busca) ?>"</p>
                             <a href="clientes.php?view=cards&mostrar_encerrados=<?= $mostrar_encerrados ?>" class="btn btn-outline-primary">
                                 <i class="bi bi-arrow-counterclockwise me-1"></i>Limpar busca
                             </a>
@@ -1029,7 +1099,7 @@ include 'header.php';
                 </div>
             <?php else: ?>
                 <?php foreach ($clientes_filtrados as $index => $c):
-                    // Verificar se o cliente está encerrado
+                    // Verificar se o cliente estÃ¡ encerrado
                     $cliente_encerrado = false;
                     if (!empty($c['data_fim']) && $c['data_fim'] !== '0000-00-00') {
                         $data_fim = trim($c['data_fim']);
@@ -1038,10 +1108,10 @@ include 'header.php';
                         }
                     }
 
-                    // Calcular dias desde o início
+                    // Calcular dias desde o inÃ­cio
                     $dias = (new DateTime($c['data_inicio']))->diff(new DateTime())->days;
 
-                    // Determinar estágio atual
+                    // Determinar estÃ¡gio atual
                     if ($cliente_encerrado) {
                         $status = 'encerrado';
                         $status_color = '#6c757d';
@@ -1051,7 +1121,7 @@ include 'header.php';
                         if ($dias <= 30) {
                             $status = 'integracao';
                             $status_color = '#0dcaf0';
-                            $status_label = 'Integração';
+                            $status_label = 'IntegraÃ§Ã£o';
                         } elseif ($dias <= 70) {
                             $status = 'operacional';
                             $status_color = '#0d6efd';
@@ -1059,23 +1129,23 @@ include 'header.php';
                         } elseif ($dias <= 91) {
                             $status = 'finalizacao';
                             $status_color = '#ffc107';
-                            $status_label = 'Finalização';
+                            $status_label = 'FinalizaÃ§Ã£o';
                         } else {
                             $status = 'critico';
                             $status_color = '#dc3545';
-                            $status_label = 'Crítico';
+                            $status_label = 'CrÃ­tico';
                         }
                         $progress = min(($dias / 91) * 100, 100);
                     } else {
                         $status = 'concluido';
                         $status_color = '#06d6a0';
-                        $status_label = 'Concluído';
+                        $status_label = 'ConcluÃ­do';
                         $progress = 100;
                     }
 
-                    // Verificar configuração NF
-                    $emitir_nf = isset($c['emitir_nf']) ? $c['emitir_nf'] : 'Não';
-                    $configurado = isset($c['configurado']) ? $c['configurado'] : 'Não';
+                    // Verificar configuraÃ§Ã£o NF
+                    $emitir_nf = isset($c['emitir_nf']) ? $c['emitir_nf'] : 'NÃ£o';
+                    $configurado = isset($c['configurado']) ? $c['configurado'] : 'NÃ£o';
                 ?>
                     <div class="client-card fade-in <?= $cliente_encerrado ? 'encerrado' : '' ?>" style="--card-index: <?= $index ?>; animation-delay: calc(var(--card-index, 0) * 0.05s);">
                         <?php if ($cliente_encerrado): ?>
@@ -1118,7 +1188,7 @@ include 'header.php';
                                     <div class="fw-semibold text-truncate"><?= htmlspecialchars($c['vendedor']) ?></div>
                                 </div>
                                 <div class="compact-info-item">
-                                    <small class="text-muted">Início</small>
+                                    <small class="text-muted">InÃ­cio</small>
                                     <div class="fw-semibold"><?= date('d/m', strtotime($c['data_inicio'])) ?></div>
                                 </div>
                                 <div class="compact-info-item">
@@ -1139,13 +1209,13 @@ include 'header.php';
                                 <?php if (isset($c['num_licencas']) && $c['num_licencas'] > 0): ?>
                                     <div class="mt-1 small text-muted">
                                         <i class="bi bi-people me-1"></i>
-                                        <?= $c['num_licencas'] ?> licença(s)
+                                        <?= $c['num_licencas'] ?> licenÃ§a(s)
                                     </div>
                                 <?php endif; ?>
 
 
 
-                                <!-- No client-card-body, após as informações existentes -->
+                                <!-- No client-card-body, apÃ³s as informaÃ§Ãµes existentes -->
                                 <?php if (!empty($c['anexo'])): ?>
                                     <div class="mt-1 small text-muted"
                                         style="background-color: #e7f3ff; font-size: 0.7rem;">
@@ -1158,7 +1228,7 @@ include 'header.php';
                                             data-bs-title="Abrir link do Google Drive">
                                             <i class="bi bi-google"></i>
                                         </a>
-                                        <span class="mx-1 text-muted">•</span>
+                                        <span class="mx-1 text-muted">â€¢</span>
                                         <button class="btn btn-sm btn-link text-primary p-0 small"
                                             onclick="copiarLinkCard('<?= htmlspecialchars($c['anexo']) ?>', event)"
                                             data-bs-toggle="tooltip"
@@ -1187,28 +1257,28 @@ include 'header.php';
                                 </small>
                                 <div class="action-buttons">
                                     <?php if (!$cliente_encerrado): ?>
-                                        <!-- BOTÃO CONCLUIR - CORRIGIDO -->
-                                        <form method="GET" action="clientes.php" style="display: inline;" onsubmit="return confirm('Deseja marcar esta implantação como CONCLUÍDA?');">
+                                        <!-- BOTÃƒO CONCLUIR - CORRIGIDO -->
+                                        <form method="GET" action="clientes.php" style="display: inline;" onsubmit="return confirm('Deseja marcar esta implantaÃ§Ã£o como CONCLUÃDA?');">
                                             <input type="hidden" name="concluir" value="<?= $c['id_cliente'] ?>">
                                             <input type="hidden" name="view" value="<?= $view_mode ?>">
                                             <input type="hidden" name="mostrar_encerrados" value="<?= $mostrar_encerrados ?>">
-                                            <button type="submit" class="btn-action concluir" data-bs-toggle="tooltip" data-bs-title="Concluir Implantação">
+                                            <button type="submit" class="btn-action concluir" data-bs-toggle="tooltip" data-bs-title="Concluir ImplantaÃ§Ã£o">
                                                 <i class="bi bi-check-circle"></i>
                                             </button>
                                         </form>
 
-                                        <!-- BOTÃO CANCELAR IMPLANTAÇÃO - CORRIGIDO -->
-                                        <form method="GET" action="clientes.php" style="display: inline;" onsubmit="return confirm('Deseja CANCELAR esta implantação? Esta ação será registrada nas observações.');">
+                                        <!-- BOTÃƒO CANCELAR IMPLANTAÃ‡ÃƒO - CORRIGIDO -->
+                                        <form method="GET" action="clientes.php" style="display: inline;" onsubmit="return confirm('Deseja CANCELAR esta implantaÃ§Ã£o? Esta aÃ§Ã£o serÃ¡ registrada nas observaÃ§Ãµes.');">
                                             <input type="hidden" name="cancelar" value="<?= $c['id_cliente'] ?>">
                                             <input type="hidden" name="view" value="<?= $view_mode ?>">
                                             <input type="hidden" name="mostrar_encerrados" value="<?= $mostrar_encerrados ?>">
-                                            <button type="submit" class="btn-action cancelar" data-bs-toggle="tooltip" data-bs-title="Cancelar Implantação">
+                                            <button type="submit" class="btn-action cancelar" data-bs-toggle="tooltip" data-bs-title="Cancelar ImplantaÃ§Ã£o">
                                                 <i class="bi bi-x-circle"></i>
                                             </button>
                                         </form>
                                     <?php endif; ?>
 
-                                    <!-- BOTÃO EDITAR - VERSÃO BOOTSTRAP NATIVA -->
+                                    <!-- BOTÃƒO EDITAR - VERSÃƒO BOOTSTRAP NATIVA -->
                                     <!-- Nos cards (view_mode == 'cards') - adicionar data-num_licencas e data-anexo -->
                                     <button class="btn-action edit edit-btn"
                                         data-bs-toggle="tooltip"
@@ -1227,7 +1297,7 @@ include 'header.php';
                                         <i class="bi bi-pencil"></i>
                                     </button>
 
-                                    <!-- BOTÃO VER TREINAMENTOS - VERSÃO CORRIGIDA -->
+                                    <!-- BOTÃƒO VER TREINAMENTOS - VERSÃƒO CORRIGIDA -->
                                     <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>"
                                         class="btn-action treinamentos"
                                         data-bs-toggle="tooltip"
@@ -1252,7 +1322,7 @@ include 'header.php';
             <?php endif; ?>
         </div>
     <?php else: ?>
-        <!-- VISUALIZAÇÃO EM TABELA -->
+        <!-- VISUALIZAÃ‡ÃƒO EM TABELA -->
         <div class="table-container">
             <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light">
@@ -1260,10 +1330,10 @@ include 'header.php';
                         <th class="ps-4">Cliente / Servidor</th>
                         <th>Vendedor</th>
                         <th>Status</th>
-                        <th>Início</th>
+                        <th>InÃ­cio</th>
                         <th>Dias</th>
                         <th>Treinamentos</th>
-                        <th class="text-center pe-4">Ações</th>
+                        <th class="text-center pe-4">AÃ§Ãµes</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1274,7 +1344,7 @@ include 'header.php';
                                     <i class="bi bi-people empty-state-icon"></i>
                                     <?php if (!empty($busca)): ?>
                                         <h5 class="fw-bold mb-2">Nenhum cliente encontrado</h5>
-                                        <p class="mb-3">Não foram encontrados clientes com "<?= htmlspecialchars($busca) ?>"</p>
+                                        <p class="mb-3">NÃ£o foram encontrados clientes com "<?= htmlspecialchars($busca) ?>"</p>
                                         <a href="clientes.php?view=list&mostrar_encerrados=<?= $mostrar_encerrados ?>" class="btn btn-outline-primary">
                                             <i class="bi bi-arrow-counterclockwise me-1"></i>Limpar busca
                                         </a>
@@ -1290,7 +1360,7 @@ include 'header.php';
                         </tr>
                     <?php else: ?>
                         <?php foreach ($clientes_filtrados as $c):
-                            // Verificar se o cliente está encerrado
+                            // Verificar se o cliente estÃ¡ encerrado
                             $cliente_encerrado = false;
                             if (!empty($c['data_fim']) && $c['data_fim'] !== '0000-00-00') {
                                 $data_fim = trim($c['data_fim']);
@@ -1306,20 +1376,20 @@ include 'header.php';
                                 $status_color = '#6c757d';
                             } elseif (empty($c['data_fim']) || $c['data_fim'] === '0000-00-00') {
                                 if ($dias <= 30) {
-                                    $status = 'Integração';
+                                    $status = 'IntegraÃ§Ã£o';
                                     $status_color = '#0dcaf0';
                                 } elseif ($dias <= 70) {
                                     $status = 'Operacional';
                                     $status_color = '#0d6efd';
                                 } elseif ($dias <= 91) {
-                                    $status = 'Finalização';
+                                    $status = 'FinalizaÃ§Ã£o';
                                     $status_color = '#ffc107';
                                 } else {
-                                    $status = 'Crítico';
+                                    $status = 'CrÃ­tico';
                                     $status_color = '#dc3545';
                                 }
                             } else {
-                                $status = 'Concluído';
+                                $status = 'ConcluÃ­do';
                                 $status_color = '#06d6a0';
                             }
                         ?>
@@ -1392,26 +1462,26 @@ include 'header.php';
                                 <td class="text-center pe-4">
                                     <div class="action-buttons justify-content-center">
                                         <?php if (!$cliente_encerrado): ?>
-                                            <!-- BOTÃO CONCLUIR IMPLANTAÇÃO - CORRIGIDO -->
+                                            <!-- BOTÃƒO CONCLUIR IMPLANTAÃ‡ÃƒO - CORRIGIDO -->
                                             <a href="?concluir=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>"
                                                 class="btn-action concluir"
                                                 data-bs-toggle="tooltip"
-                                                data-bs-title="Concluir Implantação"
-                                                onclick="event.stopPropagation(); return confirm('Deseja marcar esta implantação como CONCLUÍDA?');">
+                                                data-bs-title="Concluir ImplantaÃ§Ã£o"
+                                                onclick="event.stopPropagation(); return confirm('Deseja marcar esta implantaÃ§Ã£o como CONCLUÃDA?');">
                                                 <i class="bi bi-check-circle"></i>
                                             </a>
 
-                                            <!-- BOTÃO CANCELAR IMPLANTAÇÃO - CORRIGIDO -->
+                                            <!-- BOTÃƒO CANCELAR IMPLANTAÃ‡ÃƒO - CORRIGIDO -->
                                             <a href="?cancelar=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>"
                                                 class="btn-action cancelar"
                                                 data-bs-toggle="tooltip"
-                                                data-bs-title="Cancelar Implantação"
-                                                onclick="event.stopPropagation(); return confirm('Deseja CANCELAR esta implantação? Esta ação será registrada nas observações.');">
+                                                data-bs-title="Cancelar ImplantaÃ§Ã£o"
+                                                onclick="event.stopPropagation(); return confirm('Deseja CANCELAR esta implantaÃ§Ã£o? Esta aÃ§Ã£o serÃ¡ registrada nas observaÃ§Ãµes.');">
                                                 <i class="bi bi-x-circle"></i>
                                             </a>
                                         <?php endif; ?>
 
-                                        <!-- BOTÃO EDITAR - VERSÃO BOOTSTRAP NATIVA -->
+                                        <!-- BOTÃƒO EDITAR - VERSÃƒO BOOTSTRAP NATIVA -->
                                         <!-- Nos cards (view_mode == 'cards') - adicionar data-num_licencas e data-anexo -->
                                         <button class="btn-action edit edit-btn"
                                             data-bs-toggle="tooltip"
@@ -1431,7 +1501,7 @@ include 'header.php';
                                             <i class="bi bi-pencil"></i>
                                         </button>
 
-                                        <!-- BOTÃO VER TREINAMENTOS - VERSÃO CORRIGIDA -->
+                                        <!-- BOTÃƒO VER TREINAMENTOS - VERSÃƒO CORRIGIDA -->
                                         <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>"
                                             class="btn-action treinamentos"
                                             data-bs-toggle="tooltip"
@@ -1440,7 +1510,7 @@ include 'header.php';
                                             <i class="bi bi-journal-check"></i>
                                         </a>
 
-                                        <!-- BOTÃO EXCLUIR -->
+                                        <!-- BOTÃƒO EXCLUIR -->
                                         <a href="?delete=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>"
                                             class="btn-action delete"
                                             data-bs-toggle="tooltip"
@@ -1462,7 +1532,7 @@ include 'header.php';
 <!-- MODAL DE CLIENTE - ATUALIZADO COM CAMPOS NUM_LICENCAS E ANEXO -->
 <div class="modal fade" id="modalCliente" tabindex="-1">
     <div class="modal-dialog modal-lg">
-        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius:16px;">
+        <form method="POST" class="modal-content border-0 shadow-lg client-modal" style="border-radius:16px;">
             <div class="modal-header border-0 px-4 pt-4">
                 <h5 class="fw-bold" id="modalTitle">Ficha do Cliente</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -1499,13 +1569,13 @@ include 'header.php';
                     <!-- Linha 3: Datas -->
                     <div class="col-md-6">
                         <label class="form-label small fw-bold">
-                            <i class="bi bi-calendar-plus me-1"></i>Data Início
+                            <i class="bi bi-calendar-plus me-1"></i>Data InÃ­cio
                         </label>
                         <input type="date" name="data_inicio" id="data_inicio" class="form-control" required>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label small fw-bold">
-                            <i class="bi bi-calendar-check me-1"></i>Data Conclusão
+                            <i class="bi bi-calendar-check me-1"></i>Data ConclusÃ£o
                         </label>
                         <input type="date" name="data_fim" id="id_data_fim" class="form-control">
                     </div>
@@ -1516,7 +1586,7 @@ include 'header.php';
                             <i class="bi bi-receipt me-1"></i>Emitir nota fiscal
                         </label>
                         <select name="emitir_nf" id="emitir_nf" class="form-select" onchange="toggleConfigurado(this.value)">
-                            <option value="Não">Não</option>
+                            <option value="NÃ£o">NÃ£o</option>
                             <option value="Sim">Sim</option>
                         </select>
                     </div>
@@ -1525,16 +1595,16 @@ include 'header.php';
                             <i class="bi bi-gear me-1"></i>Configurado
                         </label>
                         <select name="configurado" id="configurado" class="form-select">
-                            <option value="Não">Não</option>
+                            <option value="NÃ£o">NÃ£o</option>
                             <option value="Sim">Sim</option>
                         </select>
                     </div>
 
-                    <!-- NOVA LINHA 5: Número de Licenças e Anexo -->
-                    <!-- NOVA LINHA 5: Número de Licenças e Anexo COM BOTÃO PARA ABRIR LINK -->
+                    <!-- NOVA LINHA 5: NÃºmero de LicenÃ§as e Anexo -->
+                    <!-- NOVA LINHA 5: NÃºmero de LicenÃ§as e Anexo COM BOTÃƒO PARA ABRIR LINK -->
                     <div class="col-md-6">
                         <label class="form-label small fw-bold">
-                            <i class="bi bi-people me-1"></i>Número de Licenças
+                            <i class="bi bi-people me-1"></i>NÃºmero de LicenÃ§as
                         </label>
                         <div class="input-group">
                             <span class="input-group-text bg-light border-end-0">
@@ -1549,7 +1619,7 @@ include 'header.php';
                                 step="1"
                                 value="0">
                         </div>
-                        <small class="text-muted">Quantidade de licenças contratadas</small>
+                        <small class="text-muted">Quantidade de licenÃ§as contratadas</small>
                     </div>
 
                     <div class="col-md-6">
@@ -1566,7 +1636,7 @@ include 'header.php';
                                 class="form-control"
                                 placeholder="https://drive.google.com/..."
                                 value="">
-                            <!-- BOTÃO PARA ABRIR LINK -->
+                            <!-- BOTÃƒO PARA ABRIR LINK -->
                             <button class="btn btn-outline-primary"
                                 type="button"
                                 id="btnAbrirAnexo"
@@ -1582,13 +1652,13 @@ include 'header.php';
                         </small>
                     </div>
 
-                    <!-- Linha 6: Observações (ocupando linha inteira) -->
+                    <!-- Linha 6: ObservaÃ§Ãµes (ocupando linha inteira) -->
                     <div class="col-12">
                         <label class="form-label small fw-bold">
-                            <i class="bi bi-chat-left-text me-1"></i>Observações
+                            <i class="bi bi-chat-left-text me-1"></i>ObservaÃ§Ãµes
                         </label>
                         <textarea name="observacao" id="observacao" class="form-control"
-                            rows="3" placeholder="Informações adicionais sobre o cliente..."></textarea>
+                            rows="3" placeholder="InformaÃ§Ãµes adicionais sobre o cliente..."></textarea>
                     </div>
                 </div>
             </div>
@@ -1613,37 +1683,37 @@ include 'header.php';
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
 
-        // Configurar data atual como padrão para novo cliente
+        // Configurar data atual como padrÃ£o para novo cliente
         const dataInicioInput = document.getElementById('data_inicio');
         if (dataInicioInput && !dataInicioInput.value) {
             const today = new Date().toISOString().split('T')[0];
             dataInicioInput.value = today;
         }
 
-        // === CORREÇÃO: EVENT LISTENER PARA BOTÕES EDITAR ===
-        // Selecionar todos os botões com a classe edit-btn
+        // === CORREÃ‡ÃƒO: EVENT LISTENER PARA BOTÃ•ES EDITAR ===
+        // Selecionar todos os botÃµes com a classe edit-btn
         const editButtons = document.querySelectorAll('.edit-btn');
 
-        // Adicionar event listener para cada botão
+        // Adicionar event listener para cada botÃ£o
         editButtons.forEach(function(button) {
             button.addEventListener('click', function(e) {
-                e.preventDefault(); // Prevenir comportamento padrão
+                e.preventDefault(); // Prevenir comportamento padrÃ£o
 
-                // Chamar função openEditModal com o botão clicado
+                // Chamar funÃ§Ã£o openEditModal com o botÃ£o clicado
                 openEditModal(this);
             });
         });
 
-        // Verificar se encontrou os botões (para debug)
-        console.log('Botões de editar encontrados:', editButtons.length);
+        // Verificar se encontrou os botÃµes (para debug)
+        console.log('BotÃµes de editar encontrados:', editButtons.length);
 
         setTimeout(function() {
             const btns = document.querySelectorAll('.edit-btn');
-            console.log('Verificação tardia - Botões encontrados:', btns.length);
+            console.log('VerificaÃ§Ã£o tardia - BotÃµes encontrados:', btns.length);
         }, 2000);
     });
 
-    // Função de controle da view
+    // FunÃ§Ã£o de controle da view
     function changeViewMode(mode) {
         const url = new URL(window.location.href);
         url.searchParams.set('view', mode);
@@ -1665,14 +1735,14 @@ include 'header.php';
         window.location.href = url.toString();
     }
 
-    // FUNÇÃO PRINCIPAL PARA ABRIR MODAL DE EDIÇÃO
+    // FUNÃ‡ÃƒO PRINCIPAL PARA ABRIR MODAL DE EDIÃ‡ÃƒO
     function openEditModal(button) {
         console.log('Abrindo modal para editar cliente ID:', button.dataset.id); // Debug
 
-        // Mudar título do modal
+        // Mudar tÃ­tulo do modal
         document.getElementById('modalTitle').innerText = 'Editar Cliente';
 
-        // Preencher campos básicos
+        // Preencher campos bÃ¡sicos
         document.getElementById('id_cliente').value = button.dataset.id;
         document.getElementById('fantasia').value = button.dataset.fantasia || '';
         document.getElementById('servidor').value = button.dataset.servidor || '';
@@ -1686,8 +1756,8 @@ include 'header.php';
         document.getElementById('anexo').value = button.dataset.anexo || '';
 
         // Campos de NF e Configurado
-        const nf = button.dataset.emitir_nf || 'Não';
-        const conf = button.dataset.configurado || 'Não';
+        const nf = button.dataset.emitir_nf || 'NÃ£o';
+        const conf = button.dataset.configurado || 'NÃ£o';
 
         document.getElementById('emitir_nf').value = nf;
         document.getElementById('configurado').value = conf;
@@ -1701,7 +1771,7 @@ include 'header.php';
         modal.show();
     }
 
-    // Funções para controle do NF/Configurado
+    // FunÃ§Ãµes para controle do NF/Configurado
     function toggleConfigurado(valor) {
         const div = document.getElementById('div_configurado');
         if (div) {
@@ -1730,7 +1800,7 @@ include 'header.php';
             emitirSelect.classList.add('border-2');
             emitirLabel?.classList.add('fw-bold');
 
-            if (configurado === 'Não') {
+            if (configurado === 'NÃ£o') {
                 emitirSelect.classList.add('border-warning');
                 configSelect.classList.add('border-warning', 'border-2');
                 emitirLabel?.classList.add('text-warning');
@@ -1753,17 +1823,17 @@ include 'header.php';
 
         document.getElementById('id_cliente').value = '';
         document.getElementById('modalTitle').innerText = 'Ficha do Cliente';
-        document.getElementById('emitir_nf').value = 'Não';
-        document.getElementById('configurado').value = 'Não';
+        document.getElementById('emitir_nf').value = 'NÃ£o';
+        document.getElementById('configurado').value = 'NÃ£o';
 
-        // NOVOS CAMPOS - resetar valores padrão
+        // NOVOS CAMPOS - resetar valores padrÃ£o
         const numLicencas = document.getElementById('num_licencas');
         if (numLicencas) numLicencas.value = 0;
 
         const anexo = document.getElementById('anexo');
         if (anexo) anexo.value = '';
 
-        toggleConfigurado('Não');
+        toggleConfigurado('NÃ£o');
 
         // Resetar data para hoje
         const today = new Date().toISOString().split('T')[0];
@@ -1796,7 +1866,7 @@ include 'header.php';
         configuradoSelect.addEventListener('change', updateModalVisual);
     }
 
-    // Reaplicar event listeners após atualizações AJAX (se houver)
+    // Reaplicar event listeners apÃ³s atualizaÃ§Ãµes AJAX (se houver)
     function refreshEditButtons() {
         const editButtons = document.querySelectorAll('.edit-btn');
         editButtons.forEach(function(button) {
@@ -1807,47 +1877,47 @@ include 'header.php';
                 openEditModal(this);
             });
         });
-        console.log('Botões de editar atualizados:', editButtons.length);
+        console.log('BotÃµes de editar atualizados:', editButtons.length);
     }
 
-    // Se você tiver carregamento dinâmico de conteúdo, chame refreshEditButtons()
+    // Se vocÃª tiver carregamento dinÃ¢mico de conteÃºdo, chame refreshEditButtons()
 
-    // Função para abrir o link do anexo em nova aba
+    // FunÃ§Ã£o para abrir o link do anexo em nova aba
     function abrirAnexo() {
         const anexoInput = document.getElementById('anexo');
         const link = anexoInput.value.trim();
 
         if (!link) {
-            // Mostrar alerta se não houver link
+            // Mostrar alerta se nÃ£o houver link
             Swal.fire({
                 icon: 'warning',
-                title: 'Anexo não encontrado',
-                text: 'Não há nenhum link cadastrado para este cliente.',
+                title: 'Anexo nÃ£o encontrado',
+                text: 'NÃ£o hÃ¡ nenhum link cadastrado para este cliente.',
                 confirmButtonColor: '#4361ee'
             });
             return;
         }
 
-        // Validar se é uma URL válida
+        // Validar se Ã© uma URL vÃ¡lida
         try {
-            // Adicionar https:// se não tiver protocolo
+            // Adicionar https:// se nÃ£o tiver protocolo
             let url = link;
             if (!url.startsWith('http://') && !url.startsWith('https://')) {
                 url = 'https://' + url;
             }
 
-            // Testar se é URL válida
+            // Testar se Ã© URL vÃ¡lida
             new URL(url);
 
             // Abrir em nova aba
             window.open(url, '_blank');
 
         } catch (e) {
-            // URL inválida
+            // URL invÃ¡lida
             Swal.fire({
                 icon: 'error',
-                title: 'Link inválido',
-                text: 'O link fornecido não é uma URL válida.',
+                title: 'Link invÃ¡lido',
+                text: 'O link fornecido nÃ£o Ã© uma URL vÃ¡lida.',
                 confirmButtonColor: '#4361ee'
             });
         }
@@ -1855,18 +1925,18 @@ include 'header.php';
 
 
 
-    // Função para copiar link diretamente do card
+    // FunÃ§Ã£o para copiar link diretamente do card
     function copiarLinkCard(link, event) {
         event.preventDefault();
         event.stopPropagation(); // Impedir que o clique abra o link
 
         navigator.clipboard.writeText(link).then(function() {
-            // Feedback visual usando SweetAlert2 (se disponível)
+            // Feedback visual usando SweetAlert2 (se disponÃ­vel)
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
                     icon: 'success',
                     title: 'Link copiado!',
-                    text: 'Link copiado para a área de transferência.',
+                    text: 'Link copiado para a Ã¡rea de transferÃªncia.',
                     timer: 2000,
                     showConfirmButton: false,
                     toast: true,
@@ -1885,22 +1955,25 @@ include 'header.php';
         });
     }
 
-    // Opcional: Função para extrair nome do arquivo do link
+    // Opcional: FunÃ§Ã£o para extrair nome do arquivo do link
     function getFileNameFromLink(link) {
         try {
             const url = new URL(link);
-            // Se for Google Drive, extrair ID ou usar padrão
+            // Se for Google Drive, extrair ID ou usar padrÃ£o
             if (url.hostname.includes('drive.google.com')) {
-                return '📁 Google Drive';
+                return 'ðŸ“ Google Drive';
             }
             // Extrair nome do arquivo da URL
             const pathParts = url.pathname.split('/');
             const fileName = pathParts[pathParts.length - 1];
-            return fileName || '📎 Anexo';
+            return fileName || 'ðŸ“Ž Anexo';
         } catch {
-            return '📎 Link';
+            return 'ðŸ“Ž Link';
         }
     }
 </script>
 
 <?php include 'footer.php'; ?>
+
+
+

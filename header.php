@@ -196,11 +196,11 @@ try {
         .menu-separator {
             height: 1px;
             background: rgba(255, 255, 255, 0.1);
-            margin: 1rem 1.5rem;
+            margin: 0.85rem 1.25rem;
         }
 
         .menu-group-title {
-            padding: 0.75rem 1.5rem 0.35rem;
+            padding: 0.6rem 1.5rem 0.3rem;
             font-size: 0.66rem;
             text-transform: uppercase;
             letter-spacing: 0.08em;
@@ -256,11 +256,11 @@ try {
             <ul class="list-unstyled components">
                 <?php $current_page = basename($_SERVER['PHP_SELF']); ?>
 
-                <li class="menu-group-title">Operacao</li>
+                <li class="menu-group-title">Operação</li>
 
                 <li class="<?= $current_page == 'relatorio.php' ? 'active' : '' ?>">
                     <a href="relatorio.php">
-                        <span><i class="bi bi-bar-chart-line"></i> Treinamentos</span>
+                        <span><i class="bi bi-bar-chart-line"></i> Agendamentos</span>
                         <?php if ($total_treinamentos_pendentes > 0): ?>
                             <span class="badge rounded-pill badge-dashboard badge-notify" title="Treinamentos pendentes"><?= $total_treinamentos_pendentes ?></span>
                         <?php endif; ?>
@@ -269,12 +269,13 @@ try {
 
                 <li class="<?= $current_page == 'treinamentos.php' ? 'active' : '' ?>">
                     <a href="treinamentos.php">
-                        <span><i class="bi bi-mortarboard"></i> Agendamentos</span>
+                        <span><i class="bi bi-mortarboard"></i> Treinamentos</span>
                         <?php if ($total_hoje > 0): ?>
                             <span class="badge rounded-pill bg-info text-dark badge-notify" title="Para hoje"><?= $total_hoje ?></span>
                         <?php endif; ?>
                     </a>
-                </li>                                
+                </li>                
+                
 
                 <div class="menu-separator"></div>
 
@@ -296,7 +297,7 @@ try {
 
                 <div class="menu-separator"></div>
 
-                <li class="menu-group-title">Gestao</li>
+                <li class="menu-group-title">Gestão</li>
 
                 <li class="<?= $current_page == 'index.php' ? 'active' : '' ?>">
                     <a href="index.php">
@@ -306,7 +307,7 @@ try {
 
                 <li class="<?= $current_page == 'pendencias.php' ? 'active' : '' ?>">
                     <a href="pendencias.php">
-                        <span><i class="bi bi-exclamation-octagon"></i> Pendencias</span>
+                        <span><i class="bi bi-exclamation-octagon"></i> Pendências</span>
                         <?php if ($total_pendencias > 0): ?>
                             <span class="badge rounded-pill bg-danger badge-notify"><?= $total_pendencias ?></span>
                         <?php endif; ?>
@@ -319,7 +320,7 @@ try {
 
                 <li class="<?= $current_page == 'orientacoes.php' ? 'active' : '' ?>">
                     <a href="orientacoes.php">
-                        <span><i class="bi bi-question-circle"></i> Orientacoes</span>
+                        <span><i class="bi bi-question-circle"></i> Orientações</span>
                     </a>
                 </li>
 

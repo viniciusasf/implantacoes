@@ -73,6 +73,7 @@ $sql_tratativa = "
         DATEDIFF(NOW(), c.data_inicio_tratativa) as dias_em_tratativa
     FROM clientes c
     WHERE c.status_tratativa = 'em_tratativa'
+      AND (c.data_fim IS NULL OR c.data_fim = '0000-00-00')
     ORDER BY c.data_inicio_tratativa ASC";
 
 $clientes_tratativa = $pdo->query($sql_tratativa)->fetchAll();
@@ -81,6 +82,11 @@ include 'header.php';
 ?>
 
 <style>
+    .page-title {
+        font-size: 1.6rem;
+        letter-spacing: 0.2px;
+    }
+
     .card-alert { 
         border: none !important; 
         border-radius: 12px; 
@@ -137,13 +143,28 @@ include 'header.php';
         font-size: 0.7rem;
         margin-left: 6px;
     }
+
+    .summary-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .summary-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08) !important;
+    }
+
+    .pendencia-action-btn {
+        border-radius: 10px;
+        font-weight: 700;
+        min-height: 38px;
+    }
 </style>
 
 <div class="container-fluid py-4 bg-light min-vh-100">
     <!-- Cabeçalho -->
     <div class="row align-items-center mb-4">
         <div class="col">
-            <h4 class="fw-bold text-dark mb-1">Controle de Pendencias</h4>
+            <h3 class="page-title fw-bold text-dark mb-1"><i class="bi bi-clipboard-data me-2 text-primary"></i>Controle de Pendências</h3>
             <p class="text-muted small">Gerencie clientes sem treinamentos pendentes e em tratativa paralela</p>
         </div>
         <div class="col-auto">
@@ -163,7 +184,7 @@ include 'header.php';
     <!-- Cards de Resumo -->
     <div class="row mb-4">
         <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-3 border-start border-danger border-4">
+            <div class="card summary-card border-0 shadow-sm rounded-3 border-start border-danger border-4">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
@@ -180,7 +201,7 @@ include 'header.php';
         </div>
         
         <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-3 border-start border-warning border-4">
+            <div class="card summary-card border-0 shadow-sm rounded-3 border-start border-warning border-4">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
@@ -197,7 +218,7 @@ include 'header.php';
         </div>
         
         <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-3 border-start border-success border-4">
+            <div class="card summary-card border-0 shadow-sm rounded-3 border-start border-success border-4">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
@@ -291,13 +312,13 @@ include 'header.php';
                                                 <td class="text-end pe-4">
                                                     <div class="btn-group">
                                                         <a href="treinamentos.php?id_cliente=<?= $ci['id_cliente'] ?>" 
-                                                           class="btn btn-primary btn-sm px-3 fw-bold rounded-start-pill"
+                                                           class="btn btn-primary btn-sm px-3 pendencia-action-btn rounded-start-pill"
                                                            data-bs-toggle="tooltip"
                                                            data-bs-title="Agendar treinamento">
                                                             <i class="bi bi-calendar-plus me-1"></i> Agendar
                                                         </a>
                                                         <a href="?marcar_tratativa=<?= $ci['id_cliente'] ?>" 
-                                                           class="btn btn-warning btn-sm px-3 fw-bold rounded-end-pill"
+                                                           class="btn btn-warning btn-sm px-3 pendencia-action-btn rounded-end-pill"
                                                            data-bs-toggle="tooltip"
                                                            data-bs-title="Marcar como em tratativa (3 dias)"
                                                            onclick="return confirm('Marcar cliente como EM TRATATIVA? Ele retornará automaticamente após 3 dias.')">
@@ -399,13 +420,13 @@ include 'header.php';
                                                 <td class="text-end pe-4">
                                                     <div class="btn-group">
                                                         <a href="treinamentos.php?id_cliente=<?= $ct['id_cliente'] ?>" 
-                                                           class="btn btn-primary btn-sm px-3 fw-bold rounded-start-pill"
+                                                           class="btn btn-primary btn-sm px-3 pendencia-action-btn rounded-start-pill"
                                                            data-bs-toggle="tooltip"
                                                            data-bs-title="Agendar treinamento">
                                                             <i class="bi bi-calendar-plus me-1"></i> Agendar
                                                         </a>
                                                         <a href="?remover_tratativa=<?= $ct['id_cliente'] ?>" 
-                                                           class="btn btn-secondary btn-sm px-3 fw-bold rounded-end-pill"
+                                                           class="btn btn-secondary btn-sm px-3 pendencia-action-btn rounded-end-pill"
                                                            data-bs-toggle="tooltip"
                                                            data-bs-title="Retornar para pendente"
                                                            onclick="return confirm('Retornar cliente para PENDENTE?')">

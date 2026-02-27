@@ -90,6 +90,43 @@ function normalizarDataTreinamento($valor)
     }
 }
 
+function existeConflitoHorarioTreinamento(PDO $pdo, $dataTreinamento, $idTreinamentoAtual = null)
+{
+    $dataTreinamento = trim((string)$dataTreinamento);
+    if ($dataTreinamento === '') {
+        return false;
+    }
+
+    try {
+        $inicio = new DateTime($dataTreinamento, new DateTimeZone('America/Sao_Paulo'));
+    } catch (Throwable $e) {
+        return false;
+    }
+
+    $inicio->setTime((int)$inicio->format('H'), (int)$inicio->format('i'), 0);
+    $fim = clone $inicio;
+    $fim->modify('+1 minute');
+
+    $sql = "SELECT id_treinamento
+            FROM treinamentos
+            WHERE data_treinamento >= ?
+              AND data_treinamento < ?";
+    $params = [$inicio->format('Y-m-d H:i:s'), $fim->format('Y-m-d H:i:s')];
+
+    $idTreinamentoAtual = (int)$idTreinamentoAtual;
+    if ($idTreinamentoAtual > 0) {
+        $sql .= " AND id_treinamento <> ?";
+        $params[] = $idTreinamentoAtual;
+    }
+
+    $sql .= " LIMIT 1";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+
+    return (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+}
+
 function obterConvidadosCliente(PDO $pdo, $idCliente)
 {
     $colunaEmailContato = obterColunaEmailContato($pdo);
@@ -394,11 +431,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $tema = $_POST['tema'];
     $status = $_POST['status'];
     $data_treinamento = !empty($_POST['data_treinamento']) ? normalizarDataTreinamento($_POST['data_treinamento']) : null;
+    $id_treinamento_atual = isset($_POST['id_treinamento']) ? (int)$_POST['id_treinamento'] : 0;
     $has_google_event_link = array_key_exists('google_event_link', $_POST);
     $has_google_agenda_link = array_key_exists('google_agenda_link', $_POST);
     $google_event_link = $has_google_event_link && !empty($_POST['google_event_link']) ? trim($_POST['google_event_link']) : null;
     $google_agenda_link = $has_google_agenda_link && !empty($_POST['google_agenda_link']) ? trim($_POST['google_agenda_link']) : null;
     $tem_coluna_google_agenda = treinamentosTemColuna($pdo, 'google_agenda_link');
+
+    if (!empty($data_treinamento) && existeConflitoHorarioTreinamento($pdo, $data_treinamento, $id_treinamento_atual)) {
+        $dataFormatada = date('d/m/Y H:i', strtotime($data_treinamento));
+        $msgConflito = "Ja existe treinamento agendado para {$dataFormatada}. Escolha outra data/hora.";
+        header("Location: treinamentos.php?msg=" . urlencode($msgConflito) . "&tipo=warning");
+        exit;
+    }
 
     if (isset($_POST['id_treinamento']) && !empty($_POST['id_treinamento'])) {
         $campos_update = [
@@ -593,6 +638,27 @@ include 'header.php';
             </button>
         </div>
     </div>
+
+    <?php if (isset($_GET['msg']) && trim((string)$_GET['msg']) !== ''):
+        $tipoMensagem = isset($_GET['tipo']) ? strtolower((string)$_GET['tipo']) : 'success';
+        $classeMensagem = 'alert-success';
+        $iconeMensagem = 'bi-check-circle';
+        if ($tipoMensagem === 'warning') {
+            $classeMensagem = 'alert-warning';
+            $iconeMensagem = 'bi-exclamation-triangle';
+        } elseif ($tipoMensagem === 'error' || $tipoMensagem === 'danger') {
+            $classeMensagem = 'alert-danger';
+            $iconeMensagem = 'bi-x-circle';
+        } elseif ($tipoMensagem === 'info') {
+            $classeMensagem = 'alert-info';
+            $iconeMensagem = 'bi-info-circle';
+        }
+    ?>
+        <div class="alert <?= $classeMensagem ?> alert-dismissible fade show border-0 shadow-sm mb-4" role="alert">
+            <i class="bi <?= $iconeMensagem ?> me-2"></i><?= htmlspecialchars((string)$_GET['msg']) ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
 
     <!-- FILTRO POR CLIENTE -->
     <div class="row mb-4">

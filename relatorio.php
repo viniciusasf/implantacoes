@@ -148,9 +148,16 @@ function criarServicoGoogleCalendarStatus()
 
             $novoToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
             if (isset($novoToken['error'])) {
+                if ((string)$novoToken['error'] === 'invalid_grant') {
+                    return [null, 'token_revogado'];
+                }
                 return [null, 'falha_renovar_token'];
             }
-            file_put_contents($tokenPath, json_encode($client->getAccessToken()));
+            $tokenAtualizado = $client->getAccessToken();
+            if (empty($tokenAtualizado['refresh_token']) && !empty($refreshToken)) {
+                $tokenAtualizado['refresh_token'] = $refreshToken;
+            }
+            file_put_contents($tokenPath, json_encode($tokenAtualizado));
         }
 
         return [new Google\Service\Calendar($client), null];
@@ -194,10 +201,15 @@ function obterStatusConvitesGoogle(array $treinamentos)
 
     [$service, $erroServico] = criarServicoGoogleCalendarStatus();
     if (!$service) {
+        $labelErro = 'Sem validacao';
+        if ($erroServico === 'token_revogado' || $erroServico === 'token_expirado_sem_refresh') {
+            $labelErro = 'Reautenticar Google';
+        }
+
         foreach ($itensComEvento as $idTreinamento => $googleEventId) {
             $statusPorTreinamento[$idTreinamento] = [
                 'tipo' => 'erro',
-                'label' => 'Sem validacao',
+                'label' => $labelErro,
                 'badge' => 'bg-warning text-dark'
             ];
         }
@@ -371,6 +383,12 @@ $total_clientes = $pdo->query("SELECT COUNT(*) FROM clientes WHERE (data_fim IS 
 $total_treinamentos = $pdo->query("SELECT COUNT(*) FROM treinamentos")->fetchColumn();
 $treinamentos_pendentes = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE status = 'PENDENTE'")->fetchColumn();
 $treinamentos_resolvidos = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE status = 'Resolvido'")->fetchColumn();
+$total_pendencias_treinamentos = 0;
+try {
+    $total_pendencias_treinamentos = (int)$pdo->query("SELECT COUNT(*) FROM pendencias_treinamentos WHERE status_pendencia = 'ABERTA'")->fetchColumn();
+} catch (Throwable $e) {
+    $total_pendencias_treinamentos = 0;
+}
 
 // 3. Consulta de treinamentos pendentes
 $sql = "SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.telefone_ddd as cliente_telefone
@@ -387,6 +405,11 @@ $hoje_data = date('Y-m-d');
 ?>
 
 <style>
+    .page-title {
+        font-size: 1.6rem;
+        letter-spacing: 0.2px;
+    }
+
     .totalizador-card {
         transition: transform 0.25s ease, box-shadow 0.25s ease !important;
         cursor: pointer;
@@ -396,10 +419,23 @@ $hoje_data = date('Y-m-d');
         transform: translateY(-5px) !important;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12) !important;
     }
+
+    .report-modal .form-control,
+    .report-modal .form-select {
+        border-radius: 10px;
+        border: 2px solid #e9ecef;
+        transition: all 0.25s;
+    }
+
+    .report-modal .form-control:focus,
+    .report-modal .form-select:focus {
+        border-color: #4361ee;
+        box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+    }
 </style>
 
 <div class="mb-4">
-    <h2 class="fw-bold">Agendamentos</h2>
+    <h3 class="page-title fw-bold"><i class="bi bi-calendar2-week me-2 text-primary"></i>Agendamentos</h3>
     <p class="text-muted">GestÃ£o de Agendamentos.</p>
 </div>
 
@@ -471,7 +507,10 @@ $hoje_data = date('Y-m-d');
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
                 <h5 class="mb-0 fw-bold text-dark">Próximos Atendimentos (Pendentes)</h5>
                 <div class="d-flex gap-2">
-                    <a href="pendencias_treinamentos.php" class="btn btn-sm btn-outline-danger fw-bold">Pendencias de Treinamentos</a>
+                    <a href="pendencias_treinamentos.php" class="btn btn-sm btn-outline-danger fw-bold">
+                        Pendencias de Treinamentos
+                        <span class="badge rounded-pill bg-danger ms-1"><?= $total_pendencias_treinamentos ?></span>
+                    </a>
                     <a href="treinamentos.php" class="btn btn-sm btn-light text-primary fw-bold">Ver todos</a>
                 </div>
             </div>
@@ -537,6 +576,7 @@ $hoje_data = date('Y-m-d');
                                     $linhas_mensagem_whatsapp = array_merge($linhas_mensagem_whatsapp, [
                                         "",
                                         "Caso precise alterar a data ou o horário ou tenha alguma dúvida, é só me enviar uma mensagem.",
+                                        "No horário do treinamento vou precisar do TEAMVER ou ANYDESK para acesso remoto ao computador.",
                                         "",
                                         "Agradeço e nos vemos em breve! " . "\u{1F44B}"
                                     ]);
@@ -626,7 +666,7 @@ $hoje_data = date('Y-m-d');
 
 <div class="modal fade" id="modalEncerrar" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+        <form method="POST" class="modal-content border-0 shadow-lg report-modal" style="border-radius: 15px;">
             <div class="modal-header border-0 px-4 pt-4">
                 <h5 class="fw-bold text-dark"><i class="bi bi-journal-check me-2 text-success"></i>Finalizar Treinamento</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -671,7 +711,7 @@ $hoje_data = date('Y-m-d');
 
 <div class="modal fade" id="modalGoogleLink" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+        <form method="POST" class="modal-content border-0 shadow-lg report-modal" style="border-radius: 15px;">
             <div class="modal-header border-0 px-4 pt-4">
                 <h5 class="fw-bold text-dark"><i class="bi bi-calendar-event me-2 text-primary"></i>Link Google Agenda</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>

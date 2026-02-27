@@ -64,6 +64,67 @@ include 'header.php';
 ?>
 
 <style>
+.page-title {
+    font-size: 1.6rem;
+    letter-spacing: 0.2px;
+}
+
+.help-search-container {
+    position: relative;
+}
+
+.help-search-container .form-control {
+    height: 45px;
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+    padding-left: 45px;
+    transition: all 0.3s;
+}
+
+.help-search-container .form-control:focus {
+    border-color: #4361ee;
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+}
+
+.help-search-container .search-icon {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+    z-index: 10;
+}
+
+.filter-input {
+    height: 45px;
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+}
+
+.filter-input:focus {
+    border-color: #4361ee;
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+}
+
+.filter-btn {
+    height: 45px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+.help-modal .form-control,
+.help-modal .form-select {
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+    transition: all 0.25s;
+}
+
+.help-modal .form-control:focus,
+.help-modal .form-select:focus {
+    border-color: #4361ee;
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+}
+
 .collapse-icon {
     transition: transform 0.3s ease;
 }
@@ -74,10 +135,10 @@ include 'header.php';
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h2 class="fw-bold mb-0">Orientações do Sistema</h2>
+        <h3 class="page-title fw-bold mb-0"><i class="bi bi-journal-richtext me-2 text-primary"></i>Orientacoes do Sistema</h3>
         <p class="text-muted small mb-0">Guia passo a passo de procedimentos e dúvidas frequentes.</p>
     </div>
-    <button class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#modalOrientacao">
+    <button class="btn btn-primary shadow-sm filter-btn" data-bs-toggle="modal" data-bs-target="#modalOrientacao">
         <i class="bi bi-plus-lg me-2"></i>Nova Orientação
     </button>
 </div>
@@ -94,20 +155,18 @@ include 'header.php';
     <div class="card-body py-3">
         <form method="GET" class="row g-3 align-items-center">
             <div class="col-md-6">
-                <div class="input-group">
-                    <span class="input-group-text bg-white border-end-0">
-                        <i class="bi bi-search text-muted"></i>
-                    </span>
+                <div class="help-search-container">
+                    <i class="bi bi-search search-icon"></i>
                     <input type="text"
                         name="busca"
-                        class="form-control border-start-0 ps-0"
-                        placeholder="Buscar por título, descrição ou palavras-chave..."
+                        class="form-control"
+                        placeholder="Buscar por titulo, descricao ou palavras-chave..."
                         value="<?php echo htmlspecialchars($busca); ?>"
                         autofocus>
                 </div>
             </div>
             <div class="col-md-4">
-                <select name="filtro_categoria" class="form-select">
+                <select name="filtro_categoria" class="form-select filter-input">
                     <option value="">Todas as categorias</option>
                     <option value="Clientes" <?php echo $filtro_categoria == 'Clientes' ? 'selected' : ''; ?>>Clientes</option>
                     <option value="Contatos" <?php echo $filtro_categoria == 'Contatos' ? 'selected' : ''; ?>>Contatos</option>
@@ -118,11 +177,11 @@ include 'header.php';
                 </select>
             </div>
             <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-primary flex-fill">
+                <button type="submit" class="btn btn-primary filter-btn flex-fill">
                     <i class="bi bi-search me-1"></i>Buscar
                 </button>
                 <?php if (!empty($busca) || !empty($filtro_categoria)): ?>
-                    <a href="orientacoes.php" class="btn btn-outline-secondary" title="Limpar busca">
+                    <a href="orientacoes.php" class="btn btn-outline-secondary filter-btn" title="Limpar busca">
                         <i class="bi bi-x-lg"></i>
                     </a>
                 <?php endif; ?>
@@ -241,13 +300,13 @@ include 'header.php';
 <!-- Modal Orientação -->
 <div class="modal fade" id="modalOrientacao" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
+        <div class="modal-content border-0 shadow-lg help-modal">
             <form method="POST">
-                <div class="modal-header border-bottom-0 pb-0">
+                <div class="modal-header border-0 px-4 pt-4">
                     <h5 class="fw-bold" id="modalTitle">Nova Orientação</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body px-4 pt-2">
                     <input type="hidden" name="id_orientacao" id="id_orientacao">
 
                     <div class="row mb-3">
@@ -322,9 +381,9 @@ Exemplo:
                         <small class="text-muted">Separe por vírgulas. Facilita a busca e localização.</small>
                     </div>
                 </div>
-                <div class="modal-footer border-top-0">
-                    <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary px-4">Salvar Orientação</button>
+                <div class="modal-footer border-0 p-4 gap-2">
+                    <button type="button" class="btn btn-light fw-bold px-4" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Orientacao</button>
                 </div>
             </form>
         </div>

@@ -171,6 +171,67 @@ include 'header.php';
 
 <style>
 /* Estilos para as tarefas */
+.page-title {
+    font-size: 1.6rem;
+    letter-spacing: 0.2px;
+}
+
+.tasks-search-container {
+    position: relative;
+}
+
+.tasks-search-container .form-control {
+    height: 45px;
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+    padding-left: 45px;
+    transition: all 0.3s;
+}
+
+.tasks-search-container .form-control:focus {
+    border-color: #4361ee;
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+}
+
+.tasks-search-container .search-icon {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+    z-index: 10;
+}
+
+.filter-input {
+    height: 45px;
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+}
+
+.filter-input:focus {
+    border-color: #4361ee;
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+}
+
+.filter-btn {
+    height: 45px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+.tasks-modal .form-control,
+.tasks-modal .form-select {
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+    transition: all 0.25s;
+}
+
+.tasks-modal .form-control:focus,
+.tasks-modal .form-select:focus {
+    border-color: #4361ee;
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+}
+
 .status-badge {
     min-width: 120px;
     text-align: center;
@@ -327,10 +388,10 @@ include 'header.php';
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
-        <h2 class="fw-bold mb-0">Tarefas (Tasks)</h2>
+        <h3 class="page-title fw-bold mb-0"><i class="bi bi-list-task me-2 text-primary"></i>Tarefas</h3>
         <p class="text-muted small mb-0">Gerencie pendências e atividades das implantações.</p>
     </div>
-    <button class="btn btn-primary shadow-sm d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#modalTarefa">
+    <button class="btn btn-primary shadow-sm d-flex align-items-center filter-btn" data-bs-toggle="modal" data-bs-target="#modalTarefa">
         <i class="bi bi-plus-lg me-2"></i>Nova Tarefa
     </button>
 </div>
@@ -434,26 +495,24 @@ include 'header.php';
             <input type="hidden" name="mostrar_concluidas" value="<?= htmlspecialchars($mostrar_concluidas) ?>">
             
             <div class="col-md-4">
-                <div class="input-group">
-                    <span class="input-group-text bg-white border-end-0">
-                        <i class="bi bi-building text-muted"></i>
-                    </span>
+                <div class="tasks-search-container">
+                    <i class="bi bi-building search-icon"></i>
                     <input type="text" 
                            name="filtro_cliente" 
-                           class="form-control border-start-0 ps-0" 
+                           class="form-control" 
                            placeholder="Filtrar por cliente..."
                            value="<?php echo htmlspecialchars($filtro_cliente); ?>">
                 </div>
             </div>
             <div class="col-md-3">
-                <select name="filtro_responsavel" class="form-select">
+                <select name="filtro_responsavel" class="form-select filter-input">
                     <option value="">Todos os responsáveis</option>
                     <option value="GestãoPRO" <?php echo $filtro_responsavel == 'GestãoPRO' ? 'selected' : ''; ?>>GestãoPRO</option>
                     <option value="Cliente" <?php echo $filtro_responsavel == 'Cliente' ? 'selected' : ''; ?>>Cliente</option>
                 </select>
             </div>
             <div class="col-md-3">
-                <select name="filtro_status" class="form-select">
+                <select name="filtro_status" class="form-select filter-input">
                     <option value="">Todos os status</option>
                     <option value="Pendente" <?php echo $filtro_status == 'Pendente' ? 'selected' : ''; ?>>Pendente</option>
                     <option value="Em Andamento" <?php echo $filtro_status == 'Em Andamento' ? 'selected' : ''; ?>>Em Andamento</option>
@@ -463,12 +522,12 @@ include 'header.php';
                 </select>
             </div>
             <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-primary flex-fill d-flex align-items-center justify-content-center">
+                <button type="submit" class="btn btn-primary filter-btn flex-fill d-flex align-items-center justify-content-center">
                     <i class="bi bi-search me-2"></i>Filtrar
                 </button>
                 <?php if (!empty($filtro_cliente) || !empty($filtro_responsavel) || !empty($filtro_status)): ?>
                     <a href="tarefas.php?mostrar_concluidas=<?= $mostrar_concluidas ?>" 
-                       class="btn btn-outline-secondary d-flex align-items-center" 
+                       class="btn btn-outline-secondary filter-btn d-flex align-items-center" 
                        title="Limpar filtros">
                         <i class="bi bi-x-lg"></i>
                     </a>
@@ -814,15 +873,15 @@ include 'header.php';
 <!-- Modal Tarefa -->
 <div class="modal fade" id="modalTarefa" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
+        <div class="modal-content border-0 shadow-lg tasks-modal">
             <form method="POST">
-                <div class="modal-header border-bottom-0 pb-0">
+                <div class="modal-header border-0 px-4 pt-4">
                     <h5 class="fw-bold d-flex align-items-center" id="modalTitle">
                         <i class="bi bi-plus-circle me-2"></i>Nova Tarefa
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body px-4 pt-2">
                     <input type="hidden" name="id_tarefa" id="id_tarefa">
                     <div class="mb-3">
                         <label class="form-label fw-semibold small d-flex align-items-center">
@@ -887,11 +946,11 @@ include 'header.php';
                         <textarea name="descricao" id="descricao" class="form-control" rows="3" placeholder="Detalhes da tarefa..."></textarea>
                     </div>
                 </div>
-                <div class="modal-footer border-top-0">
-                    <button type="button" class="btn btn-light fw-bold d-flex align-items-center" data-bs-dismiss="modal">
+                <div class="modal-footer border-0 p-4 gap-2">
+                    <button type="button" class="btn btn-light fw-bold px-4 d-flex align-items-center" data-bs-dismiss="modal">
                         <i class="bi bi-x-lg me-1"></i>Cancelar
                     </button>
-                    <button type="submit" class="btn btn-primary px-4 d-flex align-items-center">
+                    <button type="submit" class="btn btn-primary fw-bold px-4 d-flex align-items-center">
                         <i class="bi bi-check-lg me-1"></i>Salvar Tarefa
                     </button>
                 </div>
