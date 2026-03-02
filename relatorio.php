@@ -359,6 +359,45 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['salvar_link_google']))
     exit;
 }
 
+$open_google_modal_id = isset($_GET['open_google_modal_id']) ? (int)$_GET['open_google_modal_id'] : 0;
+$open_google_modal_novo = isset($_GET['open_google_modal_novo']) && (string)$_GET['open_google_modal_novo'] === '1';
+$open_google_modal_cliente = '';
+$open_google_modal_link = '';
+
+if ($open_google_modal_id > 0) {
+    try {
+        $stmtTreinoModal = $pdo->prepare("
+            SELECT
+                t.id_treinamento,
+                c.fantasia AS cliente_nome,
+                t.google_agenda_link,
+                t.google_event_link
+            FROM treinamentos t
+            LEFT JOIN clientes c ON c.id_cliente = t.id_cliente
+            WHERE t.id_treinamento = ?
+            LIMIT 1
+        ");
+        $stmtTreinoModal->execute([$open_google_modal_id]);
+        $treinoModal = $stmtTreinoModal->fetch(PDO::FETCH_ASSOC);
+
+        if ($treinoModal) {
+            $open_google_modal_cliente = trim((string)($treinoModal['cliente_nome'] ?? ''));
+            if (!$open_google_modal_novo) {
+                $open_google_modal_link = trim((string)($treinoModal['google_agenda_link'] ?? ''));
+                if ($open_google_modal_link === '') {
+                    $open_google_modal_link = trim((string)($treinoModal['google_event_link'] ?? ''));
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        // segue sem auto-abertura se falhar
+    }
+
+    if ($open_google_modal_cliente === '') {
+        $open_google_modal_cliente = 'Treinamento #' . $open_google_modal_id;
+    }
+}
+
 // Consulta para clientes sem interaÃ§Ã£o hÃ¡ mais de 3 dias
 $sql_inatividade = "
     SELECT c.id_cliente, c.fantasia, MAX(t.data_treinamento) as Ãºltima_data, c.data_inicio
@@ -802,6 +841,37 @@ $hoje_data = date('Y-m-d');
             document.getElementById('google_event_link_relatorio').value = this.dataset.googleLink || '';
             new bootstrap.Modal(document.getElementById('modalGoogleLink')).show();
         });
+    });
+
+    const autoOpenGoogleModalId = <?= (int)$open_google_modal_id ?>;
+    const autoOpenGoogleModalCliente = <?= json_encode($open_google_modal_cliente, JSON_UNESCAPED_UNICODE) ?>;
+    const autoOpenGoogleModalLink = <?= json_encode($open_google_modal_link, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    function abrirModalGoogleAutomatico(tentativa = 0) {
+        if (autoOpenGoogleModalId <= 0) {
+            return;
+        }
+        if (!window.bootstrap || !window.bootstrap.Modal) {
+            if (tentativa < 15) {
+                setTimeout(function() {
+                    abrirModalGoogleAutomatico(tentativa + 1);
+                }, 120);
+            }
+            return;
+        }
+
+        document.getElementById('google_modal_id_treinamento').value = autoOpenGoogleModalId;
+        document.getElementById('google_modal_cliente_info').innerText = autoOpenGoogleModalCliente;
+        document.getElementById('google_event_link_relatorio').value = autoOpenGoogleModalLink || '';
+        new bootstrap.Modal(document.getElementById('modalGoogleLink')).show();
+
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('open_google_modal_id');
+        cleanUrl.searchParams.delete('open_google_modal_novo');
+        window.history.replaceState({}, document.title, cleanUrl.toString());
+    }
+
+    window.addEventListener('load', function() {
+        abrirModalGoogleAutomatico(0);
     });
 
     document.querySelectorAll('.copy-whatsapp-message').forEach(btn => {

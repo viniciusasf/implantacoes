@@ -1042,7 +1042,7 @@ include 'header.php';
             ['id' => 'integracao', 'label' => 'Integração', 'count' => $integracao, 'color' => '#0dcaf0', 'icon' => 'bi-rocket-takeoff', 'days' => '0-30d'],
             ['id' => 'operacional', 'label' => 'Operacional', 'count' => $operacional, 'color' => '#0d6efd', 'icon' => 'bi-gear', 'days' => '31-70d'],
             ['id' => 'finalizacao', 'label' => 'Finalização', 'count' => $finalizacao, 'color' => '#ffc107', 'icon' => 'bi-flag', 'days' => '71-91d'],
-            ['id' => 'critico', 'label' => 'Crí­tico', 'count' => $critico, 'color' => '#dc3545', 'icon' => 'bi-exclamation-triangle', 'days' => '> 91d']
+            ['id' => 'critico', 'label' => 'Cri­tico', 'count' => $critico, 'color' => '#dc3545', 'icon' => 'bi-exclamation-triangle', 'days' => '> 91d']
         ];
 
         // Adicionar card para encerrados somente se estiverem sendo mostrados
@@ -1121,7 +1121,7 @@ include 'header.php';
                         if ($dias <= 30) {
                             $status = 'integracao';
                             $status_color = '#0dcaf0';
-                            $status_label = 'IntegraÃ§Ã£o';
+                            $status_label = 'Integração';
                         } elseif ($dias <= 70) {
                             $status = 'operacional';
                             $status_color = '#0d6efd';
@@ -1129,23 +1129,23 @@ include 'header.php';
                         } elseif ($dias <= 91) {
                             $status = 'finalizacao';
                             $status_color = '#ffc107';
-                            $status_label = 'FinalizaÃ§Ã£o';
+                            $status_label = 'Finalização';
                         } else {
                             $status = 'critico';
                             $status_color = '#dc3545';
-                            $status_label = 'CrÃ­tico';
+                            $status_label = 'Cri­tico';
                         }
                         $progress = min(($dias / 91) * 100, 100);
                     } else {
                         $status = 'concluido';
                         $status_color = '#06d6a0';
-                        $status_label = 'ConcluÃ­do';
+                        $status_label = 'Concluido';
                         $progress = 100;
                     }
 
                     // Verificar configuraÃ§Ã£o NF
-                    $emitir_nf = isset($c['emitir_nf']) ? $c['emitir_nf'] : 'NÃ£o';
-                    $configurado = isset($c['configurado']) ? $c['configurado'] : 'NÃ£o';
+                    $emitir_nf = isset($c['emitir_nf']) ? $c['emitir_nf'] : 'Não';
+                    $configurado = isset($c['configurado']) ? $c['configurado'] : 'Não';
                 ?>
                     <div class="client-card fade-in <?= $cliente_encerrado ? 'encerrado' : '' ?>" style="--card-index: <?= $index ?>; animation-delay: calc(var(--card-index, 0) * 0.05s);">
                         <?php if ($cliente_encerrado): ?>
@@ -1188,7 +1188,7 @@ include 'header.php';
                                     <div class="fw-semibold text-truncate"><?= htmlspecialchars($c['vendedor']) ?></div>
                                 </div>
                                 <div class="compact-info-item">
-                                    <small class="text-muted">InÃ­cio</small>
+                                    <small class="text-muted">Ini­cio</small>
                                     <div class="fw-semibold"><?= date('d/m', strtotime($c['data_inicio'])) ?></div>
                                 </div>
                                 <div class="compact-info-item">
@@ -1209,7 +1209,7 @@ include 'header.php';
                                 <?php if (isset($c['num_licencas']) && $c['num_licencas'] > 0): ?>
                                     <div class="mt-1 small text-muted">
                                         <i class="bi bi-people me-1"></i>
-                                        <?= $c['num_licencas'] ?> licenÃ§a(s)
+                                        <?= $c['num_licencas'] ?> licençaa(s)
                                     </div>
                                 <?php endif; ?>
 
@@ -1258,21 +1258,21 @@ include 'header.php';
                                 <div class="action-buttons">
                                     <?php if (!$cliente_encerrado): ?>
                                         <!-- BOTÃƒO CONCLUIR - CORRIGIDO -->
-                                        <form method="GET" action="clientes.php" style="display: inline;" onsubmit="return confirm('Deseja marcar esta implantaÃ§Ã£o como CONCLUÃDA?');">
+                                        <form method="GET" action="clientes.php" style="display: inline;" onsubmit="return confirm('Deseja marcar esta implantação como CONCLUIDA?');">
                                             <input type="hidden" name="concluir" value="<?= $c['id_cliente'] ?>">
                                             <input type="hidden" name="view" value="<?= $view_mode ?>">
                                             <input type="hidden" name="mostrar_encerrados" value="<?= $mostrar_encerrados ?>">
-                                            <button type="submit" class="btn-action concluir" data-bs-toggle="tooltip" data-bs-title="Concluir ImplantaÃ§Ã£o">
+                                            <button type="submit" class="btn-action concluir" data-bs-toggle="tooltip" data-bs-title="Concluir Implantação">
                                                 <i class="bi bi-check-circle"></i>
                                             </button>
                                         </form>
 
                                         <!-- BOTÃƒO CANCELAR IMPLANTAÃ‡ÃƒO - CORRIGIDO -->
-                                        <form method="GET" action="clientes.php" style="display: inline;" onsubmit="return confirm('Deseja CANCELAR esta implantaÃ§Ã£o? Esta aÃ§Ã£o serÃ¡ registrada nas observaÃ§Ãµes.');">
+                                        <form method="GET" action="clientes.php" style="display: inline;" onsubmit="return confirm('Deseja CANCELAR esta implantação? Esta ação será registrada nas observações.');">
                                             <input type="hidden" name="cancelar" value="<?= $c['id_cliente'] ?>">
                                             <input type="hidden" name="view" value="<?= $view_mode ?>">
                                             <input type="hidden" name="mostrar_encerrados" value="<?= $mostrar_encerrados ?>">
-                                            <button type="submit" class="btn-action cancelar" data-bs-toggle="tooltip" data-bs-title="Cancelar ImplantaÃ§Ã£o">
+                                            <button type="submit" class="btn-action cancelar" data-bs-toggle="tooltip" data-bs-title="Cancelar Implantação">
                                                 <i class="bi bi-x-circle"></i>
                                             </button>
                                         </form>
@@ -1330,10 +1330,10 @@ include 'header.php';
                         <th class="ps-4">Cliente / Servidor</th>
                         <th>Vendedor</th>
                         <th>Status</th>
-                        <th>InÃ­cio</th>
+                        <th>Inicio</th>
                         <th>Dias</th>
                         <th>Treinamentos</th>
-                        <th class="text-center pe-4">AÃ§Ãµes</th>
+                        <th class="text-center pe-4">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1376,20 +1376,20 @@ include 'header.php';
                                 $status_color = '#6c757d';
                             } elseif (empty($c['data_fim']) || $c['data_fim'] === '0000-00-00') {
                                 if ($dias <= 30) {
-                                    $status = 'IntegraÃ§Ã£o';
+                                    $status = 'Integração';
                                     $status_color = '#0dcaf0';
                                 } elseif ($dias <= 70) {
                                     $status = 'Operacional';
                                     $status_color = '#0d6efd';
                                 } elseif ($dias <= 91) {
-                                    $status = 'FinalizaÃ§Ã£o';
+                                    $status = 'Finalização';
                                     $status_color = '#ffc107';
                                 } else {
-                                    $status = 'CrÃ­tico';
+                                    $status = 'Crítico';
                                     $status_color = '#dc3545';
                                 }
                             } else {
-                                $status = 'ConcluÃ­do';
+                                $status = 'Concluido';
                                 $status_color = '#06d6a0';
                             }
                         ?>
@@ -1475,8 +1475,8 @@ include 'header.php';
                                             <a href="?cancelar=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>"
                                                 class="btn-action cancelar"
                                                 data-bs-toggle="tooltip"
-                                                data-bs-title="Cancelar ImplantaÃ§Ã£o"
-                                                onclick="event.stopPropagation(); return confirm('Deseja CANCELAR esta implantaÃ§Ã£o? Esta aÃ§Ã£o serÃ¡ registrada nas observaÃ§Ãµes.');">
+                                                data-bs-title="Cancelar Implantação"
+                                                onclick="event.stopPropagation(); return confirm('Deseja CANCELAR esta implantação? Esta ação será registrada nas observações.');">
                                                 <i class="bi bi-x-circle"></i>
                                             </a>
                                         <?php endif; ?>
@@ -1569,13 +1569,13 @@ include 'header.php';
                     <!-- Linha 3: Datas -->
                     <div class="col-md-6">
                         <label class="form-label small fw-bold">
-                            <i class="bi bi-calendar-plus me-1"></i>Data InÃ­cio
+                            <i class="bi bi-calendar-plus me-1"></i>Data Ini­cio
                         </label>
                         <input type="date" name="data_inicio" id="data_inicio" class="form-control" required>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label small fw-bold">
-                            <i class="bi bi-calendar-check me-1"></i>Data ConclusÃ£o
+                            <i class="bi bi-calendar-check me-1"></i>Data Conclusão
                         </label>
                         <input type="date" name="data_fim" id="id_data_fim" class="form-control">
                     </div>
@@ -1586,7 +1586,7 @@ include 'header.php';
                             <i class="bi bi-receipt me-1"></i>Emitir nota fiscal
                         </label>
                         <select name="emitir_nf" id="emitir_nf" class="form-select" onchange="toggleConfigurado(this.value)">
-                            <option value="NÃ£o">NÃ£o</option>
+                            <option value="NÃ£o">Não</option>
                             <option value="Sim">Sim</option>
                         </select>
                     </div>
@@ -1595,7 +1595,7 @@ include 'header.php';
                             <i class="bi bi-gear me-1"></i>Configurado
                         </label>
                         <select name="configurado" id="configurado" class="form-select">
-                            <option value="NÃ£o">NÃ£o</option>
+                            <option value="NÃ£o">Não</option>
                             <option value="Sim">Sim</option>
                         </select>
                     </div>
@@ -1604,7 +1604,7 @@ include 'header.php';
                     <!-- NOVA LINHA 5: NÃºmero de LicenÃ§as e Anexo COM BOTÃƒO PARA ABRIR LINK -->
                     <div class="col-md-6">
                         <label class="form-label small fw-bold">
-                            <i class="bi bi-people me-1"></i>NÃºmero de LicenÃ§as
+                            <i class="bi bi-people me-1"></i>Numero de Licenças
                         </label>
                         <div class="input-group">
                             <span class="input-group-text bg-light border-end-0">
@@ -1619,7 +1619,7 @@ include 'header.php';
                                 step="1"
                                 value="0">
                         </div>
-                        <small class="text-muted">Quantidade de licenÃ§as contratadas</small>
+                        <small class="text-muted">Quantidade de licenças contratadas</small>
                     </div>
 
                     <div class="col-md-6">
@@ -1655,10 +1655,10 @@ include 'header.php';
                     <!-- Linha 6: ObservaÃ§Ãµes (ocupando linha inteira) -->
                     <div class="col-12">
                         <label class="form-label small fw-bold">
-                            <i class="bi bi-chat-left-text me-1"></i>ObservaÃ§Ãµes
+                            <i class="bi bi-chat-left-text me-1"></i>Observaçoes
                         </label>
                         <textarea name="observacao" id="observacao" class="form-control"
-                            rows="3" placeholder="InformaÃ§Ãµes adicionais sobre o cliente..."></textarea>
+                            rows="3" placeholder="Informações adicionais sobre o cliente..."></textarea>
                     </div>
                 </div>
             </div>
@@ -1709,7 +1709,7 @@ include 'header.php';
 
         setTimeout(function() {
             const btns = document.querySelectorAll('.edit-btn');
-            console.log('VerificaÃ§Ã£o tardia - BotÃµes encontrados:', btns.length);
+            console.log('Verificação tardia - Botoes encontrados:', btns.length);
         }, 2000);
     });
 

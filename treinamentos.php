@@ -275,6 +275,7 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
 
         $googleEventId = $createdEvent->getId();
         $googleMeetLink = $createdEvent->getHangoutLink();
+        $googleAgendaLink = trim((string)$createdEvent->htmlLink);
 
         if (empty($googleMeetLink)) {
             $conferenceData = $createdEvent->getConferenceData();
@@ -289,13 +290,23 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
         }
 
         if (empty($googleMeetLink)) {
-            $googleMeetLink = $createdEvent->htmlLink;
+            $googleMeetLink = $googleAgendaLink;
         }
 
-        $stmtUpdate = $pdo->prepare("UPDATE treinamentos SET google_event_id = ?, google_event_link = ? WHERE id_treinamento = ?");
-        $stmtUpdate->execute([$googleEventId, $googleMeetLink, $idTreinamento]);
+        if (treinamentosTemColuna($pdo, 'google_agenda_link')) {
+            $stmtUpdate = $pdo->prepare("UPDATE treinamentos SET google_event_id = ?, google_event_link = ?, google_agenda_link = ? WHERE id_treinamento = ?");
+            $stmtUpdate->execute([$googleEventId, $googleMeetLink, $googleAgendaLink, $idTreinamento]);
+        } else {
+            $stmtUpdate = $pdo->prepare("UPDATE treinamentos SET google_event_id = ?, google_event_link = ? WHERE id_treinamento = ?");
+            $stmtUpdate->execute([$googleEventId, $googleMeetLink, $idTreinamento]);
+        }
 
-        return ['success' => true, 'message' => 'Google Meet criado com sucesso.'];
+        return [
+            'success' => true,
+            'message' => 'Google Meet criado com sucesso.',
+            'google_event_link' => $googleMeetLink,
+            'google_agenda_link' => $googleAgendaLink
+        ];
     } catch (Throwable $e) {
         return ['success' => false, 'message' => $e->getMessage()];
     }
@@ -429,6 +440,8 @@ if (isset($_GET['delete'])) {
 
 // Lógica para Adicionar/Editar
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $abrirGoogleAgendaLink = '';
+    $abrirGoogleAgendaTreinamentoId = 0;
     $id_cliente = $_POST['id_cliente'];
     $id_contato = $_POST['id_contato'];
     $tema = $_POST['tema'];
@@ -492,14 +505,46 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if (!empty($syncResult['success'])) {
             $msg = "Treinamento adicionado e sincronizado com Google Meet";
+            if (!empty($syncResult['google_agenda_link'])) {
+                $abrirGoogleAgendaLink = trim((string)$syncResult['google_agenda_link']);
+                $abrirGoogleAgendaTreinamentoId = $novo_id_treinamento;
+            }
         } elseif (!empty($syncResult['message'])) {
             $msg = "Treinamento adicionado. Link Google Meet não gerado automaticamente: " . $syncResult['message'];
         } else {
             $msg = "Treinamento adicionado com sucesso";
         }
     }
-    header("Location: treinamentos.php?msg=" . urlencode($msg) . "&tipo=success");
+    $redirectUrl = "treinamentos.php?msg=" . urlencode($msg) . "&tipo=success";
+    if ($abrirGoogleAgendaLink !== '') {
+        $redirectUrl .= "&open_google_agenda=" . urlencode($abrirGoogleAgendaLink);
+        $redirectUrl .= "&open_google_agenda_treinamento_id=" . (int)$abrirGoogleAgendaTreinamentoId;
+        $redirectUrl .= "&open_google_modal_novo=1";
+    }
+    header("Location: " . $redirectUrl);
     exit;
+}
+
+$open_google_agenda = '';
+$open_google_agenda_treinamento_id = 0;
+if (!empty($_GET['open_google_agenda'])) {
+    $open_google_agenda_candidate = trim((string)$_GET['open_google_agenda']);
+    if (filter_var($open_google_agenda_candidate, FILTER_VALIDATE_URL)) {
+        $parsedAgendaUrl = parse_url($open_google_agenda_candidate);
+        $agendaScheme = strtolower((string)($parsedAgendaUrl['scheme'] ?? ''));
+        $agendaHost = strtolower((string)($parsedAgendaUrl['host'] ?? ''));
+        $agendaPath = (string)($parsedAgendaUrl['path'] ?? '');
+
+        $hostValido = in_array($agendaHost, ['calendar.google.com', 'www.google.com', 'google.com'], true);
+        $pathValido = ($agendaHost === 'calendar.google.com') || (stripos($agendaPath, '/calendar/') === 0);
+
+        if ($agendaScheme === 'https' && $hostValido && $pathValido) {
+            $open_google_agenda = $open_google_agenda_candidate;
+        }
+    }
+}
+if (!empty($_GET['open_google_agenda_treinamento_id'])) {
+    $open_google_agenda_treinamento_id = (int)$_GET['open_google_agenda_treinamento_id'];
 }
 
 // Ordenação
@@ -1284,6 +1329,21 @@ include 'header.php';
 <script>
     // Inicializar tooltips
     document.addEventListener('DOMContentLoaded', function() {
+        const openGoogleAgendaLink = <?= json_encode($open_google_agenda, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+        const openGoogleAgendaTreinamentoId = <?= (int)$open_google_agenda_treinamento_id ?>;
+        if (openGoogleAgendaLink) {
+            const win = window.open(openGoogleAgendaLink, '_blank', 'noopener');
+            if (!win) {
+                alert('O navegador bloqueou a abertura em nova guia. Libere pop-ups para este site e tente novamente.');
+            }
+            if (openGoogleAgendaTreinamentoId > 0) {
+                const relatorioUrl = 'relatorio.php?open_google_modal_id=' + openGoogleAgendaTreinamentoId + '&open_google_modal_novo=1';
+                setTimeout(function() {
+                    window.location.href = relatorioUrl;
+                }, 450);
+            }
+        }
+
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
         var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl)
