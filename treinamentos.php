@@ -1316,6 +1316,17 @@ include 'header.php';
                         </select>
                     </div>
                 </div>
+                <div class="mt-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <label class="form-label small fw-bold text-muted mb-0">Horarios disponiveis (hoje +3 dias)</label>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btn_buscar_disponibilidade">
+                            <i class="bi bi-calendar-week me-1"></i>Atualizar
+                        </button>
+                    </div>
+                    <div id="disponibilidade_resultado" class="border rounded-3 p-2 bg-light small text-muted">
+                        Clique em "Atualizar" para listar os horarios livres.
+                    </div>
+                </div>
 
             </div>
             <div class="modal-footer border-0 p-4">
@@ -1388,6 +1399,91 @@ include 'header.php';
     }
 
     // Função para copiar link do Google Agenda (na tabela)
+    function renderDisponibilidade(container, diasDisponiveis) {
+        container.innerHTML = '';
+
+        if (!Array.isArray(diasDisponiveis) || diasDisponiveis.length === 0) {
+            container.innerHTML = '<div class="text-muted">Nenhuma disponibilidade encontrada no periodo.</div>';
+            return;
+        }
+
+        let totalHorarios = 0;
+        diasDisponiveis.forEach((dia) => {
+            const bloco = document.createElement('div');
+            bloco.className = 'mb-2';
+
+            const titulo = document.createElement('div');
+            titulo.className = 'fw-bold text-dark mb-1';
+            titulo.textContent = dia.data_label || dia.data || 'Dia';
+            bloco.appendChild(titulo);
+
+            const wrap = document.createElement('div');
+            wrap.className = 'd-flex flex-wrap gap-1';
+            const horarios = Array.isArray(dia.horarios) ? dia.horarios : [];
+
+            if (horarios.length === 0) {
+                const vazio = document.createElement('span');
+                vazio.className = 'text-muted';
+                vazio.textContent = 'Sem horarios livres.';
+                wrap.appendChild(vazio);
+            } else {
+                totalHorarios += horarios.length;
+                horarios.forEach((slot) => {
+                    const botao = document.createElement('button');
+                    botao.type = 'button';
+                    botao.className = 'btn btn-sm btn-outline-success';
+                    botao.textContent = slot.hora || '--:--';
+                    botao.dataset.datetime = slot.datetime_local || '';
+                    botao.addEventListener('click', function() {
+                        const dataTreinamentoInput = document.getElementById('data_treinamento');
+                        if (dataTreinamentoInput && this.dataset.datetime) {
+                            dataTreinamentoInput.value = this.dataset.datetime;
+                            dataTreinamentoInput.dispatchEvent(new Event('change'));
+                        }
+                    });
+                    wrap.appendChild(botao);
+                });
+            }
+
+            bloco.appendChild(wrap);
+            container.appendChild(bloco);
+        });
+
+        if (totalHorarios === 0) {
+            container.insertAdjacentHTML('beforeend', '<div class="text-danger mt-1">Nao ha horarios livres para hoje +3 dias.</div>');
+        }
+    }
+
+    function carregarDisponibilidadeGoogle() {
+        const container = document.getElementById('disponibilidade_resultado');
+        const botao = document.getElementById('btn_buscar_disponibilidade');
+        if (!container || !botao) {
+            return;
+        }
+
+        botao.disabled = true;
+        container.innerHTML = '<div class="text-muted">Consultando Google Agenda...</div>';
+
+        fetch('google_calendar_disponibilidade.php?dias=3&duracao_min=60', {
+                cache: 'no-store'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data || !data.success) {
+                    const erro = data && data.message ? data.message : 'Falha ao carregar disponibilidade.';
+                    container.innerHTML = '<div class="text-danger">' + erro + '</div>';
+                    return;
+                }
+                renderDisponibilidade(container, data.dias_disponiveis || []);
+            })
+            .catch(() => {
+                container.innerHTML = '<div class="text-danger">Erro na comunicacao com o servidor.</div>';
+            })
+            .finally(() => {
+                botao.disabled = false;
+            });
+    }
+
     function copiarLinkAgenda(link, clienteNome = '') {
         navigator.clipboard.writeText(link).then(() => {
             // Atualizar mensagem do toast
@@ -1512,9 +1608,22 @@ include 'header.php';
             document.getElementById('data_treinamento').value = this.dataset.data;
 
             filterContatos(this.dataset.cliente, this.dataset.contato);
+            carregarDisponibilidadeGoogle();
             new bootstrap.Modal(document.getElementById('modalTreinamento')).show();
         });
     });
+
+    const btnBuscarDisponibilidade = document.getElementById('btn_buscar_disponibilidade');
+    if (btnBuscarDisponibilidade) {
+        btnBuscarDisponibilidade.addEventListener('click', carregarDisponibilidadeGoogle);
+    }
+
+    const modalTreinamento = document.getElementById('modalTreinamento');
+    if (modalTreinamento) {
+        modalTreinamento.addEventListener('shown.bs.modal', function() {
+            carregarDisponibilidadeGoogle();
+        });
+    }
 
     // Reset modal quando fechado
     document.getElementById('modalTreinamento').addEventListener('hidden.bs.modal', function() {
@@ -1531,6 +1640,11 @@ include 'header.php';
         const now = new Date();
         const pad = (n) => String(n).padStart(2, '0');
         document.getElementById('data_treinamento').value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+        const container = document.getElementById('disponibilidade_resultado');
+        if (container) {
+            container.innerHTML = 'Clique em "Atualizar" para listar os horarios livres.';
+        }
     });
 </script>
 
