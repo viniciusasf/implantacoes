@@ -260,7 +260,7 @@ try {
 
                 <li class="<?= $current_page == 'relatorio.php' ? 'active' : '' ?>">
                     <a href="relatorio.php">
-                        <span><i class="bi bi-bar-chart-line"></i> Agendamentos</span>
+                        <span><i class="bi bi-bar-chart-line"></i> Treinamentos</span>
                         <?php if ($total_treinamentos_pendentes > 0): ?>
                             <span class="badge rounded-pill badge-dashboard badge-notify" title="Treinamentos pendentes"><?= $total_treinamentos_pendentes ?></span>
                         <?php endif; ?>
@@ -269,7 +269,7 @@ try {
 
                 <li class="<?= $current_page == 'treinamentos.php' ? 'active' : '' ?>">
                     <a href="treinamentos.php">
-                        <span><i class="bi bi-mortarboard"></i> Treinamentos</span>
+                        <span><i class="bi bi-mortarboard"></i> Agendamentos</span>
                         <?php if ($total_hoje > 0): ?>
                             <span class="badge rounded-pill bg-info text-dark badge-notify" title="Para hoje"><?= $total_hoje ?></span>
                         <?php endif; ?>
