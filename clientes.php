@@ -1021,13 +1021,13 @@ include 'header.php';
                     <button class="view-toggle-btn <?= $view_mode == 'cards' ? 'active' : '' ?>"
                         onclick="changeViewMode('cards')"
                         data-bs-toggle="tooltip"
-                        data-bs-title="VisualizaÃ§Ã£o em cards">
+                        data-bs-title="Visualização em cards">
                         <i class="bi bi-grid-3x3-gap"></i>
                     </button>
                     <button class="view-toggle-btn <?= $view_mode == 'list' ? 'active' : '' ?>"
                         onclick="changeViewMode('list')"
                         data-bs-toggle="tooltip"
-                        data-bs-title="VisualizaÃ§Ã£o em lista">
+                        data-bs-title="Visualização em lista">
                         <i class="bi bi-list"></i>
                     </button>
                 </div>
@@ -1084,7 +1084,7 @@ include 'header.php';
                         <i class="bi bi-people empty-state-icon"></i>
                         <?php if (!empty($busca)): ?>
                             <h5 class="fw-bold mb-2">Nenhum cliente encontrado</h5>
-                            <p class="mb-3">NÃ£o foram encontrados clientes com "<?= htmlspecialchars($busca) ?>"</p>
+                            <p class="mb-3">Não foram encontrados clientes com "<?= htmlspecialchars($busca) ?>"</p>
                             <a href="clientes.php?view=cards&mostrar_encerrados=<?= $mostrar_encerrados ?>" class="btn btn-outline-primary">
                                 <i class="bi bi-arrow-counterclockwise me-1"></i>Limpar busca
                             </a>
@@ -1228,7 +1228,7 @@ include 'header.php';
                                             data-bs-title="Abrir link do Google Drive">
                                             <i class="bi bi-google"></i>
                                         </a>
-                                        <span class="mx-1 text-muted">â€¢</span>
+                                        <span class="mx-1 text-muted">Google</span>
                                         <button class="btn btn-sm btn-link text-primary p-0 small"
                                             onclick="copiarLinkCard('<?= htmlspecialchars($c['anexo']) ?>', event)"
                                             data-bs-toggle="tooltip"
@@ -1344,7 +1344,7 @@ include 'header.php';
                                     <i class="bi bi-people empty-state-icon"></i>
                                     <?php if (!empty($busca)): ?>
                                         <h5 class="fw-bold mb-2">Nenhum cliente encontrado</h5>
-                                        <p class="mb-3">NÃ£o foram encontrados clientes com "<?= htmlspecialchars($busca) ?>"</p>
+                                        <p class="mb-3">Não foram encontrados clientes com "<?= htmlspecialchars($busca) ?>"</p>
                                         <a href="clientes.php?view=list&mostrar_encerrados=<?= $mostrar_encerrados ?>" class="btn btn-outline-primary">
                                             <i class="bi bi-arrow-counterclockwise me-1"></i>Limpar busca
                                         </a>
@@ -1466,7 +1466,7 @@ include 'header.php';
                                             <a href="?concluir=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>"
                                                 class="btn-action concluir"
                                                 data-bs-toggle="tooltip"
-                                                data-bs-title="Concluir ImplantaÃ§Ã£o"
+                                                data-bs-title="Concluir Implantação"
                                                 onclick="event.stopPropagation(); return confirm('Deseja marcar esta implantaÃ§Ã£o como CONCLUÃDA?');">
                                                 <i class="bi bi-check-circle"></i>
                                             </a>
@@ -1756,8 +1756,8 @@ include 'header.php';
         document.getElementById('anexo').value = button.dataset.anexo || '';
 
         // Campos de NF e Configurado
-        const nf = button.dataset.emitir_nf || 'NÃ£o';
-        const conf = button.dataset.configurado || 'NÃ£o';
+        const nf = button.dataset.emitir_nf || 'Não';
+        const conf = button.dataset.configurado || 'Não';
 
         document.getElementById('emitir_nf').value = nf;
         document.getElementById('configurado').value = conf;
