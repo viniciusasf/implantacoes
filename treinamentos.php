@@ -1408,6 +1408,7 @@ include 'header.php';
         }
 
         let totalHorarios = 0;
+        let proximoHorario = null;
         diasDisponiveis.forEach((dia) => {
             const bloco = document.createElement('div');
             bloco.className = 'mb-2';
@@ -1429,9 +1430,18 @@ include 'header.php';
             } else {
                 totalHorarios += horarios.length;
                 horarios.forEach((slot) => {
+                    if (!proximoHorario && slot.datetime_local) {
+                        proximoHorario = {
+                            datetime_local: slot.datetime_local,
+                            data_label: dia.data_label || dia.data || '',
+                            hora: slot.hora || '--:--'
+                        };
+                    }
+
                     const botao = document.createElement('button');
                     botao.type = 'button';
-                    botao.className = 'btn btn-sm btn-outline-success';
+                    const isProximo = proximoHorario && proximoHorario.datetime_local === slot.datetime_local;
+                    botao.className = isProximo ? 'btn btn-sm btn-success' : 'btn btn-sm btn-outline-success';
                     botao.textContent = slot.hora || '--:--';
                     botao.dataset.datetime = slot.datetime_local || '';
                     botao.addEventListener('click', function() {
@@ -1448,6 +1458,13 @@ include 'header.php';
             bloco.appendChild(wrap);
             container.appendChild(bloco);
         });
+
+        if (proximoHorario) {
+            const destaque = document.createElement('div');
+            destaque.className = 'alert alert-success py-2 px-3 mb-2';
+            destaque.innerHTML = '<strong>Proximo horario livre:</strong> ' + proximoHorario.data_label + ' ' + proximoHorario.hora;
+            container.insertBefore(destaque, container.firstChild);
+        }
 
         if (totalHorarios === 0) {
             container.insertAdjacentHTML('beforeend', '<div class="text-danger mt-1">Nao ha horarios livres para hoje +3 dias.</div>');

@@ -28,12 +28,7 @@ try {
         $dias = 14;
     }
 
-    $duracaoMin = isset($_GET['duracao_min']) ? (int)$_GET['duracao_min'] : 60;
-    if ($duracaoMin < 15) {
-        $duracaoMin = 15;
-    } elseif ($duracaoMin > 240) {
-        $duracaoMin = 240;
-    }
+    $duracaoMin = 60;
 
     $agora = new DateTime('now', $timezone);
     $windowStart = clone $agora;
@@ -94,8 +89,19 @@ try {
     $diasDisponiveis = [];
     for ($offset = 0; $offset <= $dias; $offset++) {
         $dia = (clone $agora)->modify('+' . $offset . ' days');
-        $inicioDia = (clone $dia)->setTime(8, 0, 0);
-        $fimDia = (clone $dia)->setTime(18, 0, 0);
+        // Regra comercial: apenas segunda a sexta, das 08:30 às 17:30.
+        $diaSemana = (int)$dia->format('N');
+        if ($diaSemana > 5) {
+            $diasDisponiveis[] = [
+                'data' => $dia->format('Y-m-d'),
+                'data_label' => $dia->format('d/m/Y'),
+                'horarios' => [],
+            ];
+            continue;
+        }
+
+        $inicioDia = (clone $dia)->setTime(8, 30, 0);
+        $fimDia = (clone $dia)->setTime(17, 30, 0);
 
         if ((int)$dia->format('Ymd') === (int)$agora->format('Ymd')) {
             if ($agora > $inicioDia) {
