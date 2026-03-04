@@ -117,12 +117,15 @@ try {
 
         $horarios = [];
         $cursor = clone $inicioDia;
+        $inicioAlmoco = (clone $dia)->setTime(12, 30, 0);
+        $fimAlmoco = (clone $dia)->setTime(13, 30, 0);
         while ($cursor < $fimDia) {
             $slotEnd = (clone $cursor)->modify('+' . $duracaoMin . ' minutes');
             if ($slotEnd > $fimDia) {
                 break;
             }
-            if (!hasOverlap($cursor, $slotEnd, $busyIntervals)) {
+            $conflitaComAlmoco = ($cursor < $fimAlmoco && $slotEnd > $inicioAlmoco);
+            if (!$conflitaComAlmoco && !hasOverlap($cursor, $slotEnd, $busyIntervals)) {
                 $horarios[] = [
                     'datetime_local' => $cursor->format('Y-m-d\TH:i'),
                     'hora' => $cursor->format('H:i'),

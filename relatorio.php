@@ -597,27 +597,27 @@ $hoje_data = date('Y-m-d');
                                     $data_treinamento_formatada = date('d/m/Y', strtotime($t['data_treinamento']));
                                     $horario_treinamento_formatado = date('H:i', strtotime($t['data_treinamento']));
                                     $linhas_mensagem_whatsapp = [
-                                        "Olá, " . $nome_whatsapp . "!",
+                                        "Olá, " . $nome_whatsapp . "! " . "\u{1F44B}",
                                         "",
-                                        "_" . "\u{2705}" . " Treinamento GestãoPRO agendado com sucesso!_",
-                                        "*" . "\u{1F4C5}" . " Data: " . $data_treinamento_formatada . "*",
-                                        "*" . "\u{1F552}" . " Horário: " . $horario_treinamento_formatado . "*",
-                                        "\u{1F3AF}" . " Tema: " . $t['tema'],
+                                        "\u{2705} Seu treinamento GestãoPRO está confirmado!",
                                         "",
-                                        "\u{1F4BB}" . " Acesse a reunião pelo Google Meet:",
+                                        "\u{1F4C5} Data: " . $data_treinamento_formatada,
+                                        "\u{1F552} Horário: " . $horario_treinamento_formatado,
+                                        "\u{1F3AF} Tema: " . $t['tema'],
+                                        "",
+                                        "\u{1F4BB} Acesse pelo Google Meet:",
                                         ($google_meet_link !== '' ? $google_meet_link : 'não informado'),
                                     ];
                                     if ($google_agenda_link !== '') {
                                         $linhas_mensagem_whatsapp[] = "";
-                                        $linhas_mensagem_whatsapp[] = "\u{1F4C6} Adicione ao Google Agenda:";
+                                        $linhas_mensagem_whatsapp[] = "\u{1F4C6} Adicione à sua agenda:";
                                         $linhas_mensagem_whatsapp[] = $google_agenda_link;
                                     }
                                     $linhas_mensagem_whatsapp = array_merge($linhas_mensagem_whatsapp, [
                                         "",
-                                        "Caso precise alterar a data ou o horário ou tenha alguma dúvida, é só me enviar uma mensagem.",
-                                        "No horário do treinamento vou precisar do TEAMVER ou ANYDESK para acesso remoto ao computador.",
+                                        "\u{1F4CC} *Lembrete importante:* no momento do treinamento, tenha o *TeamViewer* ou *AnyDesk* instalado e pronto para uso - precisarei de acesso remoto ao seu computador.",
                                         "",
-                                        "Agradeço e nos vemos em breve! " . "\u{1F44B}"
+                                        "Qualquer dúvida ou necessidade de reagendamento, é só me chamar aqui. Até lá! " . "\u{1F680}"
                                     ]);
                                     $mensagem_whatsapp = implode("\n", $linhas_mensagem_whatsapp);
                                     if (!preg_match('//u', $mensagem_whatsapp)) {

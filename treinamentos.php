@@ -1319,9 +1319,14 @@ include 'header.php';
                 <div class="mt-3">
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <label class="form-label small fw-bold text-muted mb-0">Horarios disponiveis (hoje +3 dias)</label>
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="btn_buscar_disponibilidade">
-                            <i class="bi bi-calendar-week me-1"></i>Atualizar
-                        </button>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-success" id="btn_copiar_disponibilidade" disabled>
+                                <i class="bi bi-whatsapp me-1"></i>Copiar tabela p/ cliente
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btn_buscar_disponibilidade">
+                                <i class="bi bi-calendar-week me-1"></i>Atualizar
+                            </button>
+                        </div>
                     </div>
                     <div id="disponibilidade_resultado" class="border rounded-3 p-2 bg-light small text-muted">
                         Clique em "Atualizar" para listar os horarios livres.
@@ -1399,6 +1404,80 @@ include 'header.php';
     }
 
     // Função para copiar link do Google Agenda (na tabela)
+    let diasDisponibilidadeAtual = [];
+    let disponibilidadeFoiCarregada = false;
+
+    function atualizarBotaoCopiarDisponibilidade() {
+        const botao = document.getElementById('btn_copiar_disponibilidade');
+        if (!botao) {
+            return;
+        }
+        botao.disabled = !disponibilidadeFoiCarregada;
+    }
+
+    function copiarTextoAreaTransferencia(texto, mensagemSucesso) {
+        navigator.clipboard.writeText(texto).then(() => {
+            document.getElementById('toastMessage').textContent = mensagemSucesso;
+            const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+            toast.show();
+        }).catch(() => {
+            const textArea = document.createElement('textarea');
+            textArea.value = texto;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                document.getElementById('toastMessage').textContent = mensagemSucesso;
+                const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+                toast.show();
+            } catch (err) {
+                alert('Nao foi possivel copiar. Tente novamente.');
+            }
+            document.body.removeChild(textArea);
+        });
+    }
+
+    function montarMensagemDisponibilidadeCliente(diasDisponiveis) {
+        const clienteSelect = document.getElementById('id_cliente');
+        const clienteNome = clienteSelect && clienteSelect.selectedIndex > 0 ?
+            clienteSelect.options[clienteSelect.selectedIndex].text : '';
+
+        const linhas = [];
+        linhas.push('Ola' + (clienteNome ? ', ' + clienteNome : '') + '!');
+        linhas.push('');
+        linhas.push('Segue a tabela de horarios disponiveis para agendamento do treinamento:');
+        linhas.push('');
+
+        if (!Array.isArray(diasDisponiveis) || diasDisponiveis.length === 0) {
+            linhas.push('Nao ha horarios livres para hoje +3 dias.');
+        } else {
+            diasDisponiveis.forEach((dia) => {
+                const dataLabel = dia.data_label || dia.data || 'Dia';
+                const horarios = Array.isArray(dia.horarios) ? dia.horarios : [];
+                if (horarios.length === 0) {
+                    linhas.push(dataLabel + ': sem horarios livres.');
+                } else {
+                    const horas = horarios.map((slot) => slot.hora).filter(Boolean);
+                    linhas.push(dataLabel + ': ' + horas.join(', '));
+                }
+            });
+        }
+
+        linhas.push('');
+        linhas.push('Me informe qual horario prefere para eu confirmar no Google Agenda.');
+        return linhas.join('\n');
+    }
+
+    function copiarTabelaDisponibilidadeCliente() {
+        if (!disponibilidadeFoiCarregada) {
+            alert('Atualize a disponibilidade antes de copiar a tabela.');
+            return;
+        }
+
+        const mensagem = montarMensagemDisponibilidadeCliente(diasDisponibilidadeAtual);
+        copiarTextoAreaTransferencia(mensagem, 'Tabela de horarios copiada para enviar ao cliente.');
+    }
+
     function renderDisponibilidade(container, diasDisponiveis) {
         container.innerHTML = '';
 
@@ -1478,6 +1557,9 @@ include 'header.php';
             return;
         }
 
+        disponibilidadeFoiCarregada = false;
+        diasDisponibilidadeAtual = [];
+        atualizarBotaoCopiarDisponibilidade();
         botao.disabled = true;
         container.innerHTML = '<div class="text-muted">Consultando Google Agenda...</div>';
 
@@ -1491,7 +1573,10 @@ include 'header.php';
                     container.innerHTML = '<div class="text-danger">' + erro + '</div>';
                     return;
                 }
-                renderDisponibilidade(container, data.dias_disponiveis || []);
+                diasDisponibilidadeAtual = data.dias_disponiveis || [];
+                disponibilidadeFoiCarregada = true;
+                atualizarBotaoCopiarDisponibilidade();
+                renderDisponibilidade(container, diasDisponibilidadeAtual);
             })
             .catch(() => {
                 container.innerHTML = '<div class="text-danger">Erro na comunicacao com o servidor.</div>';
@@ -1502,6 +1587,13 @@ include 'header.php';
     }
 
     function copiarLinkAgenda(link, clienteNome = '') {
+        let message = 'Link copiado para a area de transferencia!';
+        if (clienteNome) {
+            message = `Link do treinamento (${clienteNome}) copiado!`;
+        }
+        copiarTextoAreaTransferencia(link, message);
+        return;
+
         navigator.clipboard.writeText(link).then(() => {
             // Atualizar mensagem do toast
             let message = 'Link copiado para a área de transferência!';
@@ -1634,6 +1726,11 @@ include 'header.php';
     if (btnBuscarDisponibilidade) {
         btnBuscarDisponibilidade.addEventListener('click', carregarDisponibilidadeGoogle);
     }
+    const btnCopiarDisponibilidade = document.getElementById('btn_copiar_disponibilidade');
+    if (btnCopiarDisponibilidade) {
+        btnCopiarDisponibilidade.addEventListener('click', copiarTabelaDisponibilidadeCliente);
+    }
+    atualizarBotaoCopiarDisponibilidade();
 
     const modalTreinamento = document.getElementById('modalTreinamento');
     if (modalTreinamento) {
@@ -1662,6 +1759,9 @@ include 'header.php';
         if (container) {
             container.innerHTML = 'Clique em "Atualizar" para listar os horarios livres.';
         }
+        diasDisponibilidadeAtual = [];
+        disponibilidadeFoiCarregada = false;
+        atualizarBotaoCopiarDisponibilidade();
     });
 </script>
 
