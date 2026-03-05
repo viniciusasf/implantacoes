@@ -730,9 +730,14 @@ include 'header.php';
             <p class="text-muted small">Gestão de capacitação técnica dos clientes</p>
         </div>
         <div class="col-auto">
-            <button class="btn btn-primary px-4 fw-bold shadow-sm d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
-                <i class="bi bi-plus-lg me-2"></i>Novo Agendamento
-            </button>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-outline-success px-4 fw-bold shadow-sm d-flex align-items-center" id="btn_copiar_disponibilidade" disabled>
+                    <i class="bi bi-whatsapp me-2"></i>Copiar Agendamento
+                </button>
+                <button class="btn btn-primary px-4 fw-bold shadow-sm d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
+                    <i class="bi bi-plus-lg me-2"></i>Novo Agendamento
+                </button>
+            </div>
         </div>
     </div>
 
@@ -1320,9 +1325,6 @@ include 'header.php';
                     <div class="d-flex align-items-center justify-content-between mb-2">
                         <label class="form-label small fw-bold text-muted mb-0">Horarios disponiveis (hoje +3 dias)</label>
                         <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-sm btn-outline-success" id="btn_copiar_disponibilidade" disabled>
-                                <i class="bi bi-whatsapp me-1"></i>Copiar tabela p/ cliente
-                            </button>
                             <button type="button" class="btn btn-sm btn-outline-primary" id="btn_buscar_disponibilidade">
                                 <i class="bi bi-calendar-week me-1"></i>Atualizar
                             </button>
@@ -1738,6 +1740,7 @@ include 'header.php';
             carregarDisponibilidadeGoogle();
         });
     }
+    carregarDisponibilidadeGoogle();
 
     // Reset modal quando fechado
     document.getElementById('modalTreinamento').addEventListener('hidden.bs.modal', function() {
