@@ -21,5 +21,8 @@
     </script>
     
     <?php if (isset($js_extra)) echo $js_extra; ?>
+    
+    <!-- Script Modo Escuro -->
+    <script src="js/dark-mode.js"></script>
 </body>
 </html>

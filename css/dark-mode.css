@@ -1,0 +1,339 @@
+/* css/dark-mode.css - Suporte a Modo Escuro */
+
+/* Variáveis para Modo Escuro */
+[data-theme="dark"] {
+    --bg-body: #121212 !important;
+    --bg-card: #1e1e1e !important;
+
+    --sidebar-bg: #0d1117 !important;
+    --sidebar-text: #8b949e !important;
+    --sidebar-text-hover: #c9d1d9 !important;
+
+    --text-main: #e2e8f0 !important;
+    --text-muted: #94a3b8 !important;
+    --text-dark: #f8fafc !important;
+
+    --border-color: #334155 !important;
+
+    --shadow-sm: 0px 2px 4px rgba(0, 0, 0, 0.2) !important;
+    --shadow-card: 0px 8px 24px rgba(0, 0, 0, 0.4) !important;
+    --shadow-hover: 0px 12px 30px rgba(0, 0, 0, 0.5) !important;
+
+    /* Cores de inputs e forms */
+    --input-bg: #1e293b;
+    --input-border: #334155;
+
+    color-scheme: dark;
+}
+
+/* Ajustes Globais no Modo Escuro */
+[data-theme="dark"] body {
+    background-color: var(--bg-body);
+    color: var(--text-main);
+}
+
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4,
+[data-theme="dark"] h5,
+[data-theme="dark"] h6 {
+    color: var(--text-dark) !important;
+}
+
+[data-theme="dark"] .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+}
+
+/* Formulários */
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .form-select {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--text-main) !important;
+}
+
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .form-select:focus {
+    background-color: var(--bg-card) !important;
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.25) !important;
+}
+
+/* Tabelas (bootstrap/personalizadas) */
+[data-theme="dark"] .table {
+    color: var(--text-main);
+}
+
+[data-theme="dark"] .table thead th {
+    background-color: #1a202c !important;
+    color: var(--text-muted);
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .table tbody td,
+[data-theme="dark"] .table tbody tr,
+[data-theme="dark"] .table th,
+[data-theme="dark"] .table td {
+    border-color: var(--border-color) !important;
+    background-color: var(--bg-card) !important;
+    color: var(--text-main) !important;
+}
+
+[data-theme="dark"] .table tbody tr:hover td {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Modais */
+[data-theme="dark"] .modal-content {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+}
+
+[data-theme="dark"] .modal-header,
+[data-theme="dark"] .modal-footer {
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* Sidebar Hover / Active Ajustes Extras */
+[data-theme="dark"] #sidebar {
+    border-right: 1px solid var(--border-color);
+}
+
+/* Botões e Badges (Ajuste de contraste) */
+[data-theme="dark"] .btn-outline-primary {
+    color: #7085f3 !important;
+    border-color: rgba(112, 133, 243, 0.5) !important;
+}
+
+[data-theme="dark"] .btn-outline-primary:hover {
+    background-color: var(--primary) !important;
+    color: #fff !important;
+}
+
+[data-theme="dark"] .btn-outline-secondary {
+    color: var(--text-muted) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .btn-outline-secondary:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    color: var(--text-main) !important;
+}
+
+/* Scrollbars - para modernizar no modo escuro */
+[data-theme="dark"] ::-webkit-scrollbar-track {
+    background: var(--bg-body);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: #475569;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}
+
+/* Ações/Vários - backgrounds e textos auxiliares */
+[data-theme="dark"] .bg-white {
+    background-color: var(--bg-card) !important;
+    color: var(--text-main) !important;
+}
+
+[data-theme="dark"] .bg-light {
+    background-color: var(--bg-body) !important;
+    color: var(--text-main) !important;
+}
+
+[data-theme="dark"] .text-dark {
+    color: var(--text-dark) !important;
+}
+
+[data-theme="dark"] .text-muted {
+    color: var(--text-muted) !important;
+}
+
+/* Badges e backgrounds 'subtle' do Bootstrap Múltiplos */
+[data-theme="dark"] .bg-success-subtle {
+    background-color: rgba(16, 185, 129, 0.15) !important;
+    color: #10b981 !important;
+}
+
+[data-theme="dark"] .bg-danger-subtle {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    color: #ef4444 !important;
+}
+
+[data-theme="dark"] .bg-warning-subtle {
+    background-color: rgba(245, 158, 11, 0.15) !important;
+    color: #f59e0b !important;
+}
+
+[data-theme="dark"] .bg-info-subtle {
+    background-color: rgba(14, 165, 233, 0.15) !important;
+    color: #0ea5e9 !important;
+}
+
+[data-theme="dark"] .bg-primary-subtle {
+    background-color: rgba(67, 97, 238, 0.15) !important;
+    color: #4361ee !important;
+}
+
+/* Outlines para Badges (ex: border-danger, border-warning com textos coloridos) */
+[data-theme="dark"] .border-danger {
+    border-color: rgba(239, 68, 68, 0.4) !important;
+}
+
+[data-theme="dark"] .border-warning {
+    border-color: rgba(245, 158, 11, 0.4) !important;
+}
+
+[data-theme="dark"] .border-success {
+    border-color: rgba(16, 185, 129, 0.4) !important;
+}
+
+/* Paginação e Toasts e Cards Internos */
+[data-theme="dark"] .page-link {
+    background-color: var(--bg-card);
+    border-color: var(--border-color);
+    color: var(--text-main);
+}
+
+[data-theme="dark"] .page-link:hover {
+    background-color: var(--input-bg);
+    color: var(--text-dark);
+}
+
+[data-theme="dark"] .page-item.active .page-link {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+}
+
+[data-theme="dark"] .toast {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .toast-header {
+    background-color: var(--input-bg) !important;
+    color: var(--text-main) !important;
+    border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .toast-body {
+    background-color: var(--bg-card) !important;
+    color: var(--text-main) !important;
+}
+
+[data-theme="dark"] .card-footer {
+    background-color: var(--bg-card) !important;
+    border-top: 1px solid var(--border-color) !important;
+}
+
+/* Views das Páginas / Status Cards */
+[data-theme="dark"] .main-header {
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .status-card,
+[data-theme="dark"] .client-card {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .client-card-header,
+[data-theme="dark"] .client-card-footer {
+    background: rgba(0, 0, 0, 0.2) !important;
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .btn-action {
+    background: var(--input-bg);
+}
+
+[data-theme="dark"] .search-container .form-control {
+    background-color: var(--input-bg);
+    border-color: var(--input-border);
+    color: var(--text-main);
+}
+
+[data-theme="dark"] .list-group-item {
+    background-color: var(--bg-card);
+    border-color: var(--border-color);
+    color: var(--text-main);
+}
+
+[data-theme="dark"] .shadow-sm {
+    box-shadow: var(--shadow-sm) !important;
+}
+
+[data-theme="dark"] .tab-content {
+    background: var(--bg-card) !important;
+}
+
+/* Fix específico Tela Contatos */
+[data-theme="dark"] .search-card-premium,
+[data-theme="dark"] .contact-card-premium {
+    background: var(--bg-card) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .title-modern {
+    color: var(--text-dark) !important;
+}
+
+[data-theme="dark"] .name-premium {
+    color: var(--text-main) !important;
+}
+
+[data-theme="dark"] .role-premium,
+[data-theme="dark"] .info-row {
+    color: var(--text-muted) !important;
+}
+
+[data-theme="dark"] .avatar-circle {
+    background: var(--bg-card) !important;
+    border-color: var(--bg-card) !important;
+}
+
+[data-theme="dark"] .client-chip {
+    background: var(--bg-body) !important;
+    border-color: var(--border-color) !important;
+    color: var(--text-muted) !important;
+}
+
+/* Fix específico Dashboard (index.php) */
+[data-theme="dark"] .quick-stat {
+    background: var(--bg-body) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .quick-stat:hover {
+    background: var(--bg-card) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] div[style*="linear-gradient"][class*="table-container"],
+[data-theme="dark"] .table-container[style*="linear-gradient"] {
+    background: var(--bg-card) !important;
+}
+
+[data-theme="dark"] .table tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-theme="dark"] span[style*="background: #f1f5f9"] {
+    background: var(--bg-body) !important;
+    color: var(--text-main) !important;
+}
+
+[data-theme="dark"] div[style*="background: #f8fafc"] {
+    background: var(--bg-body) !important;
+}

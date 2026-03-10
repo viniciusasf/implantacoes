@@ -5,7 +5,7 @@ require_once 'config.php';
 // 1. DEFINIR VARIÃVEIS COM VALORES PADRÃƒO
 $view_mode = isset($_GET['view']) ? $_GET['view'] : 'cards';
 $filtro = isset($_GET['filtro']) ? trim($_GET['filtro']) : '';
-$estagio = isset($_GET['estagio']) ? $_GET['estagio'] : '';
+$estagio = isset($_GET['estagio']) ? $_GET['estagio'] : 'integracao';
 $busca = isset($_GET['busca']) ? trim($_GET['busca']) : '';
 $mostrar_encerrados = isset($_GET['mostrar_encerrados']) ? $_GET['mostrar_encerrados'] : '0';
 
@@ -257,19 +257,13 @@ include 'header.php';
 ?>
 
 <style>
-    :root {
-        --primary-color: #4361ee;
-        --success-color: #06d6a0;
-        --warning-color: #ffd166;
-        --danger-color: #ef476f;
-        --info-color: #118ab2;
-    }
+    /* === INTEGRAÇÃO COM DESIGN TOKENS DE HEADER.PHP + DARK THEME (Modelo Perplexity) === */
 
     body,
     html {
+        background-color: var(--bg-body);
         overflow-y: hidden !important;
         height: 100vh;
-        background-color: #f8f9fa;
     }
 
     .container-fluid.py-4 {
@@ -278,46 +272,70 @@ include 'header.php';
         display: flex;
         flex-direction: column;
         padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
+        padding-bottom: 2rem !important;
     }
 
     /* HEADER STYLES */
     .main-header {
-        background: linear-gradient(135deg, #4361ee 0%, #3a56d4 100%);
+        background: linear-gradient(135deg, var(--primary) 0%, var(--purple) 100%);
         color: white;
-        padding: 1rem;
-        border-radius: 12px;
-        margin-bottom: 1rem;
-        box-shadow: 0 4px 20px rgba(67, 97, 238, 0.15);
+        padding: 1.5rem 2rem;
+        border-radius: var(--radius-lg);
+        margin-bottom: 1.5rem;
+        box-shadow: 0 10px 30px rgba(67, 97, 238, 0.2);
+        position: relative;
+        overflow: hidden;
+    }
+    .main-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -10%;
+        width: 300px;
+        height: 300px;
+        background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+        border-radius: 50%;
     }
 
     .page-title {
-        font-size: 1.6rem;
-        letter-spacing: 0.2px;
+        font-family: var(--font-heading);
+        font-size: 1.75rem;
+        letter-spacing: -0.5px;
+        margin-bottom: 0.25rem;
     }
 
     .header-stats {
         display: flex;
-        gap: 1.5rem;
+        gap: 1rem;
         align-items: center;
+        z-index: 1;
     }
 
     .stat-item {
         text-align: center;
-        padding: 0.5rem 1rem;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
+        padding: 0.75rem 1.5rem;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: var(--radius-md);
         backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: transform 0.3s;
+    }
+    .stat-item:hover {
+        transform: translateY(-3px);
     }
 
     .stat-value {
+        font-family: var(--font-heading);
         font-size: 1.5rem;
-        font-weight: bold;
-        margin-bottom: 0.25rem;
+        font-weight: 700;
+        margin-bottom: 0px;
     }
 
     .stat-label {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
         opacity: 0.9;
     }
 
@@ -325,724 +343,531 @@ include 'header.php';
     .search-container {
         position: relative;
         flex: 1;
-        max-width: 400px;
+        max-width: 450px;
     }
 
     .search-container .form-control {
         padding-left: 45px;
-        border-radius: 10px;
-        border: 2px solid #e9ecef;
-        transition: all 0.3s;
-        height: 45px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        background-color: var(--bg-card);
+        color: var(--text-main);
+        transition: all 0.3s ease;
+        height: 48px;
+        box-shadow: var(--shadow-sm);
     }
 
     .search-container .form-control:focus {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+        border-color: var(--primary);
+        box-shadow: 0 0 0 4px var(--primary-light);
+        outline: none;
     }
 
     .search-container .search-icon {
         position: absolute;
-        left: 15px;
+        left: 18px;
         top: 50%;
         transform: translateY(-50%);
-        color: #6c757d;
+        color: var(--text-muted);
         z-index: 10;
+        font-size: 1.1rem;
     }
 
     .btn-clear-search {
         position: absolute;
-        right: 10px;
+        right: 12px;
         top: 50%;
         transform: translateY(-50%);
-        background: none;
+        background: var(--bg-body);
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         border: none;
-        color: #6c757d;
+        color: var(--text-muted);
         z-index: 10;
         cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-clear-search:hover {
+        background: var(--danger-light);
+        color: var(--danger);
     }
 
     /* VIEW TOGGLE */
     .view-toggle {
         display: flex;
-        background: white;
-        border-radius: 10px;
+        background: var(--bg-card);
+        border-radius: var(--radius-md);
         padding: 4px;
-        border: 2px solid #e9ecef;
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--border-color);
     }
 
     .view-toggle-btn {
         padding: 8px 16px;
         border: none;
         background: transparent;
-        border-radius: 8px;
-        color: #6c757d;
+        border-radius: calc(var(--radius-md) - 4px);
+        color: var(--text-muted);
         transition: all 0.3s;
         cursor: pointer;
+        font-size: 1.1rem;
     }
 
     .view-toggle-btn.active {
-        background: var(--primary-color);
-        color: white;
-        box-shadow: 0 2px 8px rgba(67, 97, 238, 0.3);
+        background: var(--primary-light);
+        color: var(--primary);
+        font-weight: 600;
     }
 
     /* STATUS CARDS */
     .status-card {
         transition: all 0.3s ease;
-        border: none;
-        border-radius: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
         cursor: pointer;
         position: relative;
         overflow: hidden;
+        background: var(--bg-card);
+        box-shadow: var(--shadow-sm);
     }
 
-    .status-card:hover,
-    .client-card:hover {
+    .status-card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        box-shadow: var(--shadow-card);
+        border-color: var(--primary-light);
     }
 
     .status-card.active {
-        box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.3);
+        border-color: var(--primary);
+        box-shadow: 0 5px 15px var(--primary-light);
     }
 
     .status-indicator {
-        width: 5px;
+        width: 6px;
         height: 100%;
         position: absolute;
         left: 0;
         top: 0;
+        border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+    }
+
+    .status-card h6 {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-muted) !important;
+    }
+    .status-card h2 {
+        font-family: var(--font-heading);
+        font-size: 2rem;
+        letter-spacing: -1px;
+        color: var(--text-main) !important;
     }
 
     /* CARDS COMPACTOS */
     .client-cards-container {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 2rem;
-        /* â† valor atual pequeno */
-        padding: 0.5rem 0;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+        padding: 0.5rem 0.5rem 2rem 0.5rem;
         overflow-y: auto;
         flex: 1;
-        max-height: none;
+        scrollbar-width: thin;
+        scrollbar-color: #2b2e35 transparent;
     }
-    .client-card {
-        height: auto;
-        min-height: 220px;
-        margin: 0.5rem;
-        margin-bottom: 1rem;
-        border-radius: 12px !important;
-        overflow: visible;
-        transition: all 0.3s ease;
-    }
+    
+    .client-cards-container::-webkit-scrollbar { width: 6px; }
+    .client-cards-container::-webkit-scrollbar-track { background: transparent; }
+    .client-cards-container::-webkit-scrollbar-thumb { background-color: #2b2e35; border-radius: 10px; }
 
-    .client-card-body {
-        flex: 1 1 auto;
-        overflow-y: auto;
-        /* â† aqui estÃ¡ a mÃ¡gica */
-        padding: 0.75rem;
-        /* um pouco mais de respiro */
+    .client-card {
+        background: var(--bg-card);
+        border-radius: var(--radius-lg) !important;
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
     }
 
     .client-card:hover {
-        z-index: 5;
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-card);
+        border-color: var(--primary-light);
     }
 
-
     .client-card.encerrado {
-        opacity: 0.7;
-        border-style: dashed;
-        background: #f8f9fa;
+        opacity: 0.5;
+        background: var(--bg-body);
+        filter: grayscale(0.6);
+    }
+    .client-card.encerrado:hover {
+        opacity: 0.9;
+        filter: grayscale(0);
     }
 
     .client-card-header {
-        padding: 0.75rem 0.75rem 0.5rem 0.75rem;
-        border-bottom: 1px solid #f1f3f4;
-        flex-shrink: 0;
+        padding: 1rem 1.25rem 0.75rem 1.25rem;
+        border-bottom: 1px solid var(--border-color);
+        background: rgba(255, 255, 255, 0.03);
     }
 
     .client-card-body {
-        padding: 0.5rem 0.75rem;
+        padding: 1rem 1.25rem;
         flex: 1;
-        overflow: visible;
     }
 
     .client-card-footer {
-        padding: 0.5rem 0.75rem;
-        background: #f8f9fa;
-        border-top: 1px solid #e9ecef;
-        flex-shrink: 0;
+        padding: 0.75rem 1.25rem;
+        background: rgba(255, 255, 255, 0.02);
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
 
     .client-card-header h6 {
-        font-size: 0.9rem;
+        font-family: var(--font-heading);
+        font-size: 1rem;
         margin-bottom: 0.25rem;
-        line-height: 1.2;
-    }
-
-    .client-card-header small {
-        font-size: 0.7rem;
+        color: var(--text-main);
     }
 
     .client-card-header .progress {
-        height: 3px;
-        margin-top: 0.25rem;
-        background-color: #f0f0f0;
+        height: 4px;
+        border-radius: 4px;
+        margin-top: 0.75rem;
+        background-color: var(--border-color);
+        overflow: hidden;
+    }
+    .client-card-header .progress-bar {
+        border-radius: 4px;
+        transition: width 1s ease-in-out;
     }
 
     .client-status-badge {
-        font-size: 0.6rem !important;
-        padding: 0.15rem 0.5rem !important;
-        border-radius: 12px !important;
-    }
-
-    .client-card-body .row {
-        margin: 0 -0.25rem;
-    }
-
-    .client-card-body .row>[class*="col-"] {
-        padding: 0 0.25rem;
-    }
-
-    .client-card-body small.text-muted {
-        font-size: 0.65rem;
-        display: block;
-        margin-bottom: 0.1rem;
-    }
-
-    .client-card-body .fw-semibold {
-        font-size: 0.8rem;
-        font-weight: 600;
-    }
-
-    .client-card-body .mt-3 {
-        margin-top: 0.5rem !important;
-        padding: 0.25rem 0.5rem !important;
         font-size: 0.7rem !important;
+        font-weight: 600;
+        padding: 0.25rem 0.6rem !important;
+        border-radius: 20px !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
-    .client-card-body .mt-3 i {
+    .compact-info {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+    .compact-info-item {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .compact-info-item small.text-muted {
         font-size: 0.7rem;
-        margin-right: 0.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.25rem;
+        color: var(--text-muted) !important;
     }
 
-    .client-card-footer small {
-        font-size: 0.65rem;
+    .compact-info-item .fw-semibold {
+        color: var(--text-main);
+        font-size: 0.9rem;
     }
 
-    /* BOTÃ•ES DE AÃ‡ÃƒO */
+    /* BOTÕES DE AÇÃO */
     .action-buttons {
         display: flex;
-        gap: 0.25rem;
-        flex-wrap: wrap;
-    }
-
-    .text-smart-truncate {
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        /* ou 1 linha em campos muito curtos */
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        gap: 0.4rem;
+        flex-wrap: nowrap;
     }
 
     .btn-action {
-        width: 28px;
-        height: 28px;
-        display: flex;
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
         border-radius: 8px;
         transition: all 0.2s;
-        border: 1px solid #dee2e6;
-        background: white;
-        color: #6c757d;
+        border: 1px solid transparent;
+        background: var(--bg-body);
+        color: var(--text-muted);
         text-decoration: none;
-        font-size: 0.8rem;
+        font-size: 0.9rem;
     }
 
-    .btn-action:hover {
-        transform: scale(1.1);
-        text-decoration: none;
-    }
-
-    .btn-action.edit {
-        color: #0d6efd;
-        border-color: #0d6efd;
-    }
-
-    .btn-action.edit:hover {
-        background-color: #0d6efd;
-        color: white;
-    }
-
-    .btn-action.treinamentos {
-        color: #0dcaf0;
-        border-color: #0dcaf0;
-    }
-
-    .btn-action.treinamentos:hover {
-        background-color: #0dcaf0;
-        color: white;
-    }
-
-    .btn-action.delete {
-        color: #dc3545;
-        border-color: #dc3545;
-    }
-
-    .btn-action.delete:hover {
-        background-color: #dc3545;
-        color: white;
-    }
-
-    /* BOTÃ•ES CONCLUIR E CANCELAR */
-    .btn-action.concluir {
-        background-color: #198754;
-        color: white;
-        border-color: #198754;
-    }
-
-    .btn-action.concluir:hover {
-        background-color: #157347;
-        border-color: #146c43;
-        color: white;
-    }
-
-    .btn-action.cancelar {
-        background-color: #dc3545;
-        color: white;
-        border-color: #dc3545;
-    }
-
-    .btn-action.cancelar:hover {
-        background-color: #bb2d3b;
-        border-color: #b02a37;
-        color: white;
-    }
-
-    .compact-info {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-
-    .compact-info-item {
-        flex: 1;
-        min-width: 45%;
-    }
-
-    .ultimo-treinamento {
-        font-size: 0.6rem;
-        opacity: 0.7;
-    }
+    .btn-action:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+    .btn-action.edit { color: var(--info); background: var(--info-light); }
+    .btn-action.edit:hover { background: var(--info); color: white; border-color: var(--info); }
+    .btn-action.treinamentos { color: var(--primary); background: var(--primary-light); }
+    .btn-action.treinamentos:hover { background: var(--primary); color: white; border-color: var(--primary); }
+    .btn-action.delete { color: var(--danger); background: var(--danger-light); }
+    .btn-action.delete:hover { background: var(--danger); color: white; border-color: var(--danger); }
+    .btn-action.concluir { color: var(--success); background: var(--success-light); }
+    .btn-action.concluir:hover { background: var(--success); color: white; border-color: var(--success); }
+    .btn-action.cancelar { color: var(--warning); background: var(--warning-light); }
+    .btn-action.cancelar:hover { background: var(--warning); color: white; border-color: var(--warning); }
 
     .treinamento-badge {
-        font-size: 0.55rem;
-        padding: 0.1rem 0.3rem;
-        margin-left: 0.25rem;
+        font-size: 0.65rem;
+        padding: 0.2rem 0.4rem;
+        border-radius: 12px;
+        font-weight: 600;
     }
 
     /* TABLE VIEW */
     .table-container {
         flex: 1;
         overflow-y: auto;
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        background: var(--bg-card);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-card);
+        border: 1px solid var(--border-color);
+        scrollbar-width: thin;
     }
 
+    .table { margin-bottom: 0; }
+
     .table thead th {
-        background-color: #f8f9fa;
-        color: #6c757d;
+        background-color: var(--bg-body);
+        color: var(--text-muted);
         font-weight: 600;
         text-transform: uppercase;
         font-size: 0.75rem;
         letter-spacing: 0.5px;
-        border-top: none;
+        border-bottom: 2px solid var(--border-color);
+        padding: 1rem;
         position: sticky;
         top: 0;
         z-index: 10;
+        white-space: nowrap;
     }
-
-    /* BOTÃ•ES NA TABELA */
-    .table-container .action-buttons {
-        gap: 0.5rem;
-    }
-
-    .table-container .btn-action {
-        width: 36px;
-        height: 36px;
+    
+    .table tbody td {
+        padding: 1rem;
+        vertical-align: middle;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--text-main);
         font-size: 0.9rem;
     }
+    
+    .table tbody tr:hover { background-color: rgba(30, 32, 37, 0.8); }
 
     /* EMPTY STATE */
     .empty-state {
-        padding: 4rem 2rem;
+        padding: 5rem 2rem;
         text-align: center;
-        color: #6c757d;
+        color: var(--text-muted);
+        background: var(--bg-card);
+        border-radius: var(--radius-lg);
+        border: 1px dashed var(--border-color);
     }
 
     .empty-state-icon {
         font-size: 4rem;
-        opacity: 0.3;
+        color: var(--primary-light);
         margin-bottom: 1.5rem;
+        display: inline-block;
     }
 
-    /* ANIMAÃ‡Ã•ES */
+    /* ANIMAÇÕES */
     @keyframes fadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(15px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 
-    .fade-in {
-        animation: fadeIn 0.5s ease forwards;
-    }
-
-    @keyframes slideIn {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
+    .fade-in { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
     /* FORM SWITCH */
-    .form-switch .form-check-input {
-        width: 3em;
-        height: 1.5em;
-        cursor: pointer;
-    }
+    .form-switch .form-check-input { width: 2.5em; height: 1.25em; cursor: pointer; }
+    .form-switch .form-check-input:checked { background-color: var(--primary); border-color: var(--primary); }
 
-    .form-switch .form-check-input:checked {
-        background-color: var(--primary-color);
-        border-color: var(--primary-color);
-    }
-
-    /* BOTÃƒO NOVO CLIENTE */
+    /* BOTÃO NOVO CLIENTE */
     .btn-novo-cliente {
-        border-radius: 10px;
-        height: 45px;
-        display: flex;
+        border-radius: var(--radius-md);
+        height: 48px;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
+        background: var(--primary);
+        border: none;
+        box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+        transition: all 0.3s;
+    }
+    .btn-novo-cliente:hover {
+        background: var(--primary-hover);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(67, 97, 238, 0.4);
     }
 
+    /* MODAL */
     .client-modal .form-control,
     .client-modal .form-select {
-        border-radius: 10px;
-        border: 2px solid #e9ecef;
-        transition: all 0.25s;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        padding: 0.6rem 1rem;
+        background-color: var(--bg-body) !important;
+        color: var(--text-main) !important;
+        transition: all 0.3s;
     }
 
     .client-modal .form-control:focus,
     .client-modal .form-select:focus {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
     }
+
+    .client-modal .form-control::placeholder { color: var(--text-muted) !important; }
+    .client-modal label { color: var(--text-muted) !important; }
+
+    .modal-content {
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color) !important;
+        background-color: var(--bg-card) !important;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+    .modal-header, .modal-footer { border-color: var(--border-color) !important; }
+    .modal-title, .modal-content h5 { color: var(--text-main) !important; }
+    .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
 
     /* TOGGLE ENCERRADOS */
     .toggle-encerrados {
-        min-width: 180px;
         display: flex;
         align-items: center;
+        background: var(--bg-card);
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        height: 48px;
     }
 
-    .toggle-encerrados .form-check-label {
-        margin-left: 8px;
-        font-weight: 500;
-    }
+    .toggle-encerrados .form-check-label { margin-left: 8px; color: var(--text-main); }
+    .table-container .action-buttons { gap: 0.5rem; }
 
-    /* BOTÃ•ES DE AÃ‡ÃƒO NA TABELA */
-    .table-container .action-buttons {
-        display: flex;
-        gap: 0.5rem;
-        justify-content: center;
-        align-items: center;
-        min-height: 40px;
-    }
+    /* DARK MODE — sobrescrever Bootstrap residual */
+    .bg-white, .bg-light { background-color: var(--bg-card) !important; }
+    .text-dark { color: var(--text-main) !important; }
+    .text-muted { color: var(--text-muted) !important; }
+    .border, .border-bottom, .border-top { border-color: var(--border-color) !important; }
+    .badge.bg-light { background-color: var(--bg-body) !important; color: var(--text-muted) !important; border: 1px solid var(--border-color) !important; }
+    .badge.bg-light.text-dark { color: var(--text-main) !important; }
+    .dropdown-menu { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; }
+    .dropdown-item { color: var(--text-main) !important; }
+    .dropdown-item:hover { background-color: rgba(30, 32, 37, 0.9) !important; color: white !important; }
+    .form-check-label { color: var(--text-main) !important; }
+    small, .small { color: var(--text-muted) !important; }
+    .alert { background-color: var(--bg-card) !important; border-color: var(--border-color) !important; color: var(--text-main) !important; }
+    .alert-success { border-left: 4px solid #10b981 !important; }
+    .alert-warning { border-left: 4px solid #f59e0b !important; }
+    .alert-danger  { border-left: 4px solid #ef4444 !important; }
+    .alert-info    { border-left: 4px solid #06b6d4 !important; }
 
-    .table-container .btn-action {
-        width: 36px;
-        height: 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 8px;
-        transition: all 0.2s;
-        border: 1px solid #dee2e6;
-        background: white;
-        color: #6c757d;
-        text-decoration: none;
-        font-size: 0.9rem;
-        flex-shrink: 0;
-    }
+    .bg-primary.bg-opacity-10 { background-color: rgba(59, 130, 246, 0.12) !important; }
+    .bg-warning.bg-opacity-10 { background-color: rgba(245, 158, 11, 0.12) !important; }
+    .bg-danger.bg-opacity-10  { background-color: rgba(239, 68, 68, 0.12) !important; }
+    .bg-success.bg-opacity-10 { background-color: rgba(16, 185, 129, 0.12) !important; }
+    .bg-info.bg-opacity-10    { background-color: rgba(6, 182, 212, 0.12) !important; }
 
-    .table-container .btn-action:hover {
-        transform: scale(1.1);
-        text-decoration: none;
-    }
-
-    .table-container .btn-action.edit {
-        color: #0d6efd;
-        border-color: #0d6efd;
-    }
-
-    .table-container .btn-action.edit:hover {
-        background-color: #0d6efd;
-        color: white;
-    }
-
-    .table-container .btn-action.treinamentos {
-        color: #0dcaf0;
-        border-color: #0dcaf0;
-    }
-
-    .table-container .btn-action.treinamentos:hover {
-        background-color: #0dcaf0;
-        color: white;
-    }
-
-    .table-container .btn-action.delete {
-        color: #dc3545;
-        border-color: #dc3545;
-    }
-
-    .table-container .btn-action.delete:hover {
-        background-color: #dc3545;
-        color: white;
-    }
-
-    .table-container .btn-action.concluir {
-        background-color: #198754;
-        color: white;
-        border-color: #198754;
-    }
-
-    .table-container .btn-action.concluir:hover {
-        background-color: #157347;
-        border-color: #146c43;
-        color: white;
-    }
-
-    .table-container .btn-action.cancelar {
-        background-color: #dc3545;
-        color: white;
-        border-color: #dc3545;
-    }
-
-    .table-container .btn-action.cancelar:hover {
-        background-color: #bb2d3b;
-        border-color: #b02a37;
-        color: white;
-    }
-
-    /* CÃ‰LULA DE AÃ‡Ã•ES NA TABELA */
-    .table td.text-center.pe-4 {
-        vertical-align: middle;
-        padding-top: 12px;
-        padding-bottom: 12px;
-    }
-
-    /* CORREÃ‡Ã•ES PARA BOTÃ•ES */
-    a.btn-action {
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        text-decoration: none !important;
-        cursor: pointer !important;
-        pointer-events: auto !important;
-    }
-
-    .client-card .client-card-footer,
-    .table td.text-center.pe-4 {
-        overflow: visible !important;
-    }
-
-    .action-buttons {
-        position: relative;
-        z-index: 100;
-    }
-
-    .client-card .btn-action {
-        min-width: 28px;
-        min-height: 28px;
-    }
-
-
-    /* Estilo para o link do anexo nos cards */
-    .client-card .anexo-link {
-        transition: all 0.2s;
-        border-radius: 4px;
-        padding: 2px 6px;
-    }
-
-    .client-card .anexo-link:hover {
-        background-color: #e7f3ff !important;
-        text-decoration: underline !important;
-    }
-
-    /* BotÃ£o de copiar nos cards */
-    .client-card .btn-copy-link {
-        opacity: 0.6;
-        transition: opacity 0.2s;
-    }
-
-    .client-card .btn-copy-link:hover {
-        opacity: 1;
-        color: #4361ee !important;
-    }
-
-    /* Indicador de anexo na tabela */
-    .table .drive-badge {
-        transition: all 0.2s;
-        border: none;
-    }
-
-    .table .drive-badge:hover {
-        filter: brightness(1.1);
-        transform: translateY(-1px);
-    }
-
-    /* AnimaÃ§Ã£o de fade-in */
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-
-    }
+    /* Anexo */
+    .client-card .anexo-link { transition: all 0.2s; border-radius: 4px; padding: 2px 6px; }
+    .client-card .anexo-link:hover { background-color: var(--info-light) !important; text-decoration: none !important; }
+    .table .drive-badge { transition: all 0.2s; border: none; }
+    .table .drive-badge:hover { filter: brightness(1.1); transform: translateY(-1px); }
 </style>
 
 <div class="container-fluid py-4">
-    <!-- HEADER COM ESTATÃSTICAS -->
-    <div class="main-header">
-        <div class="row align-items-center">
-            <div class="col-md-6">
-                <h3 class="page-title fw-bold mb-2"><i class="bi bi-people-fill me-2"></i>Gestão de Clientes</h3>
-                <p class="mb-0 opacity-75">Gerencie todos os clientes em implantação</p>
-            </div>
-            <div class="col-md-6">
-                <div class="d-flex justify-content-end align-items-center gap-3">
-                    <div class="header-stats">
-                        <div class="stat-item">
-                            <div class="stat-value"><?= count($todos_clientes) ?></div>
-                            <div class="stat-label">Total</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value"><?= $clientes_com_treinamentos ?></div>
-                            <div class="stat-label">Com Treinamentos</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value"><?= $clientes_em_atraso ?></div>
-                            <div class="stat-label">Em Atraso</div>
-                        </div>
-                    </div>
-                </div>
+
+    <!-- TOPO PADRÃO DO SISTEMA -->
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h3 class="page-title fw-bold mb-1"><i class="bi bi-people-fill me-2 text-primary"></i>Gestão de Clientes</h3>
+            <p class="text-muted small mb-0">Gerencie todos os clientes em implantação</p>
+        </div>
+        <div class="col-auto">
+            <div class="d-flex align-items-center gap-2">
+                <!-- BOTÃO ENCERRADOS -->
+                <a href="clientes.php?mostrar_encerrados=<?= $mostrar_encerrados == '1' ? '0' : '1' ?>&view=<?= urlencode($view_mode) ?>&busca=<?= urlencode($busca) ?>"
+                   class="btn px-4 fw-bold shadow-sm d-flex align-items-center <?= $mostrar_encerrados == '1' ? 'btn-secondary' : 'btn-outline-secondary' ?>">
+                    <i class="bi bi-archive me-2"></i>
+                    <?= $mostrar_encerrados == '1' ? 'Ocultar Encerrados' : 'Ver Encerrados' ?>
+                    <?php if ($encerrados > 0): ?>
+                        <span class="badge bg-secondary ms-2"><?= $encerrados ?></span>
+                    <?php endif; ?>
+                </a>
+                <!-- BOTÃO NOVO CLIENTE -->
+                <button class="btn btn-primary px-4 fw-bold shadow-sm d-flex align-items-center"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalCliente">
+                    <i class="bi bi-plus-lg me-2"></i>Novo Cliente
+                </button>
             </div>
         </div>
     </div>
 
     <!-- BARRA DE CONTROLES -->
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <div class="d-flex align-items-center gap-3">
-                <!-- CAMPO DE BUSCA -->
-                <div class="search-container">
-                    <i class="bi bi-search search-icon"></i>
-                    <form method="GET" action="clientes.php" class="d-inline" id="searchForm">
-                        <input type="text"
-                            name="busca"
-                            class="form-control"
-                            placeholder="Buscar cliente pelo nome..."
-                            value="<?= htmlspecialchars($busca) ?>"
-                            autocomplete="off"
-                            data-bs-toggle="tooltip"
-                            data-bs-title="Digite para buscar clientes">
-                        <?php if (!empty($estagio)): ?>
-                            <input type="hidden" name="estagio" value="<?= htmlspecialchars($estagio) ?>">
-                        <?php endif; ?>
-                        <?php if (!empty($filtro)): ?>
-                            <input type="hidden" name="filtro" value="<?= htmlspecialchars($filtro) ?>">
-                        <?php endif; ?>
-                        <input type="hidden" name="view" value="<?= htmlspecialchars($view_mode) ?>">
-                        <input type="hidden" name="mostrar_encerrados" value="<?= htmlspecialchars($mostrar_encerrados) ?>">
-                    </form>
-                    <?php if (!empty($busca)): ?>
-                        <button type="button" class="btn-clear-search" onclick="clearSearch()" title="Limpar busca">
-                            <i class="bi bi-x-circle"></i>
-                        </button>
-                    <?php endif; ?>
-                </div>
-
-                <!-- BOTÃƒO NOVO CLIENTE -->
-                <button class="btn btn-primary fw-bold px-4 btn-novo-cliente"
-                    data-bs-toggle="modal"
-                    data-bs-target="#modalCliente">
-                    <i class="bi bi-plus-lg me-2"></i>Novo Cliente
+    <div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
+        <!-- CAMPO DE BUSCA -->
+        <div class="search-container" style="flex: 1; min-width: 220px; max-width: 420px;">
+            <i class="bi bi-search search-icon"></i>
+            <form method="GET" action="clientes.php" class="d-inline w-100" id="searchForm">
+                <input type="text"
+                    name="busca"
+                    class="form-control w-100"
+                    placeholder="Buscar cliente pelo nome..."
+                    value="<?= htmlspecialchars($busca) ?>"
+                    autocomplete="off">
+                <?php if (!empty($estagio)): ?>
+                    <input type="hidden" name="estagio" value="<?= htmlspecialchars($estagio) ?>">
+                <?php endif; ?>
+                <?php if (!empty($filtro)): ?>
+                    <input type="hidden" name="filtro" value="<?= htmlspecialchars($filtro) ?>">
+                <?php endif; ?>
+                <input type="hidden" name="view" value="<?= htmlspecialchars($view_mode) ?>">
+                <input type="hidden" name="mostrar_encerrados" value="<?= htmlspecialchars($mostrar_encerrados) ?>">
+            </form>
+            <?php if (!empty($busca)): ?>
+                <button type="button" class="btn-clear-search" onclick="clearSearch()" title="Limpar busca">
+                    <i class="bi bi-x-circle"></i>
                 </button>
-
-                <!-- TOGGLE PARA MOSTRAR ENCERRADOS -->
-                <div class="form-check form-switch toggle-encerrados">
-                    <input class="form-check-input"
-                        type="checkbox"
-                        role="switch"
-                        id="toggleEncerrados"
-                        <?= $mostrar_encerrados == '1' ? 'checked' : '' ?>
-                        onchange="toggleClientesEncerrados(this.checked)">
-                    <label class="form-check-label small fw-bold" for="toggleEncerrados">
-                        <i class="bi bi-archive me-1"></i>Mostrar encerrados
-                    </label>
-                </div>
-            </div>
+            <?php endif; ?>
         </div>
 
-        <div class="col-md-4">
-            <div class="d-flex justify-content-end align-items-center gap-3">
-                <!-- TOGGLE DE VISUALIZAÃ‡ÃƒO -->
-                <div class="view-toggle">
-                    <button class="view-toggle-btn <?= $view_mode == 'cards' ? 'active' : '' ?>"
-                        onclick="changeViewMode('cards')"
-                        data-bs-toggle="tooltip"
-                        data-bs-title="Visualização em cards">
-                        <i class="bi bi-grid-3x3-gap"></i>
-                    </button>
-                    <button class="view-toggle-btn <?= $view_mode == 'list' ? 'active' : '' ?>"
-                        onclick="changeViewMode('list')"
-                        data-bs-toggle="tooltip"
-                        data-bs-title="Visualização em lista">
-                        <i class="bi bi-list"></i>
-                    </button>
-                </div>
-            </div>
+        <!-- SPACER -->
+        <div class="flex-grow-1 d-none d-md-block"></div>
+
+        <!-- TOGGLE DE VISUALIZAÇÃO -->
+        <div class="view-toggle">
+            <button class="view-toggle-btn <?= $view_mode == 'cards' ? 'active' : '' ?>"
+                onclick="changeViewMode('cards')"
+                title="Visualização em Cards">
+                <i class="bi bi-grid-3x3-gap"></i>
+            </button>
+            <button class="view-toggle-btn <?= $view_mode == 'list' ? 'active' : '' ?>"
+                onclick="changeViewMode('list')"
+                title="Visualização em Lista">
+                <i class="bi bi-list"></i>
+            </button>
         </div>
     </div>
 
     <!-- CARDS DE STATUS -->
     <div class="row g-3 mb-4">
         <?php
+        $total_ativos = $integracao + $operacional + $finalizacao + $critico;
         $status_data = [
+            ['id' => '', 'label' => 'Ver Todos', 'count' => $total_ativos, 'color' => '#6366f1', 'icon' => 'bi-grid-fill', 'days' => 'Ativos'],
             ['id' => 'integracao', 'label' => 'Integração', 'count' => $integracao, 'color' => '#0dcaf0', 'icon' => 'bi-rocket-takeoff', 'days' => '0-30d'],
             ['id' => 'operacional', 'label' => 'Operacional', 'count' => $operacional, 'color' => '#0d6efd', 'icon' => 'bi-gear', 'days' => '31-70d'],
             ['id' => 'finalizacao', 'label' => 'Finalização', 'count' => $finalizacao, 'color' => '#ffc107', 'icon' => 'bi-flag', 'days' => '71-91d'],
-            ['id' => 'critico', 'label' => 'Cri­tico', 'count' => $critico, 'color' => '#dc3545', 'icon' => 'bi-exclamation-triangle', 'days' => '> 91d']
+            ['id' => 'critico', 'label' => 'Crítico', 'count' => $critico, 'color' => '#dc3545', 'icon' => 'bi-exclamation-triangle', 'days' => '> 91d']
         ];
 
         // Adicionar card para encerrados somente se estiverem sendo mostrados
@@ -1051,7 +876,7 @@ include 'header.php';
         }
 
         foreach ($status_data as $s): ?>
-            <div class="col-md-3">
+            <div class="col">
                 <a href="?estagio=<?= $s['id'] ?>&busca=<?= urlencode($busca) ?>&filtro=<?= urlencode($filtro) ?>&view=<?= urlencode($view_mode) ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>"
                     class="text-decoration-none">
                     <div class="card status-card shadow-sm <?= ($estagio == $s['id']) ? 'active' : '' ?>">
@@ -1206,37 +1031,7 @@ include 'header.php';
                                         <?php endif; ?>
                                     </div>
                                 </div>
-                                <?php if (isset($c['num_licencas']) && $c['num_licencas'] > 0): ?>
-                                    <div class="mt-1 small text-muted">
-                                        <i class="bi bi-people me-1"></i>
-                                        <?= $c['num_licencas'] ?> licençaa(s)
-                                    </div>
-                                <?php endif; ?>
 
-
-
-                                <!-- No client-card-body, apÃ³s as informaÃ§Ãµes existentes -->
-                                <?php if (!empty($c['anexo'])): ?>
-                                    <div class="mt-1 small text-muted"
-                                        style="background-color: #e7f3ff; font-size: 0.7rem;">
-                                        <a href="<?= htmlspecialchars($c['anexo']) ?>"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            class="text-decoration-none small"
-                                            style="color: #4285F4; flex: 1;"
-                                            data-bs-toggle="tooltip"
-                                            data-bs-title="Abrir link do Google Drive">
-                                            <i class="bi bi-google"></i>
-                                        </a>
-                                        <span class="mx-1 text-muted">Google</span>
-                                        <button class="btn btn-sm btn-link text-primary p-0 small"
-                                            onclick="copiarLinkCard('<?= htmlspecialchars($c['anexo']) ?>', event)"
-                                            data-bs-toggle="tooltip"
-                                            data-bs-title="Copiar link">
-                                            <i class="bi bi-files"></i>
-                                        </button>
-                                    </div>
-                                <?php endif; ?>
 
 
                             </div>

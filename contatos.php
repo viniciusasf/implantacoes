@@ -15,9 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $id_cliente = $_POST['id_cliente'];
     $nome = $_POST['nome'];
     $email = isset($_POST['email']) ? trim($_POST['email']) : null;
-    if ($email === '') {
-        $email = null;
-    }
+    if ($email === '') { $email = null; }
     $cargo = $_POST['cargo'];
     $telefone = $_POST['telefone_ddd'];
     $observacao = $_POST['observacao'];
@@ -42,17 +40,16 @@ $filtro = isset($_GET['filtro']) ? trim($_GET['filtro']) : '';
 $ordenacao = isset($_GET['ordenacao']) ? $_GET['ordenacao'] : 'nome';
 $direcao = isset($_GET['direcao']) ? $_GET['direcao'] : 'asc';
 
-// Validação da ordenação para segurança
 $colunas_permitidas = ['nome', 'fantasia', 'cargo', 'telefone_ddd'];
 $ordenacao = in_array($ordenacao, $colunas_permitidas) ? $ordenacao : 'nome';
 $direcao = $direcao === 'desc' ? 'desc' : 'asc';
 
 // Paginação
-$por_pagina = 15;
+$por_pagina = 12;
 $pagina = isset($_GET['pagina']) ? max(1, intval($_GET['pagina'])) : 1;
 $offset = ($pagina - 1) * $por_pagina;
 
-// Query principal com contagem para paginação
+// Query principal
 $sql_base = "SELECT c.*, cl.fantasia FROM contatos c 
              JOIN clientes cl ON c.id_cliente = cl.id_cliente 
              WHERE 1=1";
@@ -66,33 +63,24 @@ $params_contagem = [];
 if (!empty($filtro)) {
     $sql_base .= " AND (cl.fantasia LIKE ? OR c.nome LIKE ? OR c.email LIKE ? OR c.cargo LIKE ?)";
     $sql_contagem .= " AND (cl.fantasia LIKE ? OR c.nome LIKE ? OR c.email LIKE ? OR c.cargo LIKE ?)";
-    
-    $param_value = "%$filtro%";
-    $params = [$param_value, $param_value, $param_value, $param_value];
-    $params_contagem = [$param_value, $param_value, $param_value, $param_value];
+    $val = "%$filtro%";
+    $params = [$val, $val, $val, $val];
+    $params_contagem = [$val, $val, $val, $val];
 }
 
-// Executar contagem
-$stmt_contagem = $pdo->prepare($sql_contagem);
-$stmt_contagem->execute($params_contagem);
-$total_registros = $stmt_contagem->fetchColumn();
-
-// Calcular total de páginas
+$stmt_c = $pdo->prepare($sql_contagem);
+$stmt_c->execute($params_contagem);
+$total_registros = $stmt_c->fetchColumn();
 $total_paginas = ceil($total_registros / $por_pagina);
 
-// Query dos dados com ordenação e paginação
 $sql_base .= " ORDER BY c.$ordenacao $direcao LIMIT ?, ?";
-
-// Adicionar parâmetros de paginação
 $params[] = $offset;
 $params[] = $por_pagina;
 
-// Preparar e executar query principal
 $stmt = $pdo->prepare($sql_base);
 $stmt->execute($params);
 $contatos = $stmt->fetchAll();
 
-// Trazer apenas clientes ativos para o modal
 $clientes = $pdo->query("SELECT id_cliente, fantasia FROM clientes 
                          WHERE (data_fim IS NULL OR data_fim = '0000-00-00' OR data_fim > NOW())
                          ORDER BY fantasia ASC")->fetchAll();
@@ -101,482 +89,373 @@ include 'header.php';
 ?>
 
 <style>
-    .page-title {
-        font-size: 1.6rem;
-        letter-spacing: 0.2px;
+    :root {
+        --c-primary: #4361ee;
+        --c-secondary: #7209b7;
+        --c-dark: #1e293b;
+        --c-border: #e2e8f0;
     }
 
-    .contacts-search-container {
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .contacts-wrapper {
+        animation: fadeInUp 0.5s ease-out;
+    }
+
+    .page-header-premium {
+        margin-bottom: 2.5rem;
+    }
+
+    .title-modern {
+        font-family: var(--font-heading);
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--c-dark);
+        letter-spacing: -0.5px;
+    }
+
+    .search-card-premium {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
+        padding: 0.75rem;
+        margin-bottom: 2.5rem;
+        border: none;
+    }
+
+    .search-input-group {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding-left: 1rem;
+    }
+
+    .search-input-group .form-control {
+        border: none;
+        box-shadow: none;
+        font-size: 1.05rem;
+        font-weight: 500;
+        padding: 0.75rem 0;
+    }
+
+    /* Grid de Cards */
+    .contact-card-premium {
+        background: white;
+        border-radius: 24px;
+        border: 1px solid var(--c-border);
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        height: 100%;
+        overflow: hidden;
         position: relative;
     }
 
-    .contacts-search-container .form-control {
-        height: 45px;
-        border-radius: 10px;
-        border: 2px solid #e9ecef;
-        padding-left: 45px;
-        transition: all 0.3s;
+    .contact-card-premium:hover {
+        transform: translateY(-10px);
+        border-color: var(--c-primary);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
     }
 
-    .contacts-search-container .form-control:focus {
-        border-color: #4361ee;
-        box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+    .card-visual-header {
+        height: 80px;
+        background: linear-gradient(135deg, #4361ee 0%, #7209b7 100%);
+        position: relative;
     }
 
-    .contacts-search-container .search-icon {
+    .avatar-circle {
+        width: 70px;
+        height: 70px;
+        background: white;
+        border-radius: 20px;
         position: absolute;
-        left: 15px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #6c757d;
-        z-index: 10;
-    }
-
-    .filter-btn {
-        height: 45px;
-        border-radius: 10px;
-        font-weight: 600;
-    }
-
-    .contacts-modal {
-        border-radius: 14px;
-    }
-
-    .contacts-modal .form-label {
-        color: #6c757d;
-        font-weight: 700;
-    }
-
-    .contacts-modal .form-control,
-    .contacts-modal .form-select {
-        border-radius: 10px;
-        border: 2px solid #e9ecef;
-        min-height: 44px;
-        transition: all 0.25s;
-    }
-
-    .contacts-modal .form-control:focus,
-    .contacts-modal .form-select:focus {
-        border-color: #4361ee;
-        box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
-    }
-
-    .contacts-modal textarea.form-control {
-        min-height: 96px;
-    }
-
-    .contacts-list-card {
-        border-radius: 14px;
-        overflow: hidden;
-    }
-
-    .contacts-list-card .card-header {
-        padding-top: 1rem;
-        padding-bottom: 1rem;
-    }
-
-    .contacts-table thead th {
-        background-color: #f8f9fa;
-        color: #6c757d;
-        font-weight: 700;
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 0.5px;
-        border-top: none;
-    }
-
-    .contacts-table thead th a {
-        color: #495057 !important;
-    }
-
-    .contacts-table tbody tr {
-        transition: background-color 0.2s;
-    }
-
-    .contacts-table tbody tr:hover {
-        background-color: #f8fbff;
-    }
-
-    .contact-action-btn {
-        width: 34px;
-        height: 34px;
-        border-radius: 8px;
-        display: inline-flex;
+        bottom: -35px;
+        left: 24px;
+        display: flex;
         align-items: center;
         justify-content: center;
+        font-size: 1.8rem;
+        color: var(--c-primary);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        border: 4px solid white;
     }
 
-    .contacts-empty-state {
-        padding: 4rem 2rem;
-        text-align: center;
+    .quick-actions {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        display: flex;
+        gap: 8px;
+        opacity: 0;
+        transform: translateX(10px);
+        transition: all 0.3s ease;
     }
 
-    .contacts-empty-state i {
-        font-size: 3rem;
+    .contact-card-premium:hover .quick-actions {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    .action-pill {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(8px);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255,255,255,0.3);
+        transition: all 0.2s;
+    }
+
+    .action-pill:hover { background: white; color: var(--c-primary); transform: scale(1.1); }
+    .action-pill.btn-del:hover { color: #ef4444; }
+
+    .card-body-premium {
+        padding: 50px 24px 24px;
+    }
+
+    .name-premium {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: var(--c-dark);
+        margin-bottom: 4px;
+    }
+
+    .role-premium {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 16px;
+        display: block;
+    }
+
+    .info-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+        color: #475569;
+        font-size: 0.95rem;
+        text-decoration: none;
+    }
+
+    .client-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #f1f5f9;
+        padding: 6px 14px;
+        border-radius: 100px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        border: 1px solid #e2e8f0;
+        margin-top: 8px;
+    }
+
+    /* Floating Action Button */
+    .fab-add {
+        position: fixed;
+        bottom: 40px;
+        right: 40px;
+        width: 65px;
+        height: 65px;
+        border-radius: 22px;
+        background: linear-gradient(135deg, #4361ee 0%, #7209b7 100%);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.8rem;
+        box-shadow: 0 15px 35px rgba(67, 97, 238, 0.3);
+        border: none;
+        transition: all 0.3s;
+        z-index: 1000;
+    }
+
+    .fab-add:hover {
+        transform: rotate(90deg) scale(1.1);
+        color: white;
     }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h3 class="page-title fw-bold mb-0"><i class="bi bi-person-lines-fill me-2 text-primary"></i>Contatos</h3>
-        <p class="text-muted small mb-0">Gerencie as pessoas de contato em cada cliente.</p>
+<div class="contacts-wrapper container-fluid">
+    <div class="page-header-premium d-flex justify-content-between align-items-end">
+        <div>
+            <h1 class="title-modern">Directório de Contatos</h1>
+            <p class="text-muted">Gestão centralizada de relacionamentos.</p>
+        </div>
+        <div class="d-none d-md-block">
+            <span class="badge bg-white text-dark shadow-sm px-3 py-2 rounded-3 border">Total: <strong><?= $total_registros ?></strong></span>
+        </div>
     </div>
-    <button class="btn btn-primary shadow-sm d-flex align-items-center filter-btn" data-bs-toggle="modal" data-bs-target="#modalContato">
-        <i class="bi bi-plus-lg me-2"></i>Novo Contato
-    </button>
-</div>
 
-<?php if (isset($_GET['msg'])): 
-    $tipo = isset($_GET['tipo']) ? $_GET['tipo'] : 'success';
-    $classes = [
-        'success' => 'alert-success',
-        'error' => 'alert-danger',
-        'warning' => 'alert-warning',
-        'info' => 'alert-info'
-    ];
-    $icones = [
-        'success' => 'bi-check-circle',
-        'error' => 'bi-exclamation-circle',
-        'warning' => 'bi-exclamation-triangle',
-        'info' => 'bi-info-circle'
-    ];
-    $classe = $classes[$tipo] ?? 'alert-success';
-    $icone = $icones[$tipo] ?? 'bi-check-circle';
-?>
-    <div class="alert <?php echo $classe; ?> alert-dismissible fade show border-0 shadow-sm mb-4" role="alert">
-        <i class="bi <?php echo $icone; ?> me-2"></i><?php echo htmlspecialchars($_GET['msg']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-<?php endif; ?>
-
-<!-- Barra de Filtro Simplificada -->
-<div class="card shadow-sm border-0 mb-4">
-    <div class="card-body py-3">
-        <form method="GET" class="row g-3 align-items-center">
-            <div class="col-md-10">
-                <div class="contacts-search-container">
-                    <i class="bi bi-search search-icon"></i>
-                    <input type="text" 
-                           name="filtro" 
-                           class="form-control" 
-                           placeholder="Buscar por cliente, nome do contato ou cargo..."
-                           value="<?php echo htmlspecialchars($filtro); ?>"
-                           autocomplete="off">
+    <div class="search-card-premium">
+        <form method="GET">
+            <div class="row align-items-center g-0">
+                <div class="col">
+                    <div class="search-input-group">
+                        <i class="bi bi-search text-muted"></i>
+                        <input type="text" name="filtro" class="form-control" placeholder="Buscar por nome, empresa ou cargo..." value="<?= htmlspecialchars($filtro) ?>">
+                    </div>
                 </div>
-            </div>
-            <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-primary filter-btn flex-fill d-flex align-items-center justify-content-center">
-                    <i class="bi bi-search me-2"></i>Buscar
-                </button>
-                <?php if (!empty($filtro)): ?>
-                    <a href="contatos.php" class="btn btn-outline-secondary filter-btn d-flex align-items-center" title="Limpar filtro">
-                        <i class="bi bi-x-lg"></i>
-                    </a>
-                <?php endif; ?>
+                <div class="col-auto px-2">
+                    <button type="submit" class="btn btn-primary rounded-4 px-4">Filtrar</button>
+                </div>
             </div>
         </form>
     </div>
-</div>
 
-<div class="card shadow-sm border-0 contacts-list-card">
-    <div class="card-header bg-white border-0 py-3">
-        <div class="row align-items-center">
-            <div class="col-md-6">
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-person-lines-fill text-primary me-2"></i>
-                    <span class="text-muted small">
-                        <?php if ($total_registros > 0): ?>
-                            Exibindo <strong><?php echo min($por_pagina, count($contatos)); ?></strong> de <strong><?php echo $total_registros; ?></strong> contatos
-                            <?php if (!empty($filtro)): ?>
-                                <span class="text-primary">(filtrados)</span>
-                            <?php endif; ?>
-                        <?php else: ?>
-                            Nenhum contato encontrado
+    <div class="row g-4">
+        <?php foreach ($contatos as $c): ?>
+            <div class="col-xl-3 col-lg-4 col-md-6">
+                <div class="contact-card-premium shadow-sm">
+                    <div class="card-visual-header">
+                        <div class="avatar-circle"><i class="bi bi-person-vcard"></i></div>
+                        <div class="quick-actions">
+                            <button class="action-pill edit-trigger" 
+                                    data-id="<?= $c['id_contato'] ?>" 
+                                    data-cliente="<?= $c['id_cliente'] ?>"
+                                    data-nome="<?= htmlspecialchars($c['nome']) ?>"
+                                    data-email="<?= htmlspecialchars($c['email']) ?>"
+                                    data-cargo="<?= htmlspecialchars($c['cargo']) ?>"
+                                    data-telefone="<?= htmlspecialchars($c['telefone_ddd']) ?>"
+                                    data-obs="<?= htmlspecialchars($c['observacao']) ?>"
+                                    data-bs-toggle="modal" data-bs-target="#modalContato">
+                                <i class="bi bi-pencil-fill"></i>
+                            </button>
+                            <a href="contatos.php?delete=<?= $c['id_contato'] ?>" class="action-pill btn-del" onclick="return confirm('Excluir?')">
+                                <i class="bi bi-trash-fill"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body-premium">
+                        <h4 class="name-premium"><?= htmlspecialchars($c['nome']) ?></h4>
+                        <span class="role-premium"><?= $c['cargo'] ?: 'Sem Cargo' ?></span>
+                        <hr class="my-3 opacity-10">
+                        <?php if($c['telefone_ddd']): ?>
+                            <div class="info-row"><i class="bi bi-telephone"></i> <?= htmlspecialchars($c['telefone_ddd']) ?></div>
                         <?php endif; ?>
-                    </span>
+                        <?php if($c['email']): ?>
+                            <div class="info-row"><i class="bi bi-envelope"></i> <?= htmlspecialchars($c['email']) ?></div>
+                        <?php endif; ?>
+                        <div class="client-chip"><i class="bi bi-building"></i> <?= htmlspecialchars($c['fantasia']) ?></div>
+                    </div>
                 </div>
             </div>
-            <div class="col-md-6 text-md-end">
-                <div class="btn-group" role="group">
-                    <a href="contatos.php?ordenacao=<?php echo $ordenacao; ?>&direcao=<?php echo $direcao == 'asc' ? 'desc' : 'asc'; ?>&filtro=<?php echo urlencode($filtro); ?>"
-                       class="btn btn-outline-secondary btn-sm d-flex align-items-center">
-                        <i class="bi bi-sort-<?php echo $direcao == 'asc' ? 'down' : 'up'; ?> me-1"></i>
-                        Ordenar
-                    </a>
-                    <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
-                        <?php echo ucfirst(str_replace('_ddd', '', $ordenacao)); ?>
-                    </button>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="contatos.php?ordenacao=nome&direcao=asc&filtro=<?php echo urlencode($filtro); ?>">Nome</a></li>
-                        <li><a class="dropdown-item" href="contatos.php?ordenacao=fantasia&direcao=asc&filtro=<?php echo urlencode($filtro); ?>">Cliente</a></li>
-                        <li><a class="dropdown-item" href="contatos.php?ordenacao=cargo&direcao=asc&filtro=<?php echo urlencode($filtro); ?>">Cargo</a></li>
-                        <li><a class="dropdown-item" href="contatos.php?ordenacao=telefone_ddd&direcao=asc&filtro=<?php echo urlencode($filtro); ?>">Telefone</a></li>
-                    </ul>
-                </div>
-            </div>
+        <?php endforeach; ?>
+    </div>
+
+    <!-- Paginação Premium -->
+    <?php if ($total_paginas > 1): ?>
+        <div class="mt-5 d-flex justify-content-center">
+            <nav>
+                <ul class="pagination pagination-modern gap-2">
+                    <?php if ($pagina > 1): ?>
+                        <li class="page-item">
+                            <a class="page-link rounded-3 border-0 shadow-sm" href="contatos.php?pagina=<?= $pagina - 1 ?>&filtro=<?= urlencode($filtro) ?>">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                        </li>
+                    <?php endif; ?>
+
+                    <?php
+                    $inicio = max(1, $pagina - 2);
+                    $fim = min($total_paginas, $pagina + 2);
+                    
+                    for ($i = $inicio; $i <= $fim; $i++):
+                    ?>
+                        <li class="page-item <?= ($i == $pagina) ? 'active' : '' ?>">
+                            <a class="page-link rounded-3 border-0 shadow-sm" href="contatos.php?pagina=<?= $i ?>&filtro=<?= urlencode($filtro) ?>"><?= $i ?></a>
+                        </li>
+                    <?php endfor; ?>
+
+                    <?php if ($pagina < $total_paginas): ?>
+                        <li class="page-item">
+                            <a class="page-link rounded-3 border-0 shadow-sm" href="contatos.php?pagina=<?= $pagina + 1 ?>&filtro=<?= urlencode($filtro) ?>">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                    <?php endif; ?>
+                </ul>
+            </nav>
         </div>
-    </div>
-    
-    <div class="card-body p-0">
-        <?php if (empty($contatos)): ?>
-            <div class="contacts-empty-state">
-                <i class="bi bi-person-x fs-1 text-muted d-block mb-3"></i>
-                <p class="text-muted mb-3">
-                    <?php echo !empty($filtro) ? 
-                        'Nenhum contato encontrado com o filtro aplicado.' : 
-                        'Nenhum contato cadastrado ainda. Comece adicionando o primeiro!'; ?>
-                </p>
-                <?php if (!empty($filtro)): ?>
-                    <a href="contatos.php" class="btn btn-outline-primary filter-btn">
-                        <i class="bi bi-arrow-counterclockwise me-1"></i>Limpar filtro
-                    </a>
-                <?php else: ?>
-                    <button class="btn btn-primary filter-btn" data-bs-toggle="modal" data-bs-target="#modalContato">
-                        <i class="bi bi-plus-lg me-1"></i>Adicionar Contato
-                    </button>
-                <?php endif; ?>
-            </div>
-        <?php else: ?>
-            <div class="table-responsive table-scroll-container" style="max-height: 500px;">
-                <table class="table table-hover align-middle mb-0 contacts-table">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="ps-4 py-3 border-bottom-0">
-                                <a href="contatos.php?ordenacao=nome&direcao=<?php echo ($ordenacao == 'nome' && $direcao == 'asc') ? 'desc' : 'asc'; ?>&filtro=<?php echo urlencode($filtro); ?>"
-                                   class="text-decoration-none text-dark d-flex align-items-center">
-                                    Nome
-                                    <?php if ($ordenacao == 'nome'): ?>
-                                        <i class="bi bi-caret-<?php echo $direcao == 'asc' ? 'up' : 'down'; ?>-fill ms-1 small"></i>
-                                    <?php endif; ?>
-                                </a>
-                            </th>
-                            <th class="py-3 border-bottom-0">
-                                <a href="contatos.php?ordenacao=fantasia&direcao=<?php echo ($ordenacao == 'fantasia' && $direcao == 'asc') ? 'desc' : 'asc'; ?>&filtro=<?php echo urlencode($filtro); ?>"
-                                   class="text-decoration-none text-dark d-flex align-items-center">
-                                    Cliente
-                                    <?php if ($ordenacao == 'fantasia'): ?>
-                                        <i class="bi bi-caret-<?php echo $direcao == 'asc' ? 'up' : 'down'; ?>-fill ms-1 small"></i>
-                                    <?php endif; ?>
-                                </a>
-                            </th>
-                            <th class="py-3 border-bottom-0">
-                                <a href="contatos.php?ordenacao=cargo&direcao=<?php echo ($ordenacao == 'cargo' && $direcao == 'asc') ? 'desc' : 'asc'; ?>&filtro=<?php echo urlencode($filtro); ?>"
-                                   class="text-decoration-none text-dark d-flex align-items-center">
-                                    Cargo
-                                    <?php if ($ordenacao == 'cargo'): ?>
-                                        <i class="bi bi-caret-<?php echo $direcao == 'asc' ? 'up' : 'down'; ?>-fill ms-1 small"></i>
-                                    <?php endif; ?>
-                                </a>
-                            </th>
-                            <th class="py-3 border-bottom-0">
-                                <a href="contatos.php?ordenacao=telefone_ddd&direcao=<?php echo ($ordenacao == 'telefone_ddd' && $direcao == 'asc') ? 'desc' : 'asc'; ?>&filtro=<?php echo urlencode($filtro); ?>"
-                                   class="text-decoration-none text-dark d-flex align-items-center">
-                                    Telefone
-                                    <?php if ($ordenacao == 'telefone_ddd'): ?>
-                                        <i class="bi bi-caret-<?php echo $direcao == 'asc' ? 'up' : 'down'; ?>-fill ms-1 small"></i>
-                                    <?php endif; ?>
-                                </a>
-                            </th>
-                            <th class="text-end pe-4 py-3 border-bottom-0">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($contatos as $c): ?>
-                        <tr>
-                            <td class="ps-4">
-                                <div class="fw-bold text-dark d-flex align-items-center">
-                                    <i class="bi bi-person-circle text-primary me-2"></i>
-                                    <?php echo htmlspecialchars($c['nome']); ?>
-                                </div>
-                                <?php if (!empty($c['email'])): ?>
-                                    <span class="text-muted small d-flex align-items-center mt-1">
-                                        <i class="bi bi-envelope me-1"></i>
-                                        <?php echo htmlspecialchars($c['email']); ?>
-                                    </span>
-                                <?php endif; ?>
-                                <span class="text-muted x-small d-block">ID: #<?php echo $c['id_contato']; ?></span>
-                            </td>
-                            <td>
-                                <span class="badge bg-light text-dark border d-inline-flex align-items-center">
-                                    <i class="bi bi-building me-1"></i>
-                                    <?php echo htmlspecialchars($c['fantasia']); ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php if (!empty($c['cargo'])): ?>
-                                    <span class="text-muted small d-flex align-items-center">
-                                        <i class="bi bi-briefcase me-1"></i>
-                                        <?php echo htmlspecialchars($c['cargo']); ?>
-                                    </span>
-                                <?php else: ?>
-                                    <span class="text-muted fst-italic small">Não informado</span>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php if (!empty($c['telefone_ddd'])): ?>
-                                    <span class="d-flex align-items-center">
-                                        <i class="bi bi-telephone text-success me-1"></i>
-                                        <?php echo htmlspecialchars($c['telefone_ddd']); ?>
-                                    </span>
-                                <?php else: ?>
-                                    <span class="text-muted fst-italic small">Não informado</span>
-                                <?php endif; ?>
-                            </td>
-                            <td class="text-end pe-4">
-                                <div class="d-inline-flex gap-1" role="group">
-                                    <button class="btn btn-sm btn-outline-primary edit-btn contact-action-btn" 
-                                            data-id="<?php echo $c['id_contato']; ?>"
-                                            data-cliente="<?php echo $c['id_cliente']; ?>"
-                                            data-nome="<?php echo htmlspecialchars($c['nome']); ?>"
-                                            data-email="<?php echo htmlspecialchars($c['email']); ?>"
-                                            data-cargo="<?php echo htmlspecialchars($c['cargo']); ?>"
-                                            data-telefone="<?php echo htmlspecialchars($c['telefone_ddd']); ?>"
-                                            data-obs="<?php echo htmlspecialchars($c['observacao']); ?>"
-                                            data-bs-toggle="modal" data-bs-target="#modalContato"
-                                            title="Editar contato">
-                                        <i class="bi bi-pencil-square"></i>
-                                    </button>
-                                    <a href="contatos.php?delete=<?php echo $c['id_contato']; ?>&pagina=<?php echo $pagina; ?>&filtro=<?php echo urlencode($filtro); ?>" 
-                                       class="btn btn-sm btn-outline-danger contact-action-btn" 
-                                       onclick="return confirm('Tem certeza que deseja excluir o contato \\'<?php echo addslashes($c['nome']); ?>\\'?')"
-                                       title="Excluir contato">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Paginação -->
-            <?php if ($total_paginas > 1): ?>
-            <div class="card-footer bg-white border-0 py-3">
-                <nav aria-label="Navegação de páginas">
-                    <ul class="pagination justify-content-center mb-0">
-                        <?php if ($pagina > 1): ?>
-                            <li class="page-item">
-                                <a class="page-link" href="contatos.php?pagina=<?php echo $pagina-1; ?>&ordenacao=<?php echo $ordenacao; ?>&direcao=<?php echo $direcao; ?>&filtro=<?php echo urlencode($filtro); ?>">
-                                    <i class="bi bi-chevron-left"></i>
-                                </a>
-                            </li>
-                        <?php endif; ?>
-                        
-                        <?php
-                        $inicio = max(1, $pagina - 2);
-                        $fim = min($total_paginas, $pagina + 2);
-                        
-                        if ($inicio > 1) {
-                            echo '<li class="page-item"><a class="page-link" href="contatos.php?pagina=1&ordenacao='.$ordenacao.'&direcao='.$direcao.'&filtro='.urlencode($filtro).'">1</a></li>';
-                            if ($inicio > 2) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                        }
-                        
-                        for ($i = $inicio; $i <= $fim; $i++):
-                        ?>
-                            <li class="page-item <?php echo ($i == $pagina) ? 'active' : ''; ?>">
-                                <a class="page-link" href="contatos.php?pagina=<?php echo $i; ?>&ordenacao=<?php echo $ordenacao; ?>&direcao=<?php echo $direcao; ?>&filtro=<?php echo urlencode($filtro); ?>">
-                                    <?php echo $i; ?>
-                                </a>
-                            </li>
-                        <?php endfor; ?>
-                        
-                        <?php
-                        if ($fim < $total_paginas) {
-                            if ($fim < $total_paginas - 1) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                            echo '<li class="page-item"><a class="page-link" href="contatos.php?pagina='.$total_paginas.'&ordenacao='.$ordenacao.'&direcao='.$direcao.'&filtro='.urlencode($filtro).'">'.$total_paginas.'</a></li>';
-                        }
-                        ?>
-                        
-                        <?php if ($pagina < $total_paginas): ?>
-                            <li class="page-item">
-                                <a class="page-link" href="contatos.php?pagina=<?php echo $pagina+1; ?>&ordenacao=<?php echo $ordenacao; ?>&direcao=<?php echo $direcao; ?>&filtro=<?php echo urlencode($filtro); ?>">
-                                    <i class="bi bi-chevron-right"></i>
-                                </a>
-                            </li>
-                        <?php endif; ?>
-                    </ul>
-                </nav>
-            </div>
-            <?php endif; ?>
-        <?php endif; ?>
-    </div>
+    <?php endif; ?>
 </div>
 
-<!-- Modal Contato -->
+<style>
+    /* Estilos adicionais para paginação */
+    .pagination-modern .page-link {
+        padding: 10px 18px;
+        color: var(--c-dark);
+        font-weight: 600;
+        transition: all 0.2s;
+        background: white;
+    }
+
+    .pagination-modern .page-item.active .page-link {
+        background: var(--c-primary);
+        color: white;
+        box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
+    }
+
+    .pagination-modern .page-link:hover:not(.active) {
+        background: #f1f5f9;
+        transform: translateY(-2px);
+    }
+</style>
+
+<button class="fab-add" data-bs-toggle="modal" data-bs-target="#modalContato"><i class="bi bi-plus"></i></button>
+
+<!-- Modal Reutilizado -->
 <div class="modal fade" id="modalContato" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg contacts-modal">
-            <form method="POST" id="formContato">
-                <div class="modal-header border-0 px-4 pt-4">
-                    <h5 class="fw-bold d-flex align-items-center" id="modalTitle">
-                        <i class="bi bi-person-plus me-2"></i>Novo Contato
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <div class="modal-content rounded-4 border-0">
+            <form method="POST">
+                <div class="modal-header bg-primary text-white p-4 border-0">
+                    <h5 class="modal-title fw-bold" id="modalL">Novo Contato</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body px-4 pt-2">
-                    <input type="hidden" name="id_contato" id="id_contato">
+                <div class="modal-body p-4">
+                    <input type="hidden" name="id_contato" id="id_c">
                     <div class="mb-3">
-                        <label class="form-label fw-semibold small d-flex align-items-center">
-                            <i class="bi bi-building me-1"></i>Cliente (ativos)
-                        </label>
-                        <select name="id_cliente" id="id_cliente" class="form-select" required>
-                            <option value="">Selecione um cliente ativo...</option>
-                            <?php if (empty($clientes)): ?>
-                                <option value="" disabled>Nenhum cliente ativo encontrado</option>
-                            <?php else: ?>
-                                <?php foreach ($clientes as $cl): ?>
-                                    <option value="<?php echo $cl['id_cliente']; ?>"><?php echo htmlspecialchars($cl['fantasia']); ?></option>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
+                        <label class="form-label fw-bold">Empresa</label>
+                        <select name="id_cliente" id="id_cl" class="form-select rounded-3" required>
+                            <?php foreach ($clientes as $cl): ?>
+                                <option value="<?= $cl['id_cliente'] ?>"><?= htmlspecialchars($cl['fantasia']) ?></option>
+                            <?php endforeach; ?>
                         </select>
-                        <?php if (empty($clientes)): ?>
-                            <div class="alert alert-warning mt-2 small">
-                                <i class="bi bi-exclamation-triangle me-1"></i>
-                                Não há clientes ativos cadastrados. Cadastre um cliente antes de adicionar contatos.
-                            </div>
-                        <?php endif; ?>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-semibold small d-flex align-items-center">
-                            <i class="bi bi-person me-1"></i>Nome Completo
-                        </label>
-                        <input type="text" name="nome" id="nome" class="form-control" required placeholder="Ex: João Silva">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold small d-flex align-items-center">
-                            <i class="bi bi-envelope me-1"></i>E-mail
-                        </label>
-                        <input type="email" name="email" id="email" class="form-control" placeholder="contato@empresa.com.br">
+                        <label class="form-label fw-bold">Nome</label>
+                        <input type="text" name="nome" id="nom" class="form-control rounded-3" required>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label fw-semibold small d-flex align-items-center">
-                                <i class="bi bi-briefcase me-1"></i>Cargo
-                            </label>
-                            <input type="text" name="cargo" id="cargo" class="form-control" placeholder="Ex: Gerente">
+                            <label class="form-label fw-bold">Cargo</label>
+                            <input type="text" name="cargo" id="car" class="form-control rounded-3">
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label fw-semibold small d-flex align-items-center">
-                                <i class="bi bi-telephone me-1"></i>Telefone
-                            </label>
-                            <input type="text" name="telefone_ddd" id="telefone_ddd" class="form-control" placeholder="(00) 00000-0000" maxlength="15">
+                            <label class="form-label fw-bold">Telefone</label>
+                            <input type="text" name="telefone_ddd" id="tel" class="form-control rounded-3">
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-semibold small d-flex align-items-center">
-                            <i class="bi bi-chat-text me-1"></i>Observação
-                        </label>
-                        <textarea name="observacao" id="observacao" class="form-control" rows="3" placeholder="Informações adicionais sobre este contato..."></textarea>
+                        <label class="form-label fw-bold">E-mail</label>
+                        <input type="email" name="email" id="ema" class="form-control rounded-3">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Obs</label>
+                        <textarea name="observacao" id="obs" class="form-control rounded-3" rows="2"></textarea>
                     </div>
                 </div>
-                <div class="modal-footer border-0 p-4 gap-2">
-                    <button type="button" class="btn btn-light fw-bold px-4 d-flex align-items-center" data-bs-dismiss="modal">
-                        <i class="bi bi-x-lg me-1"></i>Cancelar
-                    </button>
-                    <button type="submit" class="btn btn-primary fw-bold px-4 d-flex align-items-center" <?php echo empty($clientes) ? 'disabled' : ''; ?>>
-                        <i class="bi bi-check-lg me-1"></i>Salvar Contato
-                    </button>
+                <div class="modal-footer border-0 p-4 pt-0">
+                    <button type="submit" class="btn btn-primary w-100 py-3 fw-bold rounded-3">Salvar</button>
                 </div>
             </form>
         </div>
@@ -584,45 +463,18 @@ include 'header.php';
 </div>
 
 <script>
-// Função para aplicar máscara de telefone
-function maskPhone(value) {
-    if (!value) return "";
-    value = value.replace(/\D/g, "");
-    value = value.replace(/^(\d{2})(\d)/g, "($1) $2");
-    value = value.replace(/(\d)(\d{4})$/, "$1-$2");
-    return value;
-}
-
-const phoneInput = document.getElementById('telefone_ddd');
-phoneInput.addEventListener('input', (e) => {
-    e.target.value = maskPhone(e.target.value);
+document.querySelectorAll('.edit-trigger').forEach(b => {
+    b.onclick = function() {
+        document.getElementById('modalL').innerText = 'Editar Contato';
+        document.getElementById('id_c').value = this.dataset.id;
+        document.getElementById('id_cl').value = this.dataset.cliente;
+        document.getElementById('nom').value = this.dataset.nome;
+        document.getElementById('ema').value = this.dataset.email === 'null' ? '' : this.dataset.email;
+        document.getElementById('car').value = this.dataset.cargo;
+        document.getElementById('tel').value = this.dataset.telefone;
+        document.getElementById('obs').value = this.dataset.obs;
+    }
 });
-
-document.querySelectorAll('.edit-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-        document.getElementById('modalTitle').innerHTML = '<i class="bi bi-pencil-square me-2"></i>Editar Contato';
-        document.getElementById('id_contato').value = this.dataset.id;
-        document.getElementById('id_cliente').value = this.dataset.cliente;
-        document.getElementById('nome').value = this.dataset.nome;
-        document.getElementById('email').value = this.dataset.email || '';
-        document.getElementById('cargo').value = this.dataset.cargo;
-        document.getElementById('telefone_ddd').value = maskPhone(this.dataset.telefone);
-        document.getElementById('observacao').value = this.dataset.obs;
-    });
-});
-
-document.getElementById('modalContato').addEventListener('hidden.bs.modal', function () {
-    document.getElementById('modalTitle').innerHTML = '<i class="bi bi-person-plus me-2"></i>Novo Contato';
-    document.getElementById('formContato').reset();
-    document.getElementById('id_contato').value = '';
-});
-
-// Foco automático no campo de busca
-const filtroInput = document.querySelector('input[name="filtro"]');
-if (filtroInput && window.location.search.includes('filtro=')) {
-    filtroInput.focus();
-    filtroInput.select();
-}
 </script>
 
 <?php include 'footer.php'; ?>
