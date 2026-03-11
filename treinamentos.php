@@ -1210,7 +1210,7 @@ include 'header.php';
         <div class="col-auto">
             <div class="d-flex align-items-center gap-2">
                 <button type="button" class="btn btn-outline-success px-4 fw-bold shadow-sm d-flex align-items-center" id="btn_copiar_disponibilidade" disabled>
-                    <i class="bi bi-whatsapp me-2"></i>Copiar Agendamento
+                    <i class="bi bi-whatsapp me-2"></i>Copiar Horas Disponíveis
                 </button>
                 <button class="btn btn-primary px-4 fw-bold shadow-sm d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
                     <i class="bi bi-plus-lg me-2"></i>Novo Agendamento

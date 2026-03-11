@@ -89,262 +89,327 @@ include 'header.php';
 ?>
 
 <style>
-    :root {
-        --c-primary: #4361ee;
-        --c-secondary: #7209b7;
-        --c-dark: #1e293b;
-        --c-border: #e2e8f0;
+    /* === INTEGRAÇÃO COM DESIGN TOKENS DE HEADER.PHP + DARK THEME === */
+    body, html {
+        background-color: var(--bg-body);
+    }
+    .container-fluid.py-4 {
+        padding-top: 1rem !important;
+        padding-bottom: 2rem !important;
     }
 
-    @keyframes fadeInUp {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    .contacts-wrapper {
-        animation: fadeInUp 0.5s ease-out;
-    }
-
-    .page-header-premium {
-        margin-bottom: 2.5rem;
-    }
-
-    .title-modern {
+    .page-title {
         font-family: var(--font-heading);
         font-size: 1.75rem;
-        font-weight: 700;
-        color: var(--c-dark);
         letter-spacing: -0.5px;
+        margin-bottom: 0.25rem;
     }
 
-    .search-card-premium {
-        background: white;
-        border-radius: 20px;
-        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
-        padding: 0.75rem;
-        margin-bottom: 2.5rem;
-        border: none;
+    .search-container {
+        position: relative;
+        flex: 1;
+        max-width: 450px;
+    }
+    .search-container .form-control {
+        padding-left: 45px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+        background-color: var(--bg-card);
+        color: var(--text-main);
+        transition: all 0.3s ease;
+        height: 48px;
+        box-shadow: var(--shadow-sm);
+    }
+    .search-container .form-control:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 4px var(--primary-light);
+        outline: none;
+    }
+    .search-container .search-icon {
+        position: absolute;
+        left: 18px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        z-index: 10;
+        font-size: 1.1rem;
     }
 
-    .search-input-group {
+    .contacts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+        padding-bottom: 2rem;
+    }
+
+    .contact-card {
+        background: var(--bg-card);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        box-shadow: var(--shadow-sm);
+        transition: all 0.3s ease;
         display: flex;
-        align-items: center;
-        gap: 12px;
-        padding-left: 1rem;
-    }
-
-    .search-input-group .form-control {
-        border: none;
-        box-shadow: none;
-        font-size: 1.05rem;
-        font-weight: 500;
-        padding: 0.75rem 0;
-    }
-
-    /* Grid de Cards */
-    .contact-card-premium {
-        background: white;
-        border-radius: 24px;
-        border: 1px solid var(--c-border);
-        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        height: 100%;
+        flex-direction: column;
         overflow: hidden;
-        position: relative;
     }
-
-    .contact-card-premium:hover {
-        transform: translateY(-10px);
-        border-color: var(--c-primary);
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+    .contact-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-card);
+        border-color: var(--primary-light);
     }
-
+    
     .card-visual-header {
-        height: 80px;
-        background: linear-gradient(135deg, #4361ee 0%, #7209b7 100%);
-        position: relative;
+        padding: 1.5rem 1.25rem 0.5rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        background: rgba(255, 255, 255, 0.02);
+        border-bottom: 1px solid var(--border-color);
     }
 
     .avatar-circle {
-        width: 70px;
-        height: 70px;
-        background: white;
-        border-radius: 20px;
-        position: absolute;
-        bottom: -35px;
-        left: 24px;
+        width: 50px;
+        height: 50px;
+        background: var(--primary-light);
+        color: var(--primary);
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.8rem;
-        color: var(--c-primary);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        border: 4px solid white;
+        font-size: 1.5rem;
+        flex-shrink: 0;
     }
 
-    .quick-actions {
-        position: absolute;
-        top: 15px;
-        right: 15px;
-        display: flex;
-        gap: 8px;
-        opacity: 0;
-        transform: translateX(10px);
-        transition: all 0.3s ease;
+    .contact-info {
+        flex: 1;
+        min-width: 0;
     }
-
-    .contact-card-premium:hover .quick-actions {
-        opacity: 1;
-        transform: translateX(0);
-    }
-
-    .action-pill {
-        width: 34px;
-        height: 34px;
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.2);
-        backdrop-filter: blur(8px);
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid rgba(255,255,255,0.3);
-        transition: all 0.2s;
-    }
-
-    .action-pill:hover { background: white; color: var(--c-primary); transform: scale(1.1); }
-    .action-pill.btn-del:hover { color: #ef4444; }
-
-    .card-body-premium {
-        padding: 50px 24px 24px;
-    }
-
     .name-premium {
-        font-size: 1.25rem;
-        font-weight: 800;
-        color: var(--c-dark);
-        margin-bottom: 4px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-main);
+        margin-bottom: 0.1rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
-
     .role-premium {
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: #64748b;
+        font-size: 0.8rem;
+        color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        margin-bottom: 16px;
-        display: block;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .card-body-premium {
+        padding: 1rem 1.25rem;
+        flex: 1;
     }
 
     .info-row {
         display: flex;
         align-items: center;
-        gap: 12px;
-        margin-bottom: 12px;
-        color: #475569;
-        font-size: 0.95rem;
-        text-decoration: none;
+        gap: 10px;
+        margin-bottom: 10px;
+        color: var(--text-main);
+        font-size: 0.9rem;
+    }
+    .info-row i {
+        color: var(--text-muted);
+        width: 16px;
+        text-align: center;
     }
 
     .client-chip {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: #f1f5f9;
-        padding: 6px 14px;
-        border-radius: 100px;
-        font-size: 0.8rem;
-        font-weight: 700;
-        border: 1px solid #e2e8f0;
+        background: var(--bg-body);
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        border: 1px solid var(--border-color);
+        color: var(--text-muted);
         margin-top: 8px;
     }
 
-    /* Floating Action Button */
-    .fab-add {
-        position: fixed;
-        bottom: 40px;
-        right: 40px;
-        width: 65px;
-        height: 65px;
-        border-radius: 22px;
-        background: linear-gradient(135deg, #4361ee 0%, #7209b7 100%);
-        color: white;
+    .card-footer-premium {
+        padding: 0.75rem 1.25rem;
+        background: rgba(255, 255, 255, 0.02);
+        border-top: 1px solid var(--border-color);
         display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 0.4rem;
+    }
+
+    .btn-action {
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.8rem;
-        box-shadow: 0 15px 35px rgba(67, 97, 238, 0.3);
-        border: none;
-        transition: all 0.3s;
-        z-index: 1000;
+        border-radius: 8px;
+        transition: all 0.2s;
+        border: 1px solid transparent;
+        background: var(--bg-body);
+        color: var(--text-muted);
+        text-decoration: none;
+        font-size: 0.9rem;
     }
+    .btn-action:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+    .btn-action.edit { color: var(--info); background: var(--info-light); }
+    .btn-action.edit:hover { background: var(--info); color: white; border-color: var(--info); }
+    .btn-action.delete { color: var(--danger); background: var(--danger-light); }
+    .btn-action.delete:hover { background: var(--danger); color: white; border-color: var(--danger); }
 
-    .fab-add:hover {
-        transform: rotate(90deg) scale(1.1);
-        color: white;
+    /* PAGINAÇÃO */
+    .pagination-modern .page-link {
+        padding: 8px 16px;
+        color: var(--text-main);
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        transition: all 0.2s;
     }
+    .pagination-modern .page-item.active .page-link {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+    .pagination-modern .page-link:hover:not(.active) {
+        background: var(--bg-body);
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(15px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+    /* MODAL */
+    .contact-modal .form-control,
+    .contact-modal .form-select,
+    .contact-modal textarea {
+        background-color: var(--bg-body) !important;
+        color: var(--text-main) !important;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 0.6rem 1rem;
+    }
+    .contact-modal .form-control:focus,
+    .contact-modal .form-select:focus,
+    .contact-modal textarea:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-light);
+    }
+    .contact-modal label {
+        color: var(--text-muted) !important;
+    }
+    .modal-content {
+        background-color: var(--bg-card) !important;
+        border: 1px solid var(--border-color) !important;
+    }
+    .modal-header, .modal-footer {
+        border-color: var(--border-color) !important;
+    }
+    .modal-title { color: var(--text-main) !important; }
+    .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+
 </style>
 
-<div class="contacts-wrapper container-fluid">
-    <div class="page-header-premium d-flex justify-content-between align-items-end">
-        <div>
-            <h1 class="title-modern">Directório de Contatos</h1>
-            <p class="text-muted">Gestão centralizada de relacionamentos.</p>
+<div class="container-fluid py-4">
+    <!-- TOPO PADRÃO DO SISTEMA -->
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h3 class="page-title fw-bold mb-1"><i class="bi bi-person-vcard-fill me-2 text-primary"></i>Diretório de Contatos</h3>
+            <p class="text-muted small mb-0">Gestão centralizada de relacionamentos.</p>
         </div>
-        <div class="d-none d-md-block">
-            <span class="badge bg-white text-dark shadow-sm px-3 py-2 rounded-3 border">Total: <strong><?= $total_registros ?></strong></span>
-        </div>
-    </div>
-
-    <div class="search-card-premium">
-        <form method="GET">
-            <div class="row align-items-center g-0">
-                <div class="col">
-                    <div class="search-input-group">
-                        <i class="bi bi-search text-muted"></i>
-                        <input type="text" name="filtro" class="form-control" placeholder="Buscar por nome, empresa ou cargo..." value="<?= htmlspecialchars($filtro) ?>">
-                    </div>
-                </div>
-                <div class="col-auto px-2">
-                    <button type="submit" class="btn btn-primary rounded-4 px-4">Filtrar</button>
-                </div>
+        <div class="col-auto">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-secondary ms-2 px-3 py-2 rounded-3">Total: <?= $total_registros ?></span>
+                <button class="btn btn-primary px-4 fw-bold shadow-sm d-flex align-items-center"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalContato">
+                    <i class="bi bi-plus-lg me-2"></i>Novo Contato
+                </button>
             </div>
-        </form>
+        </div>
     </div>
 
-    <div class="row g-4">
-        <?php foreach ($contatos as $c): ?>
-            <div class="col-xl-3 col-lg-4 col-md-6">
-                <div class="contact-card-premium shadow-sm">
-                    <div class="card-visual-header">
-                        <div class="avatar-circle"><i class="bi bi-person-vcard"></i></div>
-                        <div class="quick-actions">
-                            <button class="action-pill edit-trigger" 
-                                    data-id="<?= $c['id_contato'] ?>" 
-                                    data-cliente="<?= $c['id_cliente'] ?>"
-                                    data-nome="<?= htmlspecialchars($c['nome']) ?>"
-                                    data-email="<?= htmlspecialchars($c['email']) ?>"
-                                    data-cargo="<?= htmlspecialchars($c['cargo']) ?>"
-                                    data-telefone="<?= htmlspecialchars($c['telefone_ddd']) ?>"
-                                    data-obs="<?= htmlspecialchars($c['observacao']) ?>"
-                                    data-bs-toggle="modal" data-bs-target="#modalContato">
-                                <i class="bi bi-pencil-fill"></i>
-                            </button>
-                            <a href="contatos.php?delete=<?= $c['id_contato'] ?>" class="action-pill btn-del" onclick="return confirm('Excluir?')">
-                                <i class="bi bi-trash-fill"></i>
-                            </a>
-                        </div>
+    <!-- BARRA DE CONTROLES -->
+    <div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
+        <div class="search-container" style="flex: 1; min-width: 220px; max-width: 420px;">
+            <i class="bi bi-search search-icon"></i>
+            <form method="GET" action="contatos.php" class="d-inline w-100">
+                <input type="text" name="filtro" class="form-control w-100" placeholder="Buscar por nome, empresa ou cargo..." value="<?= htmlspecialchars($filtro) ?>">
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN CARDS -->
+    <div class="contacts-grid">
+        <?php foreach ($contatos as $index => $c): ?>
+            <div class="contact-card fade-in" style="--card-index: <?= $index ?>; animation-delay: calc(var(--card-index, 0) * 0.05s);">
+                <div class="card-visual-header">
+                    <div class="avatar-circle">
+                        <i class="bi bi-person"></i>
                     </div>
-                    <div class="card-body-premium">
-                        <h4 class="name-premium"><?= htmlspecialchars($c['nome']) ?></h4>
-                        <span class="role-premium"><?= $c['cargo'] ?: 'Sem Cargo' ?></span>
-                        <hr class="my-3 opacity-10">
-                        <?php if($c['telefone_ddd']): ?>
-                            <div class="info-row"><i class="bi bi-telephone"></i> <?= htmlspecialchars($c['telefone_ddd']) ?></div>
-                        <?php endif; ?>
-                        <?php if($c['email']): ?>
-                            <div class="info-row"><i class="bi bi-envelope"></i> <?= htmlspecialchars($c['email']) ?></div>
-                        <?php endif; ?>
-                        <div class="client-chip"><i class="bi bi-building"></i> <?= htmlspecialchars($c['fantasia']) ?></div>
+                    <div class="contact-info">
+                        <div class="name-premium" title="<?= htmlspecialchars($c['nome']) ?>"><?= htmlspecialchars($c['nome']) ?></div>
+                        <div class="role-premium" title="<?= htmlspecialchars($c['cargo'] ?: 'Sem Cargo') ?>"><?= htmlspecialchars($c['cargo']) ?: 'Sem Cargo' ?></div>
+                    </div>
+                </div>
+                
+                <div class="card-body-premium">
+                    <?php if($c['telefone_ddd']): ?>
+                        <div class="info-row">
+                            <i class="bi bi-telephone"></i>
+                            <span><?= htmlspecialchars($c['telefone_ddd']) ?></span>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <?php if($c['email']): ?>
+                        <div class="info-row">
+                            <i class="bi bi-envelope"></i>
+                            <span class="text-truncate"><?= htmlspecialchars($c['email']) ?></span>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <div class="client-chip text-truncate w-100" title="<?= htmlspecialchars($c['fantasia']) ?>">
+                        <i class="bi bi-building"></i> <?= htmlspecialchars($c['fantasia']) ?>
+                    </div>
+                </div>
+
+                <div class="card-footer-premium">
+                    <div class="action-buttons">
+                        <button class="btn-action edit edit-trigger"
+                                data-bs-toggle="tooltip"
+                                data-bs-title="Editar contato"
+                                data-id="<?= $c['id_contato'] ?>" 
+                                data-cliente="<?= $c['id_cliente'] ?>"
+                                data-nome="<?= htmlspecialchars($c['nome']) ?>"
+                                data-email="<?= htmlspecialchars($c['email']) ?>"
+                                data-cargo="<?= htmlspecialchars($c['cargo']) ?>"
+                                data-telefone="<?= htmlspecialchars($c['telefone_ddd']) ?>"
+                                data-obs="<?= htmlspecialchars($c['observacao']) ?>"
+                                data-bs-toggle="modal" data-bs-target="#modalContato">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <a href="contatos.php?delete=<?= $c['id_contato'] ?>" 
+                           class="btn-action delete" 
+                           data-bs-toggle="tooltip"
+                           data-bs-title="Excluir contato"
+                           onclick="return confirm('Excluir este contato?')">
+                            <i class="bi bi-trash"></i>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -353,12 +418,12 @@ include 'header.php';
 
     <!-- Paginação Premium -->
     <?php if ($total_paginas > 1): ?>
-        <div class="mt-5 d-flex justify-content-center">
+        <div class="mt-4 mb-5 d-flex justify-content-center">
             <nav>
-                <ul class="pagination pagination-modern gap-2">
+                <ul class="pagination pagination-modern gap-2 shadow-sm rounded-3">
                     <?php if ($pagina > 1): ?>
                         <li class="page-item">
-                            <a class="page-link rounded-3 border-0 shadow-sm" href="contatos.php?pagina=<?= $pagina - 1 ?>&filtro=<?= urlencode($filtro) ?>">
+                            <a class="page-link rounded-3" href="contatos.php?pagina=<?= $pagina - 1 ?>&filtro=<?= urlencode($filtro) ?>">
                                 <i class="bi bi-chevron-left"></i>
                             </a>
                         </li>
@@ -367,17 +432,16 @@ include 'header.php';
                     <?php
                     $inicio = max(1, $pagina - 2);
                     $fim = min($total_paginas, $pagina + 2);
-                    
                     for ($i = $inicio; $i <= $fim; $i++):
                     ?>
                         <li class="page-item <?= ($i == $pagina) ? 'active' : '' ?>">
-                            <a class="page-link rounded-3 border-0 shadow-sm" href="contatos.php?pagina=<?= $i ?>&filtro=<?= urlencode($filtro) ?>"><?= $i ?></a>
+                            <a class="page-link rounded-3" href="contatos.php?pagina=<?= $i ?>&filtro=<?= urlencode($filtro) ?>"><?= $i ?></a>
                         </li>
                     <?php endfor; ?>
 
                     <?php if ($pagina < $total_paginas): ?>
                         <li class="page-item">
-                            <a class="page-link rounded-3 border-0 shadow-sm" href="contatos.php?pagina=<?= $pagina + 1 ?>&filtro=<?= urlencode($filtro) ?>">
+                            <a class="page-link rounded-3" href="contatos.php?pagina=<?= $pagina + 1 ?>&filtro=<?= urlencode($filtro) ?>">
                                 <i class="bi bi-chevron-right"></i>
                             </a>
                         </li>
@@ -388,92 +452,100 @@ include 'header.php';
     <?php endif; ?>
 </div>
 
-<style>
-    /* Estilos adicionais para paginação */
-    .pagination-modern .page-link {
-        padding: 10px 18px;
-        color: var(--c-dark);
-        font-weight: 600;
-        transition: all 0.2s;
-        background: white;
-    }
-
-    .pagination-modern .page-item.active .page-link {
-        background: var(--c-primary);
-        color: white;
-        box-shadow: 0 4px 12px rgba(67, 97, 238, 0.3);
-    }
-
-    .pagination-modern .page-link:hover:not(.active) {
-        background: #f1f5f9;
-        transform: translateY(-2px);
-    }
-</style>
-
-<button class="fab-add" data-bs-toggle="modal" data-bs-target="#modalContato"><i class="bi bi-plus"></i></button>
-
 <!-- Modal Reutilizado -->
 <div class="modal fade" id="modalContato" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content rounded-4 border-0">
-            <form method="POST">
-                <div class="modal-header bg-primary text-white p-4 border-0">
-                    <h5 class="modal-title fw-bold" id="modalL">Novo Contato</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <form method="POST" class="modal-content rounded-4 border-0 shadow-lg contact-modal">
+            <div class="modal-header border-0 px-4 pt-4">
+                <h5 class="modal-title fw-bold" id="modalL">Novo Contato</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4">
+                <input type="hidden" name="id_contato" id="id_c">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold"><i class="bi bi-building me-1"></i>Empresa</label>
+                    <select name="id_cliente" id="id_cl" class="form-select" required>
+                        <?php foreach ($clientes as $cl): ?>
+                            <option value="<?= $cl['id_cliente'] ?>"><?= htmlspecialchars($cl['fantasia']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
-                <div class="modal-body p-4">
-                    <input type="hidden" name="id_contato" id="id_c">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Empresa</label>
-                        <select name="id_cliente" id="id_cl" class="form-select rounded-3" required>
-                            <?php foreach ($clientes as $cl): ?>
-                                <option value="<?= $cl['id_cliente'] ?>"><?= htmlspecialchars($cl['fantasia']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold"><i class="bi bi-person me-1"></i>Nome</label>
+                    <input type="text" name="nome" id="nom" class="form-control" required placeholder="Nome completo">
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-bold"><i class="bi bi-briefcase me-1"></i>Cargo</label>
+                        <input type="text" name="cargo" id="car" class="form-control" placeholder="Ex: Gestor de T.I">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Nome</label>
-                        <input type="text" name="nome" id="nom" class="form-control rounded-3" required>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-bold">Cargo</label>
-                            <input type="text" name="cargo" id="car" class="form-control rounded-3">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label fw-bold">Telefone</label>
-                            <input type="text" name="telefone_ddd" id="tel" class="form-control rounded-3">
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">E-mail</label>
-                        <input type="email" name="email" id="ema" class="form-control rounded-3">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Obs</label>
-                        <textarea name="observacao" id="obs" class="form-control rounded-3" rows="2"></textarea>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label small fw-bold"><i class="bi bi-telephone me-1"></i>Telefone</label>
+                        <input type="text" name="telefone_ddd" id="tel" class="form-control" placeholder="(00) 00000-0000">
                     </div>
                 </div>
-                <div class="modal-footer border-0 p-4 pt-0">
-                    <button type="submit" class="btn btn-primary w-100 py-3 fw-bold rounded-3">Salvar</button>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold"><i class="bi bi-envelope me-1"></i>E-mail</label>
+                    <input type="email" name="email" id="ema" class="form-control" placeholder="contato@empresa.com">
                 </div>
-            </form>
-        </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold"><i class="bi bi-chat-left-text me-1"></i>Observações</label>
+                    <textarea name="observacao" id="obs" class="form-control" rows="3" placeholder="Informações adicionais..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-4">
+                <button type="button" class="btn btn-light fw-bold px-4" data-bs-dismiss="modal"><i class="bi bi-x-circle me-2"></i>Cancelar</button>
+                <button type="submit" class="btn btn-primary fw-bold shadow-sm px-4"><i class="bi bi-check-circle me-2"></i>Salvar</button>
+            </div>
+        </form>
     </div>
 </div>
 
 <script>
-document.querySelectorAll('.edit-trigger').forEach(b => {
-    b.onclick = function() {
-        document.getElementById('modalL').innerText = 'Editar Contato';
-        document.getElementById('id_c').value = this.dataset.id;
-        document.getElementById('id_cl').value = this.dataset.cliente;
-        document.getElementById('nom').value = this.dataset.nome;
-        document.getElementById('ema').value = this.dataset.email === 'null' ? '' : this.dataset.email;
-        document.getElementById('car').value = this.dataset.cargo;
-        document.getElementById('tel').value = this.dataset.telefone;
-        document.getElementById('obs').value = this.dataset.obs;
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Limpar modal ao esconder
+    var modalContatoEl = document.getElementById('modalContato');
+    if (modalContatoEl) {
+        modalContatoEl.addEventListener('hidden.bs.modal', function () {
+            document.getElementById('modalL').innerText = 'Novo Contato';
+            document.getElementById('id_c').value = '';
+            document.getElementById('nom').value = '';
+            document.getElementById('ema').value = '';
+            document.getElementById('car').value = '';
+            document.getElementById('tel').value = '';
+            document.getElementById('obs').value = '';
+            // Resetar o select para a primeira opção
+            var selectCliente = document.getElementById('id_cl');
+            if (selectCliente && selectCliente.options.length > 0) {
+                selectCliente.selectedIndex = 0;
+            }
+        });
     }
+
+    // Usando delegação de eventos para garantir que funcione em todos os cards
+    document.body.addEventListener('click', function(e) {
+        var btn = e.target.closest('.edit-trigger');
+        if (btn) {
+            document.getElementById('modalL').innerText = 'Editar Contato';
+            document.getElementById('id_c').value = btn.dataset.id || '';
+            document.getElementById('id_cl').value = btn.dataset.cliente || '';
+            document.getElementById('nom').value = btn.dataset.nome || '';
+            document.getElementById('ema').value = (btn.dataset.email === 'null' || !btn.dataset.email) ? '' : btn.dataset.email;
+            document.getElementById('car').value = btn.dataset.cargo || '';
+            document.getElementById('tel').value = btn.dataset.telefone || '';
+            document.getElementById('obs').value = btn.dataset.obs || '';
+            
+            // Força a exibição do Modal programaticamente para não conflitar com o data-bs-toggle="tooltip"
+            var myModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalContato'));
+            myModal.show();
+        }
+    });
 });
 </script>
 
