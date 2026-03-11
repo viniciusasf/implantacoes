@@ -50,399 +50,280 @@ include 'header.php';
 
 <!-- // custom dashboard styles -->
 <style>
-    /* // hero section e header da página */
-    .page-header {
-        margin-bottom: 2rem;
-    }
-    
-    .page-title {
-        font-family: var(--font-heading);
-        font-size: 1.75rem;
-        font-weight: 700;
-        letter-spacing: -0.5px;
-        margin-bottom: 0.25rem;
-    }
+/* // Design System Clean & Modern (Perplexity Style) */
+:root {
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-border: rgba(255, 255, 255, 0.08);
+}
 
-    /* // cards de estatísticas (benefícios/destaques) */
-    .stat-card {
-        border-radius: var(--radius-lg);
-        border: none;
-        transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s;
-        height: 100%;
-        background: var(--bg-card);
-        box-shadow: var(--shadow-sm);
-        position: relative;
-        overflow: hidden;
-    }
+[data-theme="dark"] {
+    --bg-body: #0d0e12;
+    --bg-card: #14151a;
+    --border-color: #2b2e35;
+    --text-main: #e2e8f0;
+    --text-muted: #94a3b8;
+    --primary-light: rgba(67, 97, 238, 0.15);
+    --success-light: rgba(16, 185, 129, 0.15);
+    --warning-light: rgba(245, 158, 11, 0.15);
+    --danger-light: rgba(239, 68, 68, 0.15);
+    --info-light: rgba(6, 182, 212, 0.15);
+}
 
-    .stat-card:hover {
-        transform: translateY(-5px);
-        box-shadow: var(--shadow-hover);
-    }
-    
-    .stat-card::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; width: 4px; height: 100%;
-        background: var(--primary);
-        border-radius: var(--radius-lg) 0 0 var(--radius-lg);
-    }
-    .stat-card.border-primary::before { background: var(--primary); }
-    .stat-card.border-success::before { background: var(--success); }
-    .stat-card.border-warning::before { background: var(--warning); }
-    .stat-card.border-info::before { background: var(--info); }
-    .stat-card.border-danger::before { background: var(--danger); }
-    .stat-card.border-dark::before { background: var(--text-dark); }
+/* Page Header */
+.modern-header {
+    padding: 1rem 0 2rem 0;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 2.5rem;
+}
 
-    .stat-icon {
-        width: 56px;
-        height: 56px;
-        border-radius: var(--radius-md);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 24px;
-        transition: all 0.3s ease;
-    }
-    
-    .stat-card:hover .stat-icon {
-        transform: scale(1.1) rotate(5deg);
-    }
+.title-accent {
+    color: var(--primary);
+    background: linear-gradient(120deg, var(--primary), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
 
-    .stat-value {
-        font-size: 2rem;
-        font-weight: 800;
-        font-family: var(--font-heading);
-        line-height: 1.2;
-        color: var(--text-dark);
-    }
+/* Stats Cards Premium */
+.stats-card-premium {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
 
-    /* // tabelas modernas */
-    .table-container {
-        border-radius: var(--radius-lg);
-        background: var(--bg-card);
-        padding: 1.5rem;
-        box-shadow: var(--shadow-card);
-        height: 100%;
-        overflow: hidden;
-    }
-    
-    .table-responsive {
-        max-height: 480px;
-        overflow-y: auto;
-        padding-right: 0.5rem;
-    }
+.stats-card-premium:hover {
+    transform: translateY(-5px);
+    border-color: var(--primary);
+    box-shadow: var(--shadow-md);
+}
 
-    .table {
-        margin-bottom: 0;
-    }
-    
-    .table thead th {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        background-color: var(--bg-card);
-        border-bottom: 2px solid #f1f5f9;
-        color: var(--text-muted);
-        font-size: 0.75rem;
-        padding: 1.2rem 1rem;
-    }
+.stats-icon-box {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    margin-bottom: 1.25rem;
+}
 
-    .table tbody tr {
-        transition: background-color 0.2s;
-    }
-    
-    .table tbody tr:hover {
-        background-color: #f8fafc;
-    }
-    
-    .table tbody td {
-        padding: 1.2rem 1rem;
-        border-bottom: 1px solid #f1f5f9;
-        vertical-align: middle;
-    }
+.stats-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
 
-    /* // design system badges & avatares */
-    .badge-soft {
-        padding: 0.4em 0.8em;
-        border-radius: var(--radius-sm);
-        font-weight: 600;
-        font-size: 0.75rem;
-        font-family: var(--font-body);
-    }
-    
-    .badge-soft-success { background: var(--success-light); color: #059669; }
-    .badge-soft-info { background: var(--info-light); color: #0284c7; }
-    .badge-soft-danger { background: var(--danger-light); color: #dc2626; }
+.stats-number {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text-main);
+    line-height: 1;
+}
 
-    .avatar-circle {
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        font-size: 1.1rem;
-        color: white;
-        box-shadow: var(--shadow-sm);
-    }
+/* Table Sections */
+.dashboard-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    height: 100%;
+}
 
-    .avatar-vendedor { background: linear-gradient(135deg, var(--primary), #818cf8); }
-    .avatar-servidor { background: linear-gradient(135deg, var(--success), #34d399); }
+.section-title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
 
-    /* // progress bars modernas */
-    .progress-thin {
-        height: 8px;
-        border-radius: 10px;
-        background-color: #f1f5f9;
-        overflow: hidden;
-    }
-    
-    .progress-thin .progress-bar {
-        border-radius: 10px;
-        background: linear-gradient(90deg, var(--primary), #818cf8);
-    }
+.table-dashboard {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
 
-    /* // quick stats cards */
-    .quick-stat {
-        background: #f8fafc;
-        border-radius: var(--radius-md);
-        padding: 1.2rem;
-        transition: all 0.2s;
-        border: 1px solid transparent;
-    }
-    
-    .quick-stat:hover {
-        background: #fff;
-        border-color: #e2e8f0;
-        box-shadow: var(--shadow-sm);
-        transform: translateY(-2px);
-    }
+.table-dashboard thead th {
+    background: var(--bg-body);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
 
-    .quick-stat-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: var(--radius-sm);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.2rem;
-    }
+.table-dashboard tbody td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.9rem;
+    color: var(--text-main);
+}
 
-    /* custom scrollbar for tables */
-    .table-responsive::-webkit-scrollbar { width: 6px; }
-    .table-responsive::-webkit-scrollbar-track { background: transparent; }
-    .table-responsive::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    .table-responsive::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+.table-dashboard tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Scrollbar Custom */
+.custom-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+.custom-scroll::-webkit-scrollbar { width: 5px; }
+.custom-scroll::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
+
+/* GSAP */
+.gsap-reveal {
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+.fw-800 { font-weight: 800; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 
-<div class="container-fluid">
-    <!-- // page header -->
-    <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+<div class="container-fluid px-0">
+    <!-- Modern Header -->
+    <div class="modern-header d-flex justify-content-between align-items-end gsap-reveal">
         <div>
-            <h2 class="page-title">Dashboard Operacional</h2>
-            <p class="text-muted mb-0" style="font-weight: 500;">Visão geral de implantações, vendedores e servidores.</p>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-2" style="font-size: 0.8rem;">
+                    <li class="breadcrumb-item active" aria-current="page">Dashboard</li>
+                </ol>
+            </nav>
+            <h2 class="fw-800 mb-0">Visão <span class="title-accent">Operacional</span></h2>
+            <p class="text-muted small mb-0">Acompanhamento em tempo real das implantações e performance.</p>
         </div>
-        <div class="d-flex gap-2">
-            <button class="btn btn-primary shadow-sm" onclick="window.print()">
-                <i class="bi bi-printer"></i> Imprimir
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-secondary px-4 fw-bold shadow-sm" onclick="window.print()">
+                <i class="bi bi-printer me-2"></i>Imprimir
             </button>
-            <button class="btn btn-primary" onclick="exportToExcel()">
-                <i class="bi bi-download"></i> Exportar
+            <button class="btn btn-primary px-4 shadow-sm fw-bold" onclick="exportToExcel()">
+                <i class="bi bi-download me-2"></i>Exportar
             </button>
         </div>
     </div>
 
-    <!-- // hero metrics: Cards de Estatísticas Principais -->
-    <div class="row g-4 mb-5">
-        <!-- Total com Concluídos -->
-        <div class="col-xl-2 col-lg-4 col-md-6">
-            <div class="card stat-card border-dark">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="text-muted text-uppercase small fw-bold mb-2" style="letter-spacing: 0.5px;">Efetivados</h6>
-                            <h2 class="stat-value mb-1"><?= $total_clientes_com_concluidos ?></h2>
-                            <span class="text-muted" style="font-size: 0.75rem; font-weight: 500;">Ativos + Concluídos</span>
-                        </div>
-                        <div class="stat-icon" style="background: rgba(27, 37, 89, 0.05); color: var(--text-dark);">
-                            <i class="bi bi-briefcase-fill"></i>
-                        </div>
-                    </div>
-                </div>
+    <!-- Stats Cards Premium -->
+    <div class="row g-4 mb-5 gsap-reveal">
+        <!-- Totais -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="stats-card-premium">
+                <div class="stats-icon-box text-dark" style="background: var(--bg-body);"><i class="bi bi-briefcase"></i></div>
+                <div class="stats-label">Efetivados</div>
+                <div class="stats-number"><?= $total_clientes_com_concluidos ?></div>
+                <div class="text-muted small mt-1">Ativos + Concl.</div>
             </div>
         </div>
-
-        <!-- Clientes Ativos -->
-        <div class="col-xl-2 col-lg-4 col-md-6">
-            <div class="card stat-card border-primary">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="text-muted text-uppercase small fw-bold mb-2" style="letter-spacing: 0.5px;">Ativos</h6>
-                            <h2 class="stat-value mb-1 text-primary"><?= $total_clientes ?></h2>
-                            <span class="text-muted" style="font-size: 0.75rem; font-weight: 500;">Em Implantação</span>
-                        </div>
-                        <div class="stat-icon" style="background: var(--primary-light); color: var(--primary);">
-                            <i class="bi bi-people-fill"></i>
-                        </div>
-                    </div>
-                </div>
+        <!-- Ativos -->
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="stats-card-premium">
+                <div class="stats-icon-box text-primary" style="background: var(--primary-light);"><i class="bi bi-person-check"></i></div>
+                <div class="stats-label">Ativos</div>
+                <div class="stats-number text-primary"><?= $total_clientes ?></div>
+                <div class="text-muted small mt-1">Em implantação</div>
             </div>
         </div>
-
         <!-- Vendedores -->
-        <div class="col-xl-2 col-lg-4 col-md-6">
-            <div class="card stat-card border-warning">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="text-muted text-uppercase small fw-bold mb-2" style="letter-spacing: 0.5px;">Vendedores</h6>
-                            <h2 class="stat-value mb-1" style="color: var(--warning);"><?= $total_vendedores ?></h2>
-                            <span class="text-muted" style="font-size: 0.75rem; font-weight: 500;">Ativos</span>
-                        </div>
-                        <div class="stat-icon" style="background: var(--warning-light); color: var(--warning);">
-                            <i class="bi bi-person-badge-fill"></i>
-                        </div>
-                    </div>
-                </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="stats-card-premium">
+                <div class="stats-icon-box text-warning" style="background: var(--warning-light);"><i class="bi bi-person-badge"></i></div>
+                <div class="stats-label">Vendedores</div>
+                <div class="stats-number text-warning"><?= $total_vendedores ?></div>
+                <div class="text-muted small mt-1">Colaboradores</div>
             </div>
         </div>
-
         <!-- Servidores -->
-        <div class="col-xl-2 col-lg-4 col-md-6">
-            <div class="card stat-card border-purple" style="--purple: #8b5cf6;">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="text-muted text-uppercase small fw-bold mb-2" style="letter-spacing: 0.5px;">Servidores</h6>
-                            <h2 class="stat-value mb-1" style="color: #8b5cf6;"><?= $total_servidores ?></h2>
-                            <span class="text-muted" style="font-size: 0.75rem; font-weight: 500;">Em uso</span>
-                        </div>
-                        <div class="stat-icon" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">
-                            <i class="bi bi-server"></i>
-                        </div>
-                    </div>
-                </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="stats-card-premium">
+                <div class="stats-icon-box text-info" style="background: var(--info-light);"><i class="bi bi-server"></i></div>
+                <div class="stats-label">Servidores</div>
+                <div class="stats-number text-info"><?= $total_servidores ?></div>
+                <div class="text-muted small mt-1">Ativos em uso</div>
             </div>
         </div>
-
         <!-- Concluídos -->
-        <div class="col-xl-2 col-lg-4 col-md-6">
-            <div class="card stat-card border-success">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="text-muted text-uppercase small fw-bold mb-2" style="letter-spacing: 0.5px;">Concluídos</h6>
-                            <h2 class="stat-value mb-1 text-success"><?= $total_concluidos ?></h2>
-                            <span class="text-muted" style="font-size: 0.75rem; font-weight: 500;">Finalizados</span>
-                        </div>
-                        <div class="stat-icon" style="background: var(--success-light); color: var(--success);">
-                            <i class="bi bi-check-circle-fill"></i>
-                        </div>
-                    </div>
-                </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="stats-card-premium">
+                <div class="stats-icon-box text-success" style="background: var(--success-light);"><i class="bi bi-check-all"></i></div>
+                <div class="stats-label">Concluídos</div>
+                <div class="stats-number text-success"><?= $total_concluidos ?></div>
+                <div class="text-muted small mt-1">Sucesso total</div>
             </div>
         </div>
-
         <!-- Cancelados -->
-        <div class="col-xl-2 col-lg-4 col-md-6">
-            <div class="card stat-card border-danger">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="text-muted text-uppercase small fw-bold mb-2" style="letter-spacing: 0.5px;">Cancelados</h6>
-                            <h2 class="stat-value mb-1 text-danger"><?= $total_cancelados ?></h2>
-                            <span class="text-muted" style="font-size: 0.75rem; font-weight: 500;">Encerrados s/ sucesso</span>
-                        </div>
-                        <div class="stat-icon" style="background: var(--danger-light); color: var(--danger);">
-                            <i class="bi bi-x-circle-fill"></i>
-                        </div>
-                    </div>
-                </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="stats-card-premium">
+                <div class="stats-icon-box text-danger" style="background: var(--danger-light);"><i class="bi bi-x-circle"></i></div>
+                <div class="stats-label">Cancelados</div>
+                <div class="stats-number text-danger"><?= $total_cancelados ?></div>
+                <div class="text-muted small mt-1">Interrompidos</div>
             </div>
         </div>
     </div>
 
-    <!-- // section: overview data -->
-    <div class="row g-4 mb-4">
-        
-        <!-- // tabela vendedores -->
+    <!-- Overview Data -->
+    <div class="row g-4 mb-4 gsap-reveal">
+        <!-- Vendedores Section -->
         <div class="col-lg-7">
-            <div class="table-container d-flex flex-column">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="fw-bold mb-0 text-dark d-flex align-items-center">
-                        <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; margin-right: 12px;">
-                            <i class="bi bi-award-fill"></i>
-                        </div>
-                        Performance por Vendedor
-                    </h5>
-                    <span class="badge" style="background: #f1f5f9; color: var(--text-dark); padding: 0.5rem 1rem; border-radius: 20px; font-weight: 600;">
-                        <?= count($vendedores) ?> Vendedores
-                    </span>
+            <div class="dashboard-section d-flex flex-column">
+                <div class="section-title">
+                    <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-award"></i>
+                    </div>
+                    Performance por Vendedor
                 </div>
                 
-                <div class="table-responsive flex-grow-1">
-                    <table class="table table-borderless table-hover">
+                <div class="table-responsive flex-grow-1 custom-scroll" style="max-height: 480px;">
+                    <table class="table-dashboard">
                         <thead>
                             <tr>
-                                <th class="ps-2">Vendedor</th>
+                                <th>Vendedor</th>
                                 <th class="text-center">Total</th>
                                 <th class="text-center">Ativos</th>
-                                <th class="text-center">Concluídos</th>
-                                <th class="text-center">Cancelados</th>
-                                <th class="text-end pe-2">Share</th>
+                                <th class="text-center">Share</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (empty($vendedores)): ?>
+                            <?php foreach ($vendedores as $v): 
+                                $percentage = $total_clientes > 0 ? ($v['total_clientes'] / $total_clientes) * 100 : 0;
+                            ?>
                                 <tr>
-                                    <td colspan="6" class="text-center py-5 text-muted">
-                                        <div style="background: #f8fafc; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
-                                            <i class="bi bi-emoji-frown" style="font-size: 1.5rem;"></i>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="stats-icon-box mb-0 me-3" style="width: 36px; height: 36px; font-size: 0.9rem; background: var(--bg-body); color: var(--primary);">
+                                                <?= substr($v['vendedor'], 0, 1) ?>
+                                            </div>
+                                            <span class="fw-bold"><?= htmlspecialchars($v['vendedor']) ?></span>
                                         </div>
-                                        <span style="font-weight: 500;">Nenhum vendedor encontrado.</span>
+                                    </td>
+                                    <td class="text-center fw-bold"><?= $v['total_clientes'] ?></td>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary bg-opacity-10 text-primary px-3 rounded-pill"><?= $v['clientes_ativos'] ?></span>
+                                    </td>
+                                    <td style="min-width: 120px;">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="progress flex-grow-1" style="height: 6px; border-radius: 10px; background: var(--bg-body);">
+                                                <div class="progress-bar" style="width: <?= $percentage ?>%; border-radius: 10px;"></div>
+                                            </div>
+                                            <span class="small fw-bold" style="width: 35px;"><?= round($percentage) ?>%</span>
+                                        </div>
                                     </td>
                                 </tr>
-                            <?php else: ?>
-                                <?php foreach ($vendedores as $v):
-                                    $percentage = $total_clientes > 0 ? ($v['total_clientes'] / $total_clientes) * 100 : 0;
-                                ?>
-                                    <tr>
-                                        <td class="ps-2">
-                                            <div class="d-flex align-items-center">
-                                                <div class="avatar-circle avatar-vendedor me-3">
-                                                    <?= substr($v['vendedor'], 0, 1) ?>
-                                                </div>
-                                                <div>
-                                                    <div class="fw-bold text-dark" style="font-size: 0.95rem;"><?= htmlspecialchars($v['vendedor']) ?></div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td class="text-center align-middle">
-                                            <span class="fw-bold text-dark"><?= $v['total_clientes'] ?></span>
-                                        </td>
-                                        <td class="text-center align-middle">
-                                            <span class="badge-soft badge-soft-info"><?= $v['clientes_ativos'] ?></span>
-                                        </td>
-                                        <td class="text-center align-middle">
-                                            <span class="badge-soft badge-soft-success"><?= $v['clientes_concluidos'] ?></span>
-                                        </td>
-                                        <td class="text-center align-middle">
-                                            <span class="badge-soft badge-soft-danger"><?= $v['clientes_cancelados'] ?></span>
-                                        </td>
-                                        <td class="pe-2 align-middle">
-                                            <div class="d-flex align-items-center justify-content-end">
-                                                <div class="progress-thin flex-grow-1 me-3" style="width: 80px; background: #e2e8f0;">
-                                                    <div class="progress-bar" style="width: <?= $percentage ?>%"></div>
-                                                </div>
-                                                <span class="text-dark fw-bold" style="font-size: 0.85rem; width: 35px; text-align: right;"><?= round($percentage) ?>%</span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
+                            <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
@@ -451,48 +332,40 @@ include 'header.php';
 
         <!-- // estatísticas rápidas e destaques -->
         <div class="col-lg-5">
-            <div class="table-container">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="fw-bold mb-0 text-dark d-flex align-items-center">
-                        <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--danger-light); color: var(--danger); display: flex; align-items: center; justify-content: center; margin-right: 12px;">
-                            <i class="bi bi-lightning-charge-fill"></i>
-                        </div>
-                        Insights Rápidos
-                    </h5>
+            <div class="dashboard-section h-100">
+                <div class="section-title">
+                    <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--danger-light); color: var(--danger); display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-lightning"></i>
+                    </div>
+                    Insights Rápidos
                 </div>
                 
                 <div class="row g-3">
                     <div class="col-sm-6">
-                        <div class="quick-stat">
+                        <div class="p-3 bg-light bg-opacity-10 rounded-3 border border-1 border-opacity-10">
                             <div class="d-flex align-items-center mb-2">
-                                <div class="quick-stat-icon" style="background: var(--primary-light); color: var(--primary);">
-                                    <i class="bi bi-trophy-fill"></i>
+                                <div class="stats-icon-box mb-0 me-3" style="width: 32px; height: 32px; font-size: 0.8rem; background: var(--primary-light); color: var(--primary);">
+                                    <i class="bi bi-trophy"></i>
                                 </div>
-                                <div class="ms-3">
-                                    <div class="small text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">Vendedor Top</div>
-                                    <div class="fw-bold text-dark" style="font-size: 0.95rem; line-height: 1.2;">
-                                        <?= !empty($vendedores) ? htmlspecialchars($vendedores[0]['vendedor']) : 'N/A' ?>
-                                    </div>
+                                <div>
+                                    <div class="text-muted small fw-bold text-uppercase" style="font-size: 0.65rem;">Vendedor Top</div>
+                                    <div class="fw-bold fs-6"><?= !empty($vendedores) ? htmlspecialchars($vendedores[0]['vendedor']) : 'N/A' ?></div>
                                 </div>
                             </div>
-                            <small class="text-muted d-block text-end fw-medium"><?= !empty($vendedores) ? $vendedores[0]['total_clientes'] : '0' ?> clientes</small>
                         </div>
                     </div>
 
                     <div class="col-sm-6">
-                        <div class="quick-stat">
+                        <div class="p-3 bg-light bg-opacity-10 rounded-3 border border-1 border-opacity-10">
                             <div class="d-flex align-items-center mb-2">
-                                <div class="quick-stat-icon" style="background: var(--success-light); color: var(--success);">
-                                    <i class="bi bi-hdd-network-fill"></i>
+                                <div class="stats-icon-box mb-0 me-3" style="width: 32px; height: 32px; font-size: 0.8rem; background: var(--success-light); color: var(--success);">
+                                    <i class="bi bi-hdd"></i>
                                 </div>
-                                <div class="ms-3">
-                                    <div class="small text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">Servidor Top</div>
-                                    <div class="fw-bold text-dark" style="font-size: 0.95rem; line-height: 1.2;">
-                                        <?= !empty($servidores) ? htmlspecialchars($servidores[0]['servidor']) : 'N/A' ?>
-                                    </div>
+                                <div>
+                                    <div class="text-muted small fw-bold text-uppercase" style="font-size: 0.65rem;">Servidor Top</div>
+                                    <div class="fw-bold fs-6"><?= !empty($servidores) ? htmlspecialchars($servidores[0]['servidor']) : 'N/A' ?></div>
                                 </div>
                             </div>
-                            <small class="text-muted d-block text-end fw-medium"><?= !empty($servidores) ? $servidores[0]['total_clientes'] : '0' ?> clientes</small>
                         </div>
                     </div>
 
@@ -512,59 +385,39 @@ include 'header.php';
                         }
                     ?>
                     
-                    <div class="col-sm-6">
-                        <div class="quick-stat">
-                            <div class="d-flex align-items-center mb-2">
-                                <div class="quick-stat-icon" style="background: var(--info-light); color: var(--info);">
-                                    <i class="bi bi-graph-up-arrow"></i>
+                    <div class="col-12">
+                        <div class="p-3 bg-primary bg-opacity-10 rounded-3 border border-1 border-opacity-10 d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center">
+                                <div class="stats-icon-box mb-0 me-3" style="width: 32px; height: 32px; font-size: 0.8rem; background: var(--info-light); color: var(--info);">
+                                    <i class="bi bi-graph-up"></i>
                                 </div>
-                                <div class="ms-3">
-                                    <div class="small text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">Maior Retenção</div>
-                                    <div class="fw-bold text-dark" style="font-size: 0.95rem; line-height: 1.2;">
-                                        <?= htmlspecialchars($vendedor_maior_taxa ?: 'N/A') ?>
-                                    </div>
+                                <div>
+                                    <div class="text-muted small fw-bold text-uppercase" style="font-size: 0.65rem;">Maior Retenção</div>
+                                    <div class="fw-bold fs-6 text-primary"><?= htmlspecialchars($vendedor_maior_taxa ?: 'N/A') ?></div>
                                 </div>
                             </div>
-                            <small class="text-muted d-block text-end fw-medium"><?= round($maior_taxa) ?>% ativos</small>
-                        </div>
-                    </div>
-
-                    <div class="col-sm-6">
-                        <div class="quick-stat">
-                            <div class="d-flex align-items-center mb-2">
-                                <div class="quick-stat-icon" style="background: var(--warning-light); color: var(--warning);">
-                                    <i class="bi bi-check2-all"></i>
-                                </div>
-                                <div class="ms-3">
-                                    <div class="small text-muted fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.5px;">Mais Entregas</div>
-                                    <div class="fw-bold text-dark" style="font-size: 0.95rem; line-height: 1.2;">
-                                        <?= htmlspecialchars($vendedor_maior_concluidos ?: 'N/A') ?>
-                                    </div>
-                                </div>
-                            </div>
-                            <small class="text-muted d-block text-end fw-medium"><?= round($maior_concluidos) ?>% concluídos</small>
+                            <div class="text-primary fw-bold fs-5"><?= round($maior_taxa) ?>%</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- status distribution -->
-                <div class="mt-4 pt-4 border-top" style="border-color: #f1f5f9 !important;">
-                    <h6 class="fw-bold text-dark mb-4">Taxa de Conclusão Global</h6>
+                <div class="mt-4 pt-4 border-top border-opacity-10">
+                    <h6 class="fw-800 text-main mb-3">Implantado com Sucesso</h6>
                     <?php
                         $total_finalizados = $total_concluidos + $total_cancelados;
                         $taxa_sucesso = $total_finalizados > 0 ? ($total_concluidos / $total_finalizados) * 100 : 0;
                     ?>
-                    <div class="d-flex align-items-center justify-content-between mb-2">
-                        <span class="text-muted fw-medium" style="font-size: 0.9rem;">Sucesso Implantações</span>
-                        <span class="badge bg-success" style="border-radius: 20px; font-size: 0.85rem; padding: 0.4em 0.8em;"><?= round($taxa_sucesso) ?>%</span>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="text-muted small">Taxa de Sucesso Global</span>
+                        <span class="badge bg-success bg-opacity-10 text-success"><?= round($taxa_sucesso) ?>%</span>
                     </div>
-                    <div class="progress-thin mb-2" style="height: 12px;">
+                    <div class="progress" style="height: 10px; border-radius: 20px; background: var(--bg-body);">
                         <div class="progress-bar bg-success" style="width: <?= $taxa_sucesso ?>%"></div>
                         <div class="progress-bar bg-danger" style="width: <?= 100 - $taxa_sucesso ?>%"></div>
                     </div>
-                    <div class="d-flex justify-content-between text-muted" style="font-size: 0.75rem;">
-                        <span><i class="bi bi-circle-fill text-success" style="font-size: 0.5rem; vertical-align: middle;"></i> <?= $total_concluidos ?> Sucesso</span>
-                        <span><i class="bi bi-circle-fill text-danger" style="font-size: 0.5rem; vertical-align: middle;"></i> <?= $total_cancelados ?> Falhas</span>
+                    <div class="d-flex justify-content-between mt-2 small text-muted">
+                        <span><i class="bi bi-circle-fill text-success" style="font-size: 0.5rem;"></i> <?= $total_concluidos ?> Sucesso</span>
+                        <span><i class="bi bi-circle-fill text-danger" style="font-size: 0.5rem;"></i> <?= $total_cancelados ?> Falha</span>
                     </div>
                 </div>
             </div>
@@ -572,155 +425,93 @@ include 'header.php';
     </div>
 
     <!-- // section: second row data -->
-    <div class="row g-4 mb-5">
-        <!-- // tabela servidores -->
+    <div class="row g-4 mb-5 gsap-reveal">
         <div class="col-lg-6">
-            <div class="table-container d-flex flex-column">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="fw-bold mb-0 text-dark d-flex align-items-center">
-                        <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--success-light); color: var(--success); display: flex; align-items: center; justify-content: center; margin-right: 12px;">
-                            <i class="bi bi-hdd-fill"></i>
-                        </div>
-                        Uso por Servidor
-                    </h5>
+            <div class="dashboard-section h-100">
+                <div class="section-title">
+                    <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--success-light); color: var(--success); display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-hdd"></i>
+                    </div>
+                    Uso por Servidor
                 </div>
-                
-                <div class="table-responsive flex-grow-1">
-                    <table class="table table-borderless table-hover">
+                <div class="table-responsive custom-scroll" style="max-height: 400px;">
+                    <table class="table-dashboard">
                         <thead>
                             <tr>
-                                <th class="ps-2">Servidor</th>
+                                <th>Servidor</th>
                                 <th class="text-center">Total</th>
                                 <th class="text-center">Ativos</th>
-                                <th class="text-center">Vendedores</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if (empty($servidores)): ?>
+                            <?php foreach ($servidores as $s): ?>
                                 <tr>
-                                    <td colspan="4" class="text-center py-5 text-muted">Ainda não há dados de servidores.</td>
-                                </tr>
-                            <?php else: ?>
-                                <?php foreach ($servidores as $s): ?>
-                                    <tr>
-                                        <td class="ps-2">
-                                            <div class="d-flex align-items-center">
-                                                <div class="avatar-circle avatar-servidor me-3" style="width: 38px; height: 38px; font-size: 0.9rem;">
-                                                    <i class="bi bi-hdd"></i>
-                                                </div>
-                                                <div>
-                                                    <div class="fw-bold text-dark" style="font-size: 0.95rem;"><?= htmlspecialchars($s['servidor']) ?></div>
-                                                    <div class="text-muted" style="font-size: 0.7rem; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="<?= $s['vendedores'] ?>">
-                                                        <?= $s['vendedores'] ?>
-                                                    </div>
-                                                </div>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="stats-icon-box mb-0 me-3" style="width: 32px; height: 32px; font-size: 0.8rem; background: var(--bg-body); color: var(--success);">
+                                                <i class="bi bi-hdd"></i>
                                             </div>
-                                        </td>
-                                        <td class="text-center align-middle fw-bold"><?= $s['total_clientes'] ?></td>
-                                        <td class="text-center align-middle">
-                                            <span class="badge-soft badge-soft-info"><?= $s['clientes_ativos'] ?></span>
-                                        </td>
-                                        <td class="text-center align-middle">
-                                            <span class="badge bg-light text-dark shadow-sm border" style="padding: 0.4em 0.8em; border-radius: 20px;">
-                                                <i class="bi bi-people me-1 text-primary"></i> <?= count(explode(', ', $s['vendedores'])) ?>
-                                            </span>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
+                                            <span class="fw-bold"><?= htmlspecialchars($s['servidor']) ?></span>
+                                        </div>
+                                    </td>
+                                    <td class="text-center fw-bold"><?= $s['total_clientes'] ?></td>
+                                    <td class="text-center">
+                                        <span class="badge bg-success bg-opacity-10 text-success px-3 rounded-pill"><?= $s['clientes_ativos'] ?></span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
 
-        <!-- // distribuição geral de status -->
         <div class="col-lg-6">
-            <div class="table-container" style="background: linear-gradient(180deg, var(--bg-card) 0%, #f8fafc 100%);">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="fw-bold mb-0 text-dark d-flex align-items-center">
-                        <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(139, 92, 246, 0.1); color: var(--purple); display: flex; align-items: center; justify-content: center; margin-right: 12px;">
-                            <i class="bi bi-pie-chart-fill"></i>
-                        </div>
-                        Composição da Base
-                    </h5>
+            <div class="dashboard-section h-100">
+                <div class="section-title">
+                    <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(139, 92, 246, 0.1); color: var(--purple); display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-pie-chart"></i>
+                    </div>
+                    Composição da Base
                 </div>
                 
-                <div class="row g-3 mb-5 mt-2">
+                <div class="row g-3 mb-4">
                     <div class="col-4">
-                        <div class="card border-0 shadow-sm" style="border-radius: var(--radius-md);">
-                            <div class="card-body text-center p-3">
-                                <div class="text-muted fw-bold text-uppercase mb-2" style="font-size: 0.65rem; letter-spacing: 0.5px;">Ativos</div>
-                                <div class="fw-black h2 mb-0 text-primary" style="font-family: var(--font-heading);"><?= $total_ativos ?></div>
-                                <span class="badge bg-primary bg-opacity-10 text-primary mt-2" style="border-radius: 20px;">
-                                    <?= $total_clientes > 0 ? round(($total_ativos / $total_clientes) * 100) : 0 ?>%
-                                </span>
-                            </div>
+                        <div class="text-center p-3 bg-light bg-opacity-10 rounded-3 border">
+                            <div class="text-muted small fw-bold text-uppercase mb-1">ATIVOS</div>
+                            <div class="h3 fw-800 text-primary mb-0"><?= $total_ativos ?></div>
                         </div>
                     </div>
                     <div class="col-4">
-                        <div class="card border-0 shadow-sm" style="border-radius: var(--radius-md);">
-                            <div class="card-body text-center p-3">
-                                <div class="text-muted fw-bold text-uppercase mb-2" style="font-size: 0.65rem; letter-spacing: 0.5px;">Concluídos</div>
-                                <div class="fw-black h2 mb-0 text-success" style="font-family: var(--font-heading);"><?= $total_concluidos ?></div>
-                                <span class="badge bg-success bg-opacity-10 text-success mt-2" style="border-radius: 20px;">
-                                    <?= $total_clientes > 0 ? round(($total_concluidos / $total_clientes) * 100) : 0 ?>%
-                                </span>
-                            </div>
+                        <div class="text-center p-3 bg-light bg-opacity-10 rounded-3 border">
+                            <div class="text-muted small fw-bold text-uppercase mb-1">SUCESSO</div>
+                            <div class="h3 fw-800 text-success mb-0"><?= $total_concluidos ?></div>
                         </div>
                     </div>
                     <div class="col-4">
-                        <div class="card border-0 shadow-sm" style="border-radius: var(--radius-md);">
-                            <div class="card-body text-center p-3">
-                                <div class="text-muted fw-bold text-uppercase mb-2" style="font-size: 0.65rem; letter-spacing: 0.5px;">Cancelados</div>
-                                <div class="fw-black h2 mb-0 text-danger" style="font-family: var(--font-heading);"><?= $total_cancelados ?></div>
-                                <span class="badge bg-danger bg-opacity-10 text-danger mt-2" style="border-radius: 20px;">
-                                    <?= $total_clientes > 0 ? round(($total_cancelados / $total_clientes) * 100) : 0 ?>%
-                                </span>
-                            </div>
+                        <div class="text-center p-3 bg-light bg-opacity-10 rounded-3 border">
+                            <div class="text-muted small fw-bold text-uppercase mb-1">CANCEL.</div>
+                            <div class="h3 fw-800 text-danger mb-0"><?= $total_cancelados ?></div>
                         </div>
                     </div>
                 </div>
 
                 <div class="px-2">
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="fw-bold text-dark" style="font-size: 0.9rem;">Distribuição Visual</span>
-                        <span class="badge bg-dark text-white rounded-pill px-3"><?= $total_clientes ?> Total</span>
+                    <div class="progress" style="height: 32px; border-radius: 12px; overflow: hidden; background: var(--bg-body);">
+                        <div class="progress-bar bg-primary" 
+                             style="width: <?= $total_clientes > 0 ? ($total_ativos / $total_clientes) * 100 : 0 ?>%"
+                             data-bs-toggle="tooltip" title="Ativos: <?= $total_ativos ?>"></div>
+                        <div class="progress-bar bg-success" 
+                             style="width: <?= $total_clientes > 0 ? ($total_concluidos / $total_clientes) * 100 : 0 ?>%"
+                             data-bs-toggle="tooltip" title="Concluídos: <?= $total_concluidos ?>"></div>
+                        <div class="progress-bar bg-danger" 
+                             style="width: <?= $total_clientes > 0 ? ($total_cancelados / $total_clientes) * 100 : 0 ?>%"
+                             data-bs-toggle="tooltip" title="Cancelados: <?= $total_cancelados ?>"></div>
                     </div>
-                    <div class="progress" style="height: 24px; border-radius: 12px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);">
-                        <div class="progress-bar bg-primary"
-                            style="width: <?= $total_clientes > 0 ? ($total_ativos / $total_clientes) * 100 : 0 ?>%"
-                            data-bs-toggle="tooltip"
-                            title="Ativos: <?= $total_ativos ?> clientes">
-                            <?= $total_clientes > 0 && ($total_ativos / $total_clientes) > 0.1 ? round(($total_ativos / $total_clientes) * 100) . '%' : '' ?>
-                        </div>
-                        <div class="progress-bar bg-success"
-                            style="width: <?= $total_clientes > 0 ? ($total_concluidos / $total_clientes) * 100 : 0 ?>%"
-                            data-bs-toggle="tooltip"
-                            title="Concluídos: <?= $total_concluidos ?> clientes">
-                            <?= $total_clientes > 0 && ($total_concluidos / $total_clientes) > 0.1 ? round(($total_concluidos / $total_clientes) * 100) . '%' : '' ?>
-                        </div>
-                        <div class="progress-bar bg-danger"
-                            style="width: <?= $total_clientes > 0 ? ($total_cancelados / $total_clientes) * 100 : 0 ?>%"
-                            data-bs-toggle="tooltip"
-                            title="Cancelados: <?= $total_cancelados ?> clientes">
-                            <?= $total_clientes > 0 && ($total_cancelados / $total_clientes) > 0.1 ? round(($total_cancelados / $total_clientes) * 100) . '%' : '' ?>
-                        </div>
-                    </div>
-                    
-                    <div class="d-flex justify-content-center flex-wrap gap-4 mt-4">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-circle-fill text-primary me-2" style="font-size: 0.6rem;"></i>
-                            <span class="text-muted fw-medium" style="font-size: 0.85rem;">Em andamento</span>
-                        </div>
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-circle-fill text-success me-2" style="font-size: 0.6rem;"></i>
-                            <span class="text-muted fw-medium" style="font-size: 0.85rem;">Sucesso</span>
-                        </div>
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-circle-fill text-danger me-2" style="font-size: 0.6rem;"></i>
-                            <span class="text-muted fw-medium" style="font-size: 0.85rem;">Interrompido</span>
-                        </div>
+                    <div class="d-flex justify-content-center gap-4 mt-4 small text-muted fw-bold">
+                        <span><i class="bi bi-circle-fill text-primary me-1"></i> ATIVOS</span>
+                        <span><i class="bi bi-circle-fill text-success me-1"></i> SUCESSO</span>
+                        <span><i class="bi bi-circle-fill text-danger me-1"></i> CANCEL.</span>
                     </div>
                 </div>
             </div>
@@ -788,6 +579,9 @@ include 'header.php';
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }
+
+    // GSAP Entrance
+    gsap.to(".gsap-reveal", { duration: 0.6, opacity: 1, y: 0, stagger: 0.1, ease: "power2.out" });
 
     // init tooltips
     document.addEventListener('DOMContentLoaded', function() {

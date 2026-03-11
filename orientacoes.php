@@ -64,110 +64,197 @@ include 'header.php';
 ?>
 
 <style>
-.page-title {
-    font-size: 1.6rem;
-    letter-spacing: 0.2px;
+/* // Design System Clean & Modern (Perplexity Style) */
+:root {
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --card-hover-y: -4px;
 }
 
-.help-search-container {
+[data-theme="dark"] :root {
+    --glass-bg: rgba(15, 23, 42, 0.4);
+    --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+/* Page Header - Simplificado e menos intrusivo */
+.modern-header {
+    padding: 1rem 0 2rem 0;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 2rem;
+}
+
+.title-accent {
+    color: var(--primary);
+    background: linear-gradient(120deg, var(--primary), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Search Area - Sem sobreposição forçada */
+.search-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    margin-bottom: 2.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.search-input-wrapper {
     position: relative;
+    flex-grow: 1;
 }
 
-.help-search-container .form-control {
-    height: 45px;
-    border-radius: 10px;
-    border: 2px solid #e9ecef;
-    padding-left: 45px;
-    transition: all 0.3s;
-}
-
-.help-search-container .form-control:focus {
-    border-color: #4361ee;
-    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
-}
-
-.help-search-container .search-icon {
+.search-input-wrapper i {
     position: absolute;
-    left: 15px;
+    left: 1.25rem;
     top: 50%;
     transform: translateY(-50%);
-    color: #6c757d;
-    z-index: 10;
+    color: var(--primary);
+    font-size: 1.2rem;
 }
 
-.filter-input {
-    height: 45px;
+.search-input-wrapper .form-control {
+    padding-left: 3.5rem;
+    height: 52px;
+    background: var(--bg-body) !important;
+    border: 1px solid var(--border-color) !important;
+}
+
+/* Accordion & Cards Style */
+.category-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    transition: all 0.25s ease;
+}
+
+.category-card:hover {
+    border-color: var(--primary);
+}
+
+.accordion-trigger {
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    color: inherit;
+}
+
+.icon-box {
+    width: 40px;
+    height: 40px;
     border-radius: 10px;
-    border: 2px solid #e9ecef;
+    background: var(--primary-light);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    margin-right: 1.25rem;
 }
 
-.filter-input:focus {
-    border-color: #4361ee;
-    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+.orientation-item {
+    background: var(--bg-body);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1.5rem;
+    height: 100%;
+    transition: all 0.3s ease;
 }
 
-.filter-btn {
-    height: 45px;
-    border-radius: 10px;
-    font-weight: 600;
+.orientation-item:hover {
+    transform: translateY(var(--card-hover-y));
+    box-shadow: var(--shadow-hover);
+    border-color: rgba(67, 97, 238, 0.3);
 }
 
-.help-modal .form-control,
-.help-modal .form-select {
-    border-radius: 10px;
-    border: 2px solid #e9ecef;
-    transition: all 0.25s;
+/* Typography & Badges */
+.tag-pill {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    background: var(--primary-light);
+    color: var(--primary);
+    border: 1px solid transparent;
 }
 
-.help-modal .form-control:focus,
-.help-modal .form-select:focus {
-    border-color: #4361ee;
-    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.15);
+.badge-count {
+    background: var(--bg-body);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    margin-left: 1rem;
+    border: 1px solid var(--border-color);
 }
 
-.collapse-icon {
+/* Animations */
+.gsap-reveal {
+    opacity: 0;
+    transform: translateY(15px);
+}
+
+.rotate-icon {
     transition: transform 0.3s ease;
 }
-.collapsed .collapse-icon {
+
+.collapsed .rotate-icon {
     transform: rotate(-90deg);
 }
+
+/* Helpers */
+.fw-800 { font-weight: 800; }
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h3 class="page-title fw-bold mb-0"><i class="bi bi-journal-richtext me-2 text-primary"></i>Orientacoes do Sistema</h3>
-        <p class="text-muted small mb-0">Guia passo a passo de procedimentos e dúvidas frequentes.</p>
+<div class="container-fluid px-0">
+    <!-- Modern Header -->
+    <div class="modern-header d-flex justify-content-between align-items-end">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-2" style="font-size: 0.8rem;">
+                    <li class="breadcrumb-item"><a href="index.php" class="text-decoration-none text-muted">Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Orientações</li>
+                </ol>
+            </nav>
+            <h2 class="fw-800 mb-0">Central de <span class="title-accent">Orientações</span></h2>
+            <p class="text-muted small mb-0">Documentação e procedimentos operacionais atualizados.</p>
+        </div>
+        <button class="btn btn-primary px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalOrientacao">
+            <i class="bi bi-plus-lg"></i>
+            <span class="ms-2">Nova Orientação</span>
+        </button>
     </div>
-    <button class="btn btn-primary shadow-sm filter-btn" data-bs-toggle="modal" data-bs-target="#modalOrientacao">
-        <i class="bi bi-plus-lg me-2"></i>Nova Orientação
-    </button>
-</div>
 
-<?php if (isset($_GET['msg'])): ?>
-    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-4" role="alert">
-        <i class="bi bi-check-circle me-2"></i><?php echo htmlspecialchars($_GET['msg']); ?>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-<?php endif; ?>
+    <!-- Mensagens -->
+    <?php if (isset($_GET['msg'])): ?>
+        <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm mb-4" role="alert" style="background: var(--success-light); color: var(--success);">
+            <i class="bi bi-check2-circle me-2"></i><?php echo htmlspecialchars($_GET['msg']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
 
-<!-- Barra de Busca -->
-<div class="card shadow-sm border-0 mb-3">
-    <div class="card-body py-3">
+    <!-- Search Section -->
+    <div class="search-section">
         <form method="GET" class="row g-3 align-items-center">
-            <div class="col-md-6">
-                <div class="help-search-container">
-                    <i class="bi bi-search search-icon"></i>
+            <div class="col-lg-7">
+                <div class="search-input-wrapper">
+                    <i class="bi bi-search"></i>
                     <input type="text"
                         name="busca"
                         class="form-control"
-                        placeholder="Buscar por titulo, descricao ou palavras-chave..."
+                        placeholder="Pesquisar por termo, dúvida ou categoria..."
                         value="<?php echo htmlspecialchars($busca); ?>"
                         autofocus>
                 </div>
             </div>
-            <div class="col-md-4">
-                <select name="filtro_categoria" class="form-select filter-input">
-                    <option value="">Todas as categorias</option>
+            <div class="col-lg-3">
+                <select name="filtro_categoria" class="form-select" style="height: 52px;">
+                    <option value="">Todas as Categorias</option>
                     <option value="Clientes" <?php echo $filtro_categoria == 'Clientes' ? 'selected' : ''; ?>>Clientes</option>
                     <option value="Contatos" <?php echo $filtro_categoria == 'Contatos' ? 'selected' : ''; ?>>Contatos</option>
                     <option value="Treinamentos" <?php echo $filtro_categoria == 'Treinamentos' ? 'selected' : ''; ?>>Treinamentos</option>
@@ -176,224 +263,163 @@ include 'header.php';
                     <option value="Geral" <?php echo $filtro_categoria == 'Geral' ? 'selected' : ''; ?>>Geral</option>
                 </select>
             </div>
-            <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-primary filter-btn flex-fill">
-                    <i class="bi bi-search me-1"></i>Buscar
-                </button>
-                <?php if (!empty($busca) || !empty($filtro_categoria)): ?>
-                    <a href="orientacoes.php" class="btn btn-outline-secondary filter-btn" title="Limpar busca">
-                        <i class="bi bi-x-lg"></i>
-                    </a>
-                <?php endif; ?>
+            <div class="col-lg-2">
+                <button type="submit" class="btn btn-primary w-100 fw-bold" style="height: 52px;">Filtrar</button>
             </div>
         </form>
     </div>
-</div>
 
-<!-- Resultados -->
-<?php if (empty($orientacoes)): ?>
-    <div class="card shadow-sm border-0">
-        <div class="card-body text-center py-5">
-            <i class="bi bi-info-circle fs-1 text-muted d-block mb-3"></i>
-            <p class="text-muted">
-                <?php echo (!empty($busca) || !empty($filtro_categoria)) ? 'Nenhuma orientação encontrada com os filtros aplicados.' : 'Nenhuma orientação cadastrada ainda.'; ?>
-            </p>
-            <?php if (!empty($busca) || !empty($filtro_categoria)): ?>
-                <a href="orientacoes.php" class="btn btn-sm btn-outline-primary">Limpar busca</a>
-            <?php endif; ?>
+    <!-- Content Area -->
+    <?php if (empty($orientacoes)): ?>
+        <div class="text-center py-5">
+            <div class="mb-4 text-muted"><i class="bi bi-search" style="font-size: 3rem; opacity: 0.2;"></i></div>
+            <h5 class="text-muted">Nenhum resultado encontrado.</h5>
+            <a href="orientacoes.php" class="btn btn-link text-primary mt-2">Limpar todos os filtros</a>
         </div>
-    </div>
-<?php else: ?>
-    <!-- Accordion por Categoria -->
-    <div class="accordion" id="accordionOrientacoes">
-        <?php
-        $first = true; // Variável para controlar o primeiro item
-        foreach ($orientacoes_agrupadas as $categoria => $items):
-            $categoria_id = md5($categoria);
-        ?>
-            <div class="card shadow-sm border-0 mb-3">
-                <div class="card-header bg-white border-0" id="heading<?php echo $categoria_id; ?>">
-                    <h2 class="mb-0">
-                        <button class="btn btn-link btn-block text-start fw-bold text-dark text-decoration-none d-flex align-items-center collapsed"
-                            type="button"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#collapse<?php echo $categoria_id; ?>"
-                            aria-expanded="false" 
-                            <?php echo $categoria_id; ?>
-                            <i class="bi bi-folder-fill text-primary me-2 fs-5"></i>
-                            <?php echo htmlspecialchars($categoria); ?>
-                            <span class="badge bg-primary ms-2"><?php echo count($items); ?></span>
-                            <i class="bi bi-chevron-down ms-auto collapse-icon"></i> <!-- Ícone indicador -->
-                        </button>
-                    </h2>
-                </div>
-
-                <div id="collapse<?php echo $categoria_id; ?>"
-                    class="collapse" <!-- ALTERADO: removida a classe 'show' -->
-                    <aria-labelledby="heading<?php echo $categoria_id; ?>"<data-bs-parent="#accordionOrientacoes">
-                    <div class="card-body p-0">
-                        <div class="list-group list-group-flush">
-                            <?php foreach ($items as $o): ?>
-                                <div class="list-group-item">
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <div class="flex-grow-1">
-                                            <h5 class="mb-2 fw-bold">
-                                                <i class="bi bi-lightbulb text-warning me-2"></i>
-                                                <?php echo htmlspecialchars($o['titulo']); ?>
-                                            </h5>
-                                            <div class="text-muted mb-2" style="white-space: pre-wrap;">
-                                                <?php echo nl2br(htmlspecialchars($o['descricao'])); ?>
+    <?php else: ?>
+        <div class="accordion" id="accordionMain">
+            <?php foreach ($orientacoes_agrupadas as $categoria => $items): 
+                $cat_id = 'cat_'.md5($categoria);
+            ?>
+                <div class="category-card gsap-reveal">
+                    <button class="accordion-trigger collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#<?php echo $cat_id; ?>">
+                        <div class="icon-box"><i class="bi bi-folder2"></i></div>
+                        <div class="flex-grow-1">
+                            <h6 class="mb-0 fw-bold text-dark"><?php echo htmlspecialchars($categoria); ?></h6>
+                            <span class="text-muted extra-small"><?php echo count($items); ?> orientações registradas</span>
+                        </div>
+                        <div class="ms-auto d-flex align-items-center">
+                            <span class="badge-count"><?php echo count($items); ?></span>
+                            <i class="bi bi-chevron-down rotate-icon ms-3 opacity-50"></i>
+                        </div>
+                    </button>
+                    
+                    <div id="<?php echo $cat_id; ?>" class="collapse" data-bs-parent="#accordionMain">
+                        <div class="p-4 pt-0">
+                            <div class="row g-4">
+                                <?php foreach ($items as $o): ?>
+                                    <div class="col-12 col-md-6">
+                                        <div class="orientation-item">
+                                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                                <h6 class="fw-bold mb-0 text-main" style="max-width: 80%;"><?php echo htmlspecialchars($o['titulo']); ?></h6>
+                                                <div class="dropdown">
+                                                    <button class="btn btn-sm btn-link text-muted p-0" type="button" data-bs-toggle="dropdown">
+                                                        <i class="bi bi-three-dots-vertical"></i>
+                                                    </button>
+                                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0">
+                                                        <li><a class="dropdown-item py-2 edit-btn" href="#" 
+                                                            data-id="<?php echo $o['id_orientacao']; ?>"
+                                                            data-titulo="<?php echo htmlspecialchars($o['titulo']); ?>"
+                                                            data-categoria="<?php echo htmlspecialchars($o['categoria']); ?>"
+                                                            data-descricao="<?php echo htmlspecialchars($o['descricao']); ?>"
+                                                            data-link="<?php echo htmlspecialchars($o['link_acesso']); ?>"
+                                                            data-palavras="<?php echo htmlspecialchars($o['palavras_chave']); ?>"
+                                                            data-ordem="<?php echo $o['ordem']; ?>"
+                                                            data-bs-toggle="modal" data-bs-target="#modalOrientacao">
+                                                            <i class="bi bi-pencil me-2 text-primary"></i>Editar</a></li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li><a class="dropdown-item py-2 text-danger" href="orientacoes.php?delete=<?php echo $o['id_orientacao']; ?>" onclick="return confirm('Excluir orientação?')">
+                                                            <i class="bi bi-trash3 me-2"></i>Remover</a></li>
+                                                    </ul>
+                                                </div>
                                             </div>
-                                            <?php if (!empty($o['link_acesso'])): ?>
-                                                <div class="mb-2">
-                                                    <a href="<?php echo htmlspecialchars($o['link_acesso']); ?>"
-                                                        class="btn btn-sm btn-outline-primary"
-                                                        target="_blank">
-                                                        <i class="bi bi-link-45deg me-1"></i>Acessar Link
+                                            
+                                            <p class="text-muted small mb-4" style="line-height: 1.6; white-space: pre-wrap;"><?php echo htmlspecialchars($o['descricao']); ?></p>
+                                            
+                                            <div class="d-flex align-items-center justify-content-between mt-auto">
+                                                <div class="d-flex flex-wrap gap-1">
+                                                    <?php 
+                                                    if(!empty($o['palavras_chave'])):
+                                                        foreach(explode(',', $o['palavras_chave']) as $tag): ?>
+                                                            <span class="tag-pill">#<?php echo trim($tag); ?></span>
+                                                        <?php endforeach;
+                                                    endif; ?>
+                                                </div>
+                                                <?php if(!empty($o['link_acesso'])): ?>
+                                                    <a href="<?php echo $o['link_acesso']; ?>" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                                                        Ver Link <i class="bi bi-arrow-up-right ms-1" style="font-size: 0.7rem;"></i>
                                                     </a>
-                                                </div>
-                                            <?php endif; ?>
-                                            <?php if (!empty($o['palavras_chave'])): ?>
-                                                <div class="small text-muted">
-                                                    <i class="bi bi-tags me-1"></i>
-                                                    <?php
-                                                    $tags = explode(',', $o['palavras_chave']);
-                                                    foreach ($tags as $tag): ?>
-                                                        <span class="badge bg-light text-dark border me-1"><?php echo trim(htmlspecialchars($tag)); ?></span>
-                                                    <?php endforeach; ?>
-                                                </div>
-                                            <?php endif; ?>
-                                        </div>
-                                        <div class="ms-3">
-                                            <button class="btn btn-sm btn-light text-primary edit-btn me-1"
-                                                data-id="<?php echo $o['id_orientacao']; ?>"
-                                                data-titulo="<?php echo htmlspecialchars($o['titulo']); ?>"
-                                                data-categoria="<?php echo htmlspecialchars($o['categoria']); ?>"
-                                                data-descricao="<?php echo htmlspecialchars($o['descricao']); ?>"
-                                                data-link="<?php echo htmlspecialchars($o['link_acesso']); ?>"
-                                                data-palavras="<?php echo htmlspecialchars($o['palavras_chave']); ?>"
-                                                data-ordem="<?php echo $o['ordem']; ?>"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#modalOrientacao">
-                                                <i class="bi bi-pencil-square"></i>
-                                            </button>
-                                            <a href="orientacoes.php?delete=<?php echo $o['id_orientacao']; ?>"
-                                                class="btn btn-sm btn-light text-danger"
-                                                onclick="return confirm('Deseja realmente excluir esta orientação?')">
-                                                <i class="bi bi-trash"></i>
-                                            </a>
+                                                <?php endif; ?>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            <?php endforeach; ?>
+                                <?php endforeach; ?>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        <?php
-            $first = false;
-        endforeach;
-        ?>
-    </div>
-<?php endif; ?>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</div>
 
-<!-- Modal Orientação -->
+<!-- Modal -->
 <div class="modal fade" id="modalOrientacao" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg help-modal">
+        <div class="modal-content border-0 shadow-lg">
             <form method="POST">
-                <div class="modal-header border-0 px-4 pt-4">
+                <div class="modal-header border-0 p-4 pb-0">
                     <h5 class="fw-bold" id="modalTitle">Nova Orientação</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body px-4 pt-2">
+                <div class="modal-body p-4">
                     <input type="hidden" name="id_orientacao" id="id_orientacao">
-
-                    <div class="row mb-3">
-                        <div class="col-md-8">
-                            <label class="form-label fw-semibold small">Título da Orientação</label>
-                            <input type="text"
-                                name="titulo"
-                                id="titulo"
-                                class="form-control"
-                                required
-                                placeholder="Ex: Como cadastrar um novo cliente">
+                    <div class="row g-3">
+                        <div class="col-md-9">
+                            <label class="form-label small fw-bold">Título</label>
+                            <input type="text" name="titulo" id="titulo" class="form-control" placeholder="Título da orientação" required>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-semibold small">Ordem</label>
-                            <input type="number"
-                                name="ordem"
-                                id="ordem"
-                                class="form-control"
-                                value="0"
-                                min="0"
-                                placeholder="0">
-                            <small class="text-muted">Ordem de exibição</small>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Ordem</label>
+                            <input type="number" name="ordem" id="ordem" class="form-control" value="0">
                         </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold small">Categoria</label>
-                        <select name="categoria" id="categoria" class="form-select" required>
-                            <option value="">Selecione uma categoria...</option>
-                            <option value="Clientes">Clientes</option>
-                            <option value="Contatos">Contatos</option>
-                            <option value="Treinamentos">Treinamentos</option>
-                            <option value="Tarefas">Tarefas</option>
-                            <option value="Sistema">Sistema</option>
-                            <option value="Geral">Geral</option>
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold small">Descrição / Passo a Passo</label>
-                        <textarea name="descricao"
-                            id="descricao"
-                            class="form-control"
-                            rows="6"
-                            required
-                            placeholder="Descreva o procedimento passo a passo...
-
-Exemplo:
-1. Acesse o menu Clientes
-2. Clique em 'Novo Cliente'
-3. Preencha os dados obrigatórios
-4. Clique em 'Salvar'"></textarea>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold small">Link de Acesso (Opcional)</label>
-                        <input type="url"
-                            name="link_acesso"
-                            id="link_acesso"
-                            class="form-control"
-                            placeholder="https://exemplo.com/pagina">
-                        <small class="text-muted">URL para página relacionada ou documentação externa</small>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold small">Palavras-chave (Tags)</label>
-                        <input type="text"
-                            name="palavras_chave"
-                            id="palavras_chave"
-                            class="form-control"
-                            placeholder="cadastro, cliente, empresa">
-                        <small class="text-muted">Separe por vírgulas. Facilita a busca e localização.</small>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold">Categoria</label>
+                            <select name="categoria" id="categoria" class="form-select" required>
+                                <option value="Clientes">Clientes</option>
+                                <option value="Contatos">Contatos</option>
+                                <option value="Treinamentos">Treinamentos</option>
+                                <option value="Tarefas">Tarefas</option>
+                                <option value="Google Agenda">Google Agenda</option>
+                                <option value="Geral">Geral</option>
+                                <option value="Sistema">Sistema</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-bold">Conteúdo da Orientação</label>
+                            <textarea name="descricao" id="descricao" class="form-control" rows="8" placeholder="Passo a passo ou descrição técnica..." required></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Link (Opcional)</label>
+                            <input type="url" name="link_acesso" id="link_acesso" class="form-control" placeholder="https://...">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Tags (Separadas por vírgula)</label>
+                            <input type="text" name="palavras_chave" id="palavras_chave" class="form-control" placeholder="tag1, tag2">
+                        </div>
                     </div>
                 </div>
-                <div class="modal-footer border-0 p-4 gap-2">
-                    <button type="button" class="btn btn-light fw-bold px-4" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary fw-bold px-4">Salvar Orientacao</button>
+                <div class="modal-footer border-0 p-4 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Fechar</button>
+                    <button type="submit" class="btn btn-primary px-4 fw-bold">Salvar Informação</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 <script>
-    // Lógica de Edição
+document.addEventListener('DOMContentLoaded', function() {
+    // GSAP Entrance
+    gsap.from(".modern-header", { duration: 0.6, opacity: 0, x: -20, ease: "power2.out" });
+    gsap.from(".search-section", { duration: 0.8, opacity: 0, y: 10, delay: 0.1, ease: "power2.out" });
+    gsap.to(".gsap-reveal", { duration: 0.5, opacity: 1, y: 0, stagger: 0.08, delay: 0.3, ease: "power2.out" });
+
+    // Modal Logic
     document.querySelectorAll('.edit-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
             document.getElementById('modalTitle').innerText = 'Editar Orientação';
             document.getElementById('id_orientacao').value = this.dataset.id;
             document.getElementById('titulo').value = this.dataset.titulo;
@@ -405,12 +431,13 @@ Exemplo:
         });
     });
 
-    // Reset ao fechar modal
-    document.getElementById('modalOrientacao').addEventListener('hidden.bs.modal', function() {
+    const modal = document.getElementById('modalOrientacao');
+    modal.addEventListener('hidden.bs.modal', function() {
         document.getElementById('modalTitle').innerText = 'Nova Orientação';
-        document.querySelector('form').reset();
+        modal.querySelector('form').reset();
         document.getElementById('id_orientacao').value = '';
     });
+});
 </script>
 
 <?php include 'footer.php'; ?>

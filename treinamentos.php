@@ -555,7 +555,7 @@ $sql_alerta = "SELECT fantasia FROM clientes
                AND id_cliente NOT IN (
                    SELECT DISTINCT id_cliente FROM treinamentos 
                    WHERE data_treinamento >= CURDATE() 
-                   AND data_treinamento <= DATE_ADD(CURDATE(), INTERVAL 3 DAY)
+                   AND data_treinamento <= DATE_ADD(CURDATE(), INTERVAL 5 DAY)
                )";
 $clientes_sem_agenda = $pdo->query($sql_alerta)->fetchAll(PDO::FETCH_COLUMN);
 
@@ -583,8 +583,8 @@ $sql_inatividade = "
     )
     GROUP BY c.id_cliente, c.data_inicio
     HAVING 
-        (MAX(t.data_treinamento) < DATE_SUB(CURDATE(), INTERVAL 3 DAY)) OR 
-        (MAX(t.data_treinamento) IS NULL AND c.data_inicio < DATE_SUB(CURDATE(), INTERVAL 3 DAY))
+        (MAX(t.data_treinamento) < DATE_SUB(CURDATE(), INTERVAL 5 DAY)) OR 
+        (MAX(t.data_treinamento) IS NULL AND c.data_inicio < DATE_SUB(CURDATE(), INTERVAL 5 DAY))
     ORDER BY última_data ASC";
 $clientes_inativos = $pdo->query($sql_inatividade)->fetchAll();
 
@@ -1005,241 +1005,177 @@ include 'header.php';
 ?>
 
 <style>
-    /* INTEGRAÇÃO COM DESIGN TOKENS DE HEADER.PHP + OVERRIDES DARK THEME (Modelo Perplexity) */
-    [data-theme="dark"] {
-        --bg-body: #0d0e12;
-        --bg-card: #14151a;
-        --bg-hover: #1e2025;
-        --text-main: #e2e8f0;
-        --text-muted: #94a3b8;
-        --border-color: #2b2e35;
-    }
+/* // Design System Clean & Modern (Perplexity Style) */
+:root {
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-border: rgba(255, 255, 255, 0.08);
+}
 
-    body, html {
-        height: 100vh;
-        overflow-x: hidden;
-    }
+[data-theme="dark"] {
+    --bg-body: #0d0e12;
+    --bg-card: #14151a;
+    --border-color: #2b2e35;
+    --text-main: #e2e8f0;
+    --text-muted: #94a3b8;
+    --primary-light: rgba(67, 97, 238, 0.15);
+    --warning-light: rgba(255, 193, 7, 0.1);
+    --danger-light: rgba(220, 53, 69, 0.1);
+    --info-light: rgba(13, 202, 240, 0.1);
+}
 
-    [data-theme="dark"] body, [data-theme="dark"] html {
-        background-color: var(--bg-body) !important;
-        color: var(--text-main) !important;
-    }
-    
-    .container-fluid.bg-light.min-vh-100 {
-        background-color: transparent !important;
-        padding-top: 1.5rem !important;
-    }
+/* Page Header - Simplificado */
+.modern-header {
+    padding: 1rem 0 2rem 0;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 2rem;
+}
 
-    /* Sobrescrever classes do Bootstrap para Dark Mode */
-    [data-theme="dark"] .bg-light, [data-theme="dark"] .bg-white { background-color: var(--bg-card) !important; }
-    [data-theme="dark"] .text-dark { color: var(--text-main) !important; }
-    [data-theme="dark"] .text-muted { color: var(--text-muted) !important; }
-    [data-theme="dark"] .border, [data-theme="dark"] .border-bottom, [data-theme="dark"] .border-top, [data-theme="dark"] .border-start, [data-theme="dark"] .border-end { border-color: var(--border-color) !important; }
+.title-accent {
+    color: var(--primary);
+    background: linear-gradient(120deg, var(--primary), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
 
-    /* Estilos adicionais para os botões do Google Agenda */
-    .btn-google-link { min-width: 40px; }
-    .copy-link-btn:hover { background-color: var(--success) !important; color: white !important; }
-    .open-link-btn:hover { background-color: var(--info) !important; color: white !important; }
-    [data-theme="dark"] .toast-success { background-color: var(--success) !important; color: white !important; border: 1px solid var(--border-color) !important;}
-    [data-theme="dark"] .link-input-group .form-control:read-only { background-color: var(--bg-body); cursor: default; border-color: var(--border-color); color: var(--text-main); }
+/* Search Area - Sem sobreposição */
+.search-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    margin-bottom: 2.5rem;
+    box-shadow: var(--shadow-sm);
+}
 
-    /* Visibilidade de botões outline no modo escuro */
-    [data-theme="dark"] .btn-outline-primary { border-color: rgba(67, 97, 238, 0.5) !important; color: #7085f3 !important; }
-    [data-theme="dark"] .btn-outline-primary:hover { background-color: var(--primary) !important; color: white !important; }
-    [data-theme="dark"] .btn-outline-info { border-color: rgba(13, 202, 240, 0.5) !important; color: #0dcaf0 !important; }
-    [data-theme="dark"] .btn-outline-info:hover { background-color: #0dcaf0 !important; color: #000 !important; }
+.search-input-wrapper {
+    position: relative;
+    flex-grow: 1;
+}
 
-    /* Ordenação nas colunas */
-    .sortable-header {
-        cursor: pointer;
-        transition: all 0.2s;
-        font-family: var(--font-heading);
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 0.5px;
-        color: var(--text-muted) !important;
-    }
-    .sortable-header:hover {
-        background-color: transparent !important;
-        color: var(--text-main) !important;
-    }
+.search-input-wrapper i {
+    position: absolute;
+    left: 1.25rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--primary);
+    font-size: 1.2rem;
+}
 
-    /* Cards */
-    [data-theme="dark"] .totalizador-card {
-        transition: all 0.3s ease !important;
-        cursor: pointer;
-        border: 1px solid var(--border-color) !important;
-        border-radius: var(--radius-lg);
-        background: var(--bg-card) !important;
-        box-shadow: none !important;
-    }
-    [data-theme="dark"] .totalizador-card:hover {
-        transform: translateY(-5px) !important;
-        border-color: var(--primary-light) !important;
-    }
-    [data-theme="dark"] .card {
-        border-radius: var(--radius-lg);
-        border: 1px solid var(--border-color) !important;
-        background-color: var(--bg-card) !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
-    }
-    [data-theme="dark"] .card-header, [data-theme="dark"] .card-footer {
-        background-color: transparent !important;
-        border-bottom-color: var(--border-color) !important;
-        border-top-color: var(--border-color) !important;
-    }
+.search-input-wrapper .form-control {
+    padding-left: 3.5rem;
+    height: 52px;
+    background: var(--bg-body) !important;
+    border: 1px solid var(--border-color) !important;
+}
 
-    [data-theme="dark"] .page-title {
-        font-family: var(--font-heading);
-        font-size: 1.75rem;
-        letter-spacing: -0.5px;
-        margin-bottom: 0.25rem;
-        color: var(--text-main) !important;
-    }
+/* Dashboard Cards - Refinados */
+.stats-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    transition: all 0.25s ease;
+    height: 100%;
+}
 
-    /* Inputs e Buscas */
-    .training-search-container { position: relative; }
-    [data-theme="dark"] .training-search-container .form-control, [data-theme="dark"] .filter-input, [data-theme="dark"] .form-select {
-        height: 48px;
-        border-radius: var(--radius-md);
-        border: 1px solid var(--border-color) !important;
-        background-color: var(--bg-body) !important;
-        color: var(--text-main) !important;
-        transition: all 0.3s ease;
-        box-shadow: none !important;
-    }
-    .training-search-container .form-control { padding-left: 45px; }
-    [data-theme="dark"] .training-search-container .form-control:focus, [data-theme="dark"] .filter-input:focus, [data-theme="dark"] .form-select:focus {
-        border-color: var(--primary) !important;
-        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
-        outline: none;
-    }
-    .training-search-container .search-icon {
-        position: absolute;
-        left: 18px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: var(--text-muted);
-        z-index: 10;
-        font-size: 1.1rem;
-    }
+.stats-card:hover {
+    border-color: var(--primary);
+    transform: translateY(-3px);
+}
 
-    .filter-btn {
-        height: 48px;
-        border-radius: var(--radius-md);
-        font-weight: 600;
-        box-shadow: none !important;
-    }
+.stats-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+}
 
-    /* Table */
-    .table-container { scrollbar-width: thin; }
-    [data-theme="dark"] .table thead th {
-        background-color: var(--bg-card) !important;
-        color: var(--text-muted) !important;
-        border-bottom: 1px solid var(--border-color) !important;
-    }
-    [data-theme="dark"] .table tbody td {
-        vertical-align: middle;
-        color: var(--text-main) !important;
-        border-bottom: 1px solid var(--border-color) !important;
-    }
-    [data-theme="dark"] .table tbody tr:hover { background-color: var(--bg-hover) !important; }
-    [data-theme="dark"] .table th a { color: var(--text-muted) !important; }
-    
-    /* Outros botões / badges */
-    .badge {
-        border-radius: 8px;
-        font-weight: 600;
-        padding: 0.4em 0.6em;
-    }
-    [data-theme="dark"] .badge.bg-light { background-color: var(--bg-body) !important; color: var(--text-muted) !important; border: 1px solid var(--border-color) !important; }
-    [data-theme="dark"] .btn-light { background-color: var(--bg-body) !important; border-color: var(--border-color) !important; color: var(--text-main) !important; }
-    [data-theme="dark"] .btn-light:hover { background-color: var(--bg-hover) !important; color: white !important; }
-    [data-theme="dark"] .btn-outline-secondary { border-color: var(--border-color) !important; color: var(--text-muted) !important; }
-    [data-theme="dark"] .btn-outline-secondary:hover { background-color: var(--bg-hover) !important; color: var(--text-main) !important; }
+/* Table Style */
+.table-premium {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 3rem;
+}
 
-    /* Modais */
-    [data-theme="dark"] .modal-content { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; }
-    [data-theme="dark"] .modal-header, [data-theme="dark"] .modal-footer { border-color: var(--border-color) !important; }
-    [data-theme="dark"] .modal-title, [data-theme="dark"] .modal-content h5 { color: var(--text-main) !important; }
+.table-premium thead th {
+    background: var(--bg-body);
+    font-size: 0.75rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted) !important;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color) !important;
+}
 
-    /* Dropdowns e paginação */
-    [data-theme="dark"] .dropdown-menu { background-color: var(--bg-card) !important; border: 1px solid var(--border-color) !important; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5) !important; }
-    [data-theme="dark"] .dropdown-item { color: var(--text-main) !important; background-color: transparent !important; }
-    [data-theme="dark"] .dropdown-item:hover { background-color: var(--bg-hover) !important; color: white !important; }
-    [data-theme="dark"] .page-link { background-color: var(--bg-card) !important; border-color: var(--border-color) !important; color: var(--text-main) !important; }
-    [data-theme="dark"] .page-link:hover { background-color: var(--bg-hover) !important; color: white !important; }
-    [data-theme="dark"] .page-item.active .page-link { background-color: var(--primary) !important; border-color: var(--primary) !important; color: white !important; }
-    [data-theme="dark"] .page-item.disabled .page-link { background-color: var(--bg-body) !important; color: var(--text-muted) !important; border-color: var(--border-color) !important; }
+.table-premium tbody td {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color) !important;
+    font-size: 0.9rem;
+    color: var(--text-main);
+}
 
-    /* Otimizar cores da row de cards para o modelo */
-    [data-theme="dark"] .bg-primary.bg-opacity-10 { background-color: rgba(59, 130, 246, 0.15) !important; }
-    [data-theme="dark"] .bg-warning.bg-opacity-10 { background-color: rgba(245, 158, 11, 0.15) !important; }
-    [data-theme="dark"] .bg-danger.bg-opacity-10 { background-color: rgba(239, 68, 68, 0.15) !important; }
-    [data-theme="dark"] .bg-success.bg-opacity-10 { background-color: rgba(16, 185, 129, 0.15) !important; }
-    
-    [data-theme="dark"] .border-warning, [data-theme="dark"] .border-primary, [data-theme="dark"] .border-danger, [data-theme="dark"] .border-success { border-left-width: 4px !important; }
-    [data-theme="dark"] .totalizador-card h2 { color: var(--text-main) !important; }
-    
-    /* Modal / Offcanvas / Tooltips */
-    [data-theme="dark"] .bg-light.rounded-3.border { background-color: var(--bg-body) !important; border-color: var(--border-color) !important; }
-    
-    /* Input DateTime / Date Picker */
-    [data-theme="dark"] ::-webkit-calendar-picker-indicator { filter: invert(0.8) sepia(1) hue-rotate(180deg); opacity: 0.6; cursor: pointer; }
-    
-    /* Alertas */
-    [data-theme="dark"] .alert { background-color: var(--bg-card) !important; border-color: var(--border-color) !important; color: var(--text-main) !important; }
-    [data-theme="dark"] .alert-success { border-left: 4px solid var(--success) !important; }
-    [data-theme="dark"] .alert-warning { border-left: 4px solid var(--warning) !important; }
-    [data-theme="dark"] .alert-danger { border-left: 4px solid var(--danger) !important; }
-    [data-theme="dark"] .alert-info { border-left: 4px solid var(--info) !important; }
-    
-    /* Botões fechamento modais/alertas */
-    [data-theme="dark"] .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
-    
-    /* Ajustes específicos de texto mutado baseados no Perplexity */
-    [data-theme="dark"] small, [data-theme="dark"] .small { color: var(--text-muted) !important; }
+/* Animations */
+.gsap-reveal {
+    opacity: 0;
+    transform: translateY(15px);
+}
+
+.fw-800 { font-weight: 800; }
+
+/* Overrides para visibilidade de botões */
+.btn-outline-primary { border-color: var(--primary); color: var(--primary); }
+.btn-outline-primary:hover { background: var(--primary); color: #fff; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 
-<div class="container-fluid py-4 bg-light min-vh-100">
-    <div class="row align-items-center mb-4">
-        <div class="col">
-            <h3 class="page-title fw-bold text-dark mb-1"><i class="bi bi-calendar2-week me-2 text-primary"></i>Agenda de Treinamentos</h3>
-            <p class="text-muted small">Gestão de capacitação técnica dos clientes</p>
+<div class="container-fluid px-0">
+    <!-- Modern Header -->
+    <div class="modern-header d-flex justify-content-between align-items-end gsap-reveal">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-2" style="font-size: 0.8rem;">
+                    <li class="breadcrumb-item"><a href="index.php" class="text-decoration-none text-muted">Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Treinamentos</li>
+                </ol>
+            </nav>
+            <h2 class="fw-800 mb-0">Agenda de <span class="title-accent">Treinamentos</span></h2>
+            <p class="text-muted small mb-0">Gestão de capacitação técnica dos clientes.</p>
         </div>
-        <div class="col-auto">
-            <div class="d-flex align-items-center gap-2">
-                <button type="button" class="btn btn-outline-success px-4 fw-bold shadow-sm d-flex align-items-center" id="btn_copiar_disponibilidade" disabled>
-                    <i class="bi bi-whatsapp me-2"></i>Copiar Horas Disponíveis
-                </button>
-                <button class="btn btn-primary px-4 fw-bold shadow-sm d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
-                    <i class="bi bi-plus-lg me-2"></i>Novo Agendamento
-                </button>
-            </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" class="btn btn-outline-success px-4 fw-bold shadow-sm d-flex align-items-center" id="btn_copiar_disponibilidade" disabled>
+                <i class="bi bi-whatsapp me-2"></i>Copiar Horas
+            </button>
+            <button class="btn btn-primary px-4 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
+                <i class="bi bi-calendar-plus me-2"></i>Novo Agendamento
+            </button>
         </div>
     </div>
 
+    <!-- Alertas de Inatividade -->
     <?php if (!empty($clientes_inativos)): ?>
-        <div class="alert alert-warning border-0 shadow-sm mb-4" role="alert">
+        <div class="alert alert-warning border-0 shadow-sm mb-4 gsap-reveal" role="alert" style="background: var(--warning-light); color: var(--warning);">
             <div class="d-flex align-items-center">
-                <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
-                <div>
-                    <h6 class="alert-heading fw-bold mb-1">Atenção: Clientes em inatividade!</h6>
-                    <p class="mb-0 small">Existem <strong><?= count($clientes_inativos) ?></strong> clientes sem agendamentos pendentes e sem interação há mais de 3 dias.</p>
+                <i class="bi bi-exclamation-triangle me-3 fs-5"></i>
+                <div class="flex-grow-1">
+                    <h6 class="mb-0 fw-bold">Atenção: <?= count($clientes_inativos) ?> clientes em inatividade!</h6>
+                    <span class="small opacity-75">Clientes sem agendamentos há mais de 5 dias.</span>
                 </div>
-                <div class="ms-auto text-decoration-none">
-                    <button type="button" class="btn btn-sm btn-warning fw-bold" data-bs-toggle="collapse" data-bs-target="#listaInatividade">Ver Clientes</button>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
+                <button type="button" class="btn btn-sm btn-warning fw-bold px-3 ms-3" data-bs-toggle="collapse" data-bs-target="#listaInatividade">Ver Detalhes</button>
             </div>
             <div class="collapse mt-3" id="listaInatividade">
-                <div class="list-group list-group-flush rounded-3 border">
+                <div class="row g-2">
                     <?php foreach ($clientes_inativos as $ci): ?>
-                        <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-3">
-                            <span class="fw-bold"><i class="bi bi-building me-2"></i><?= htmlspecialchars($ci['fantasia']) ?></span>
-                            <span class="badge bg-light text-dark border">
-                                ÚLTIMO CONTATO: <?= $ci['última_data'] ? date('d/m/Y', strtotime($ci['última_data'])) : (date('d/m/Y', strtotime($ci['data_inicio'])) . ' (INÍCIO)') ?>
-                            </span>
+                        <div class="col-md-4">
+                            <div class="p-2 border rounded bg-white bg-opacity-50 small">
+                                <strong><?= htmlspecialchars($ci['fantasia']) ?></strong><br>
+                                <span class="text-muted">Último: <?= $ci['última_data'] ? date('d/m/Y', strtotime($ci['última_data'])) : 'Nunca' ?></span>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -1247,118 +1183,103 @@ include 'header.php';
         </div>
     <?php endif; ?>
 
-    <div class="row g-4 mb-5">
-        <div class="col-md-3">
-            <div class="card totalizador-card h-100 p-3 border-0 shadow-sm border-start border-primary border-4">
-                <div class="d-flex align-items-center">
-                    <div class="bg-primary bg-opacity-10 p-3 rounded-3 me-3">
-                        <i class="bi bi-building text-primary fs-3"></i>
-                    </div>
-                    <div>
-                        <h6 class="text-muted mb-1 small fw-bold">CLIENTES</h6>
-                        <h3 class="mb-0 fw-bold"><?= $total_clientes; ?></h3>
-                    </div>
-                </div>
+    <!-- Stats Cards -->
+    <div class="row g-4 mb-5 gsap-reveal">
+        <div class="col-6 col-md-3">
+            <div class="stats-card">
+                <div class="stats-icon text-primary" style="background: var(--primary-light);"><i class="bi bi-building"></i></div>
+                <h3 class="fw-800 mb-1"><?= $total_clientes; ?></h3>
+                <span class="text-muted small fw-bold">CLIENTES ATIVOS</span>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card totalizador-card h-100 p-3 border-0 shadow-sm border-start border-info border-4">
-                <div class="d-flex align-items-center">
-                    <div class="bg-info bg-opacity-10 p-3 rounded-3 me-3">
-                        <i class="bi bi-mortarboard text-info fs-3"></i>
-                    </div>
-                    <div>
-                        <h6 class="text-muted mb-1 small fw-bold">TREINAMENTOS</h6>
-                        <h3 class="mb-0 fw-bold"><?= $total_treinamentos; ?></h3>
-                    </div>
-                </div>
+        <div class="col-6 col-md-3">
+            <div class="stats-card">
+                <div class="stats-icon text-info" style="background: var(--info-light);"><i class="bi bi-mortarboard"></i></div>
+                <h3 class="fw-800 mb-1"><?= $total_treinamentos; ?></h3>
+                <span class="text-muted small fw-bold">TOTAL TREINOS</span>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card totalizador-card h-100 p-3 border-0 shadow-sm border-start border-warning border-4">
-                <div class="d-flex align-items-center">
-                    <div class="bg-warning bg-opacity-10 p-3 rounded-3 me-3">
-                        <i class="bi bi-clock-history text-warning fs-3"></i>
-                    </div>
-                    <div>
-                        <h6 class="text-muted mb-1 small fw-bold">PENDENTES</h6>
-                        <h3 class="mb-0 fw-bold"><?= $treinamentos_pendentes; ?></h3>
-                    </div>
-                </div>
+        <div class="col-6 col-md-3">
+            <div class="stats-card">
+                <div class="stats-icon text-warning" style="background: var(--warning-light);"><i class="bi bi-clock-history"></i></div>
+                <h3 class="fw-800 mb-1"><?= $treinamentos_pendentes; ?></h3>
+                <span class="text-muted small fw-bold">AGENDADOS</span>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card totalizador-card h-100 p-3 border-0 shadow-sm border-start border-success border-4">
-                <div class="d-flex align-items-center">
-                    <div class="bg-success bg-opacity-10 p-3 rounded-3 me-3">
-                        <i class="bi bi-check2-circle text-success fs-3"></i>
-                    </div>
-                    <div>
-                        <h6 class="text-muted mb-1 small fw-bold">RESOLVIDOS</h6>
-                        <h3 class="mb-0 fw-bold"><?= $treinamentos_resolvidos; ?></h3>
-                    </div>
-                </div>
+        <div class="col-6 col-md-3">
+            <div class="stats-card">
+                <div class="stats-icon text-danger" style="background: var(--danger-light);"><i class="bi bi-exclamation-circle"></i></div>
+                <h3 class="fw-800 mb-1"><?= $total_pendencias_treinamentos; ?></h3>
+                <span class="text-muted small fw-bold">PENDÊNCIAS</span>
             </div>
         </div>
     </div>
 
-
-
-
-    <!-- TABELA DE TREINAMENTOS -->
-    <div class="card shadow-sm border-0 rounded-3 overflow-hidden">
-        <div class="card-header bg-white border-bottom py-3 px-4">
-            <div class="d-flex align-items-center justify-content-between">
-                <div class="d-flex align-items-center">
-                    <h5 class="fw-bold mb-0 text-dark">Treinamentos</h5>
-                    <?php if ($total_resultados > 0): ?>
-                        <span class="badge bg-primary bg-opacity-10 text-primary ms-3 px-3 py-2" style="font-size: 0.75rem;">
-                            <?= $total_registros ?> registros encontrados
-                        </span>
-                    <?php endif; ?>
+    <!-- Search Section -->
+    <div class="search-section gsap-reveal">
+        <form method="GET" class="row g-3 align-items-center">
+            <div class="col-lg-8">
+                <div class="search-input-wrapper">
+                    <i class="bi bi-search"></i>
+                    <input type="text"
+                        name="filtro_cliente"
+                        class="form-control"
+                        placeholder="Buscar cliente por nome ou fantasia..."
+                        value="<?php echo htmlspecialchars($filtro_cliente); ?>"
+                        autofocus>
                 </div>
-                <div class="d-flex gap-2">
-                    <div class="dropdown">
-                        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
-                            <i class="bi bi-sort-down me-1"></i> Ordenar
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="border-radius: 12px; font-size: 0.85rem;">
-                            <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=data_treinamento&direcao=asc&filtro_cliente=<?= urlencode($filtro_cliente) ?>"><i class="bi bi-calendar3 me-2"></i>Data (Próximos)</a></li>
-                            <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=cliente_nome&direcao=asc&filtro_cliente=<?= urlencode($filtro_cliente) ?>"><i class="bi bi-building me-2"></i>Cliente</a></li>
-                            <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=tema&direcao=asc&filtro_cliente=<?= urlencode($filtro_cliente) ?>"><i class="bi bi-tag me-2"></i>Tema</a></li>
-                            <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=status&direcao=asc&filtro_cliente=<?= urlencode($filtro_cliente) ?>"><i class="bi bi-check-circle me-2"></i>Status</a></li>
-                        </ul>
-                    </div>
-                    <a href="pendencias_treinamentos.php" class="btn btn-sm btn-outline-danger d-flex align-items-center fw-bold">
-                        Pendências de Treinamentos
-                        <?php if ($total_pendencias_treinamentos > 0): ?>
-                            <span class="badge bg-danger text-white ms-2"><?= $total_pendencias_treinamentos ?></span>
-                        <?php endif; ?>
-                    </a>
-                    <a href="treinamentos.php?mostrar_todos=1" class="btn btn-sm btn-light border d-flex align-items-center">Ver todos</a>
+            </div>
+            <div class="col-lg-2">
+                <a href="pendencias_treinamentos.php" class="btn btn-outline-danger w-100 fw-bold d-flex align-items-center justify-content-center" style="height: 52px;">
+                    Pendências <span class="badge bg-danger ms-2"><?= $total_pendencias_treinamentos ?></span>
+                </a>
+            </div>
+            <div class="col-lg-2">
+                <button type="submit" class="btn btn-primary w-100 fw-bold" style="height: 52px;">Filtrar</button>
+            </div>
+            <?php if ($filtros_ativos): ?>
+                <div class="col-12 mt-2">
+                    <a href="treinamentos.php" class="text-primary small text-decoration-none fw-bold"><i class="bi bi-x-circle me-1"></i> Limpar todos os filtros</a>
+                </div>
+            <?php endif; ?>
+        </form>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="table-premium gsap-reveal">
+        <div class="p-4 border-bottom d-flex justify-content-between align-items-center bg-white">
+            <h5 class="fw-bold mb-0">Listagem de Treinamentos</h5>
+            <div class="d-flex gap-2">
+                <a href="treinamentos.php?mostrar_todos=1" class="btn btn-sm btn-light border px-3">Ver Resolvidos</a>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Ordenar</button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                        <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=data_treinamento&direcao=asc"><i class="bi bi-calendar3 me-2"></i>Data</a></li>
+                        <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=cliente_nome&direcao=asc"><i class="bi bi-building me-2"></i>Cliente</a></li>
+                    </ul>
                 </div>
             </div>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light">
+                <thead>
                     <tr>
-                        <th class="ps-4 py-3 border-bottom-0">
+                        <th class="ps-4">
                             <a href="treinamentos.php?ordenacao=data_treinamento&direcao=<?= ($ordenacao == 'data_treinamento' && $direcao == 'asc') ? 'desc' : 'asc' ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>"
                                 class="text-decoration-none d-flex align-items-center">
-                                <span class="text-muted small fw-bold text-uppercase">Data Agendada</span>
+                                <span>Data Agendada</span>
                                 <?php if ($ordenacao == 'data_treinamento'): ?>
                                     <i class="bi bi-caret-<?= $direcao == 'asc' ? 'up' : 'down' ?>-fill ms-1 small text-primary"></i>
                                 <?php endif; ?>
                             </a>
                         </th>
-                        <th class="py-3 border-bottom-0 text-muted small fw-bold text-uppercase">Cliente</th>
-                        <th class="py-3 border-bottom-0 text-muted small fw-bold text-uppercase">Servidor</th>
-                        <th class="py-3 border-bottom-0 text-muted small fw-bold text-uppercase">Contato</th>
-                        <th class="py-3 border-bottom-0 text-muted small fw-bold text-uppercase">Tema</th>
-                        <th class="py-3 border-bottom-0 text-muted small fw-bold text-uppercase">Status</th>
-                        <th class="py-3 border-bottom-0 text-muted small fw-bold text-uppercase text-center">Convite</th>
-                        <th class="py-3 border-bottom-0 text-muted small fw-bold text-uppercase text-end pe-4">Ações</th>
+                        <th>Cliente</th>
+                        <th>Servidor</th>
+                        <th>Contato</th>
+                        <th>Tema</th>
+                        <th>Status</th>
+                        <th class="text-center">Convite</th>
+                        <th class="text-end pe-4">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1552,12 +1473,12 @@ include 'header.php';
 
         <!-- Paginação -->
         <?php if ($total_paginas > 1): ?>
-            <div class="card-footer bg-white border-0 py-3">
+            <div class="p-4 border-top">
                 <nav aria-label="Navegação de páginas">
-                    <ul class="pagination justify-content-center mb-0">
+                    <ul class="pagination justify-content-center mb-0 gap-1">
                         <?php if ($pagina > 1): ?>
                             <li class="page-item">
-                                <a class="page-link" href="treinamentos.php?pagina=<?= $pagina - 1 ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>">
+                                <a class="page-link rounded-3 border-0 bg-light" href="treinamentos.php?pagina=<?= $pagina - 1 ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>">
                                     <i class="bi bi-chevron-left"></i>
                                 </a>
                             </li>
@@ -1567,30 +1488,18 @@ include 'header.php';
                         $inicio = max(1, $pagina - 2);
                         $fim = min($total_paginas, $pagina + 2);
 
-                        if ($inicio > 1) {
-                            echo '<li class="page-item"><a class="page-link" href="treinamentos.php?pagina=1&ordenacao=' . $ordenacao . '&direcao=' . $direcao . '&filtro_cliente=' . urlencode($filtro_cliente) . '">1</a></li>';
-                            if ($inicio > 2) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                        }
-
                         for ($i = $inicio; $i <= $fim; $i++):
                         ?>
                             <li class="page-item <?= ($i == $pagina) ? 'active' : '' ?>">
-                                <a class="page-link" href="treinamentos.php?pagina=<?= $i ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>">
+                                <a class="page-link rounded-3 border-0 <?= ($i == $pagina) ? 'bg-primary text-white' : 'bg-light text-muted' ?>" href="treinamentos.php?pagina=<?= $i ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>">
                                     <?= $i ?>
                                 </a>
                             </li>
                         <?php endfor; ?>
 
-                        <?php
-                        if ($fim < $total_paginas) {
-                            if ($fim < $total_paginas - 1) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                            echo '<li class="page-item"><a class="page-link" href="treinamentos.php?pagina=' . $total_paginas . '&ordenacao=' . $ordenacao . '&direcao=' . $direcao . '&filtro_cliente=' . urlencode($filtro_cliente) . '">' . $total_paginas . '</a></li>';
-                        }
-                        ?>
-
                         <?php if ($pagina < $total_paginas): ?>
                             <li class="page-item">
-                                <a class="page-link" href="treinamentos.php?pagina=<?= $pagina + 1 ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>">
+                                <a class="page-link rounded-3 border-0 bg-light" href="treinamentos.php?pagina=<?= $pagina + 1 ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>">
                                     <i class="bi bi-chevron-right"></i>
                                 </a>
                             </li>
@@ -1917,28 +1826,26 @@ include 'header.php';
             clienteSelect.options[clienteSelect.selectedIndex].text : '';
 
         const linhas = [];
-        linhas.push('Ola' + (clienteNome ? ', ' + clienteNome : '') + '!');
+        linhas.push('Olá' + (clienteNome ? ' ' + clienteNome : '') + '! Tudo bem? 👍');
         linhas.push('');
-        linhas.push('Segue a tabela de horarios disponiveis para agendamento do treinamento:');
+        linhas.push('Para agendarmos nosso treinamento, veja os horários que tenho disponíveis:');
         linhas.push('');
 
         if (!Array.isArray(diasDisponiveis) || diasDisponiveis.length === 0) {
-            linhas.push('Nao ha horarios livres para hoje +3 dias.');
+            linhas.push('Putz, não encontrei horários livres para os próximos dias. 😕');
         } else {
             diasDisponiveis.forEach((dia) => {
                 const dataLabel = dia.data_label || dia.data || 'Dia';
                 const horarios = Array.isArray(dia.horarios) ? dia.horarios : [];
-                if (horarios.length === 0) {
-                    linhas.push(dataLabel + ': sem horarios livres.');
-                } else {
+                if (horarios.length > 0) {
                     const horas = horarios.map((slot) => slot.hora).filter(Boolean);
-                    linhas.push(dataLabel + ': ' + horas.join(', '));
+                    linhas.push('*' + dataLabel + '*: ' + horas.join(', '));
                 }
             });
         }
 
         linhas.push('');
-        linhas.push('Me informe qual horario prefere para eu confirmar no Google Agenda.');
+        linhas.push('Qual desses fica melhor para você? Me avisa aqui que eu já reservo! 🚀');
         return linhas.join('\n');
     }
 
@@ -2329,6 +2236,14 @@ include 'header.php';
         disponibilidadeFoiCarregada = false;
         atualizarBotaoCopiarDisponibilidade();
     });
+
+    // GSAP Entrance
+    if (typeof gsap !== 'undefined') {
+        gsap.to(".gsap-reveal", { duration: 0.6, opacity: 1, y: 0, stagger: 0.1, ease: "power2.out" });
+    } else {
+        // Fallback caso GSAP falhe
+        document.querySelectorAll('.gsap-reveal').forEach(el => el.style.opacity = '1');
+    }
 </script>
 
 <?php include 'footer.php'; ?>
