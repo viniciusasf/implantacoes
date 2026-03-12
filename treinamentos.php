@@ -1133,6 +1133,7 @@ include 'header.php';
 .btn-outline-primary:hover { background: var(--primary); color: #fff; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 
 <div class="container-fluid px-0">
     <!-- Modern Header -->
@@ -1169,15 +1170,54 @@ include 'header.php';
                 <button type="button" class="btn btn-sm btn-warning fw-bold px-3 ms-3" data-bs-toggle="collapse" data-bs-target="#listaInatividade">Ver Detalhes</button>
             </div>
             <div class="collapse mt-3" id="listaInatividade">
-                <div class="row g-2">
-                    <?php foreach ($clientes_inativos as $ci): ?>
-                        <div class="col-md-4">
-                            <div class="p-2 border rounded bg-white bg-opacity-50 small">
-                                <strong><?= htmlspecialchars($ci['fantasia']) ?></strong><br>
-                                <span class="text-muted">Último: <?= $ci['última_data'] ? date('d/m/Y', strtotime($ci['última_data'])) : 'Nunca' ?></span>
-                            </div>
+                <style>
+                    .kanban-board { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; }
+                    .kanban-column { background: rgba(0,0,0,0.1); border-radius: 12px; min-width: 250px; flex: 1; min-height: 200px; display: flex; flex-direction: column; border: 1px dashed var(--border-color); }
+                    .kanban-header { padding: 0.75rem 1rem; font-weight: 800; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+                    .kanban-list { flex-grow: 1; padding: 0.75rem; min-height: 100px; }
+                    .kanban-card { background: var(--bg-card); border: 1px solid var(--border-color); padding: 0.75rem; border-radius: 8px; margin-bottom: 0.5rem; cursor: grab; transition: all 0.2s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+                    .kanban-card:active { cursor: grabbing; }
+                    .kanban-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+                    .column-count { background: var(--border-color); padding: 2px 8px; border-radius: 10px; font-size: 0.65rem; color: var(--text-main); }
+                    .kanban-column[data-status="contato"] .kanban-header { color: #3b82f6; }
+                    .kanban-column[data-status="nao_responde"] .kanban-header { color: #ef4444; }
+                </style>
+                <div class="kanban-board">
+                    <!-- Coluna: Inativos (Geral) -->
+                    <div class="kanban-column" data-status="inativo">
+                        <div class="kanban-header">
+                            <span>Inativos</span>
+                            <span class="column-count" id="count-inativo">0</span>
                         </div>
-                    <?php endforeach; ?>
+                        <div class="kanban-list" id="list-inativo">
+                            <?php foreach ($clientes_inativos as $ci): ?>
+                                <div class="kanban-card" data-id="<?= $ci['id_cliente'] ?>">
+                                    <div class="fw-bold mb-1" style="font-size: 0.85rem;"><?= htmlspecialchars($ci['fantasia']) ?></div>
+                                    <div class="text-muted" style="font-size: 0.7rem;">
+                                        <i class="bi bi-clock-history me-1"></i>Último: <?= $ci['última_data'] ? date('d/m/Y', strtotime($ci['última_data'])) : 'Nunca' ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <!-- Coluna: Em Contato -->
+                    <div class="kanban-column" data-status="contato">
+                        <div class="kanban-header">
+                            <span>Em Contato</span>
+                            <span class="column-count" id="count-contato">0</span>
+                        </div>
+                        <div class="kanban-list" id="list-contato"></div>
+                    </div>
+
+                    <!-- Coluna: Não Responde -->
+                    <div class="kanban-column" data-status="nao_responde">
+                        <div class="kanban-header">
+                            <span>Não Responde</span>
+                            <span class="column-count" id="count-nao_responde">0</span>
+                        </div>
+                        <div class="kanban-list" id="list-nao_responde"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2182,6 +2222,58 @@ include 'header.php';
             carregarDisponibilidadeGoogle();
         });
     }
+
+    // Lógica do Kanban de Inatividade
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!document.getElementById('list-inativo')) return;
+
+        const statuses = ['inativo', 'contato', 'nao_responde'];
+        const kanbanState = JSON.parse(localStorage.getItem('kanban_inatividade_v2') || '{}');
+
+        // Restaurar estado do localStorage
+        statuses.forEach(status => {
+            const list = document.getElementById(`list-${status}`);
+            if (status !== 'inativo') {
+                const ids = kanbanState[status] || [];
+                ids.forEach(id => {
+                    const card = document.querySelector(`.kanban-card[data-id="${id}"]`);
+                    if (card) list.appendChild(card);
+                });
+            }
+        });
+
+        // Inicializar Sortable para cada coluna
+        statuses.forEach(status => {
+            new Sortable(document.getElementById(`list-${status}`), {
+                group: 'kanban_inatividade',
+                animation: 150,
+                ghostClass: 'opacity-50',
+                onEnd: function() {
+                    salvarEstadoKanban();
+                    atualizarContadoresKanban();
+                }
+            });
+        });
+
+        function salvarEstadoKanban() {
+            const state = {};
+            statuses.forEach(status => {
+                const list = document.getElementById(`list-${status}`);
+                state[status] = Array.from(list.children).map(c => c.dataset.id);
+            });
+            localStorage.setItem('kanban_inatividade_v2', JSON.stringify(state));
+        }
+
+        function atualizarContadoresKanban() {
+            statuses.forEach(status => {
+                const count = document.getElementById(`list-${status}`).childElementCount;
+                document.getElementById(`count-${status}`).innerText = count;
+            });
+        }
+
+        atualizarContadoresKanban();
+    });
+
     carregarDisponibilidadeGoogle();
 
     // Reset modal quando fechado
