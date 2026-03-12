@@ -1179,11 +1179,13 @@ include 'header.php';
                     .kanban-card:active { cursor: grabbing; }
                     .kanban-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
                     .column-count { background: var(--border-color); padding: 2px 8px; border-radius: 10px; font-size: 0.65rem; color: var(--text-main); }
-                    .kanban-column[data-status="contato"] .kanban-header { color: #3b82f6; }
-                    .kanban-column[data-status="nao_responde"] .kanban-header { color: #ef4444; }
+                    .kanban-column[data-status="contato"] .kanban-header { color: #10b981; } /* Sistema OK (Verde) */
+                    .kanban-column[data-status="enviada"] .kanban-header { color: #f59e0b; } /* Mensagem Enviada (Laranja) */
+                    .kanban-column[data-status="nao_responde"] .kanban-header { color: #ef4444; } /* Não Responde (Vermelho) */
+                    .kanban-column[data-status="inativo"] .kanban-header { color: #3b82f6; } /* Enviar Mensagem (Azul) */
                 </style>
                 <div class="kanban-board">
-                    <!-- Coluna: Inativos (Geral) -->
+                    <!-- Coluna: Enviar Mensagem (Inativos) -->
                     <div class="kanban-column" data-status="inativo">
                         <div class="kanban-header">
                             <span>Enviar Mensagem</span>
@@ -1201,7 +1203,16 @@ include 'header.php';
                         </div>
                     </div>
 
-                    <!-- Coluna: Em Contato -->
+                    <!-- Coluna: Mensagem Enviada -->
+                    <div class="kanban-column" data-status="enviada">
+                        <div class="kanban-header">
+                            <span>Mensagem Enviada</span>
+                            <span class="column-count" id="count-enviada">0</span>
+                        </div>
+                        <div class="kanban-list" id="list-enviada"></div>
+                    </div>
+
+                    <!-- Coluna: Sistema OK -->
                     <div class="kanban-column" data-status="contato">
                         <div class="kanban-header">
                             <span>Sistema OK</span>
@@ -2227,7 +2238,7 @@ include 'header.php';
     document.addEventListener('DOMContentLoaded', function() {
         if (!document.getElementById('list-inativo')) return;
 
-        const statuses = ['inativo', 'contato', 'nao_responde'];
+        const statuses = ['inativo', 'enviada', 'contato', 'nao_responde'];
         const kanbanState = JSON.parse(localStorage.getItem('kanban_inatividade_v2') || '{}');
 
         // Restaurar estado do localStorage
