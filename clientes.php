@@ -516,7 +516,7 @@ body, html {
         <div class="search-container position-relative flex-grow-1" style="max-width: 500px;">
             <i class="bi bi-search position-absolute text-muted" style="left: 1rem; top: 50%; transform: translateY(-50%);"></i>
             <form method="GET" action="clientes.php" id="searchForm">
-                <input type="text" name="busca" class="form-control search-input-modern w-100" 
+                <input type="text" name="busca" id="searchInput" class="form-control search-input-modern w-100" 
                        placeholder="Buscar cliente por nome ou fantasia..." value="<?= htmlspecialchars($busca) ?>">
                 <input type="hidden" name="view" value="<?= $view_mode ?>">
                 <input type="hidden" name="estagio" value="<?= $estagio ?>">
@@ -878,6 +878,24 @@ body, html {
             });
         } else {
             document.querySelectorAll(".gsap-reveal").forEach(el => el.style.opacity = 1);
+        }
+
+        // Lógica de busca automática com delay (debounce)
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            // Colocar foco e mover cursor para o final
+            const val = searchInput.value;
+            searchInput.value = '';
+            searchInput.focus();
+            searchInput.value = val;
+
+            let timeout = null;
+            searchInput.addEventListener('input', function() {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    document.getElementById('searchForm').submit();
+                }, 500); // 500ms de delay
+            });
         }
     });
 

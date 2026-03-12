@@ -1183,37 +1183,7 @@ include 'header.php';
         </div>
     <?php endif; ?>
 
-    <!-- Stats Cards -->
-    <div class="row g-4 mb-5 gsap-reveal">
-        <div class="col-6 col-md-3">
-            <div class="stats-card">
-                <div class="stats-icon text-primary" style="background: var(--primary-light);"><i class="bi bi-building"></i></div>
-                <h3 class="fw-800 mb-1"><?= $total_clientes; ?></h3>
-                <span class="text-muted small fw-bold">CLIENTES ATIVOS</span>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="stats-card">
-                <div class="stats-icon text-info" style="background: var(--info-light);"><i class="bi bi-mortarboard"></i></div>
-                <h3 class="fw-800 mb-1"><?= $total_treinamentos; ?></h3>
-                <span class="text-muted small fw-bold">TOTAL TREINOS</span>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="stats-card">
-                <div class="stats-icon text-warning" style="background: var(--warning-light);"><i class="bi bi-clock-history"></i></div>
-                <h3 class="fw-800 mb-1"><?= $treinamentos_pendentes; ?></h3>
-                <span class="text-muted small fw-bold">AGENDADOS</span>
-            </div>
-        </div>
-        <div class="col-6 col-md-3">
-            <div class="stats-card">
-                <div class="stats-icon text-danger" style="background: var(--danger-light);"><i class="bi bi-exclamation-circle"></i></div>
-                <h3 class="fw-800 mb-1"><?= $total_pendencias_treinamentos; ?></h3>
-                <span class="text-muted small fw-bold">PENDÊNCIAS</span>
-            </div>
-        </div>
-    </div>
+
 
     <!-- Search Section -->
     <div class="search-section gsap-reveal">
@@ -1612,7 +1582,7 @@ include 'header.php';
 
                 <div class="mt-3">
                     <div class="d-flex align-items-center justify-content-between mb-2">
-                        <label class="form-label small fw-bold text-muted mb-0">Horarios disponiveis (hoje +3 dias)</label>
+                        <label class="form-label small fw-bold text-muted mb-0">Horários disponíveis (hoje, amanhã e depois)</label>
                         <div class="d-flex gap-2">
                             <button type="button" class="btn btn-sm btn-outline-primary" id="btn_buscar_disponibilidade">
                                 <i class="bi bi-calendar-week me-1"></i>Atualizar
@@ -1840,6 +1810,8 @@ include 'header.php';
                 if (horarios.length > 0) {
                     const horas = horarios.map((slot) => slot.hora).filter(Boolean);
                     linhas.push('*' + dataLabel + '*: ' + horas.join(', '));
+                } else {
+                    linhas.push('*' + dataLabel + '*: Sem horários disponíveis');
                 }
             });
         }
@@ -1885,7 +1857,7 @@ include 'header.php';
             if (horarios.length === 0) {
                 const vazio = document.createElement('span');
                 vazio.className = 'text-muted';
-                vazio.textContent = 'Sem horarios livres.';
+                vazio.textContent = 'Sem horários disponíveis.';
                 wrap.appendChild(vazio);
             } else {
                 totalHorarios += horarios.length;
@@ -1927,7 +1899,7 @@ include 'header.php';
         }
 
         if (totalHorarios === 0) {
-            container.insertAdjacentHTML('beforeend', '<div class="text-danger mt-1">Nao ha horarios livres para hoje +3 dias.</div>');
+            container.insertAdjacentHTML('beforeend', '<div class="text-danger mt-1">Não há horários livres para hoje, amanhã e depois.</div>');
         }
     }
 
@@ -1944,7 +1916,7 @@ include 'header.php';
         botao.disabled = true;
         container.innerHTML = '<div class="text-muted">Consultando Google Agenda...</div>';
 
-        fetch('google_calendar_disponibilidade.php?dias=3&duracao_min=60', {
+        fetch('google_calendar_disponibilidade.php?dias=2&duracao_min=60', {
                 cache: 'no-store'
             })
             .then(r => r.json())
