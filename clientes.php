@@ -621,7 +621,7 @@ body, html {
                                     title="Editar" onclick="openEditModal(this)">
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <a href="treinamentos.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos" title="Treinamentos">
+                            <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos" title="Treinamentos">
                                 <i class="bi bi-calendar-check"></i>
                             </a>
                             <?php if (!$cliente_encerrado): ?>
@@ -715,7 +715,7 @@ body, html {
                                                     onclick="openEditModal(this)">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
-                                            <a href="treinamentos.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos">
+                                            <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos">
                                                 <i class="bi bi-calendar-check"></i>
                                             </a>
                                             <a href="?delete=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>" class="btn btn-sm btn-action delete" onclick="return confirm('Excluir cliente?')">
