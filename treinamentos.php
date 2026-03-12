@@ -1186,7 +1186,7 @@ include 'header.php';
                     <!-- Coluna: Inativos (Geral) -->
                     <div class="kanban-column" data-status="inativo">
                         <div class="kanban-header">
-                            <span>Inativos</span>
+                            <span>Enviar Mensagem</span>
                             <span class="column-count" id="count-inativo">0</span>
                         </div>
                         <div class="kanban-list" id="list-inativo">
@@ -1204,7 +1204,7 @@ include 'header.php';
                     <!-- Coluna: Em Contato -->
                     <div class="kanban-column" data-status="contato">
                         <div class="kanban-header">
-                            <span>Em Contato</span>
+                            <span>Sistema OK</span>
                             <span class="column-count" id="count-contato">0</span>
                         </div>
                         <div class="kanban-list" id="list-contato"></div>
