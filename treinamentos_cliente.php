@@ -37,6 +37,22 @@ if (!$id_cliente) {
     exit;
 }
 
+// Lógica para Salvar Nova Observação (Histórico)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_observation') {
+    $titulo = $_POST['titulo'] ?? 'Observação Geral';
+    $conteudo = $_POST['conteudo'] ?? '';
+    // Corrigindo para aceitar 'INFORMAÇÃO' com acento conforme o ENUM definido na tabela
+    $tipo = $_POST['tipo'] ?? 'INFORMAÇÃO'; 
+    $tags = $_POST['tags'] ?? '';
+    $autor = $_POST['autor'] ?: 'Sistema';
+
+    $stmtObsAdd = $pdo->prepare("INSERT INTO observacoes_cliente (id_cliente, titulo, conteudo, tipo, tags, registrado_por) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmtObsAdd->execute([$id_cliente, $titulo, $conteudo, $tipo, $tags, $autor]);
+    
+    header("Location: treinamentos_cliente.php?id_cliente=$id_cliente&msg=Historico+registrado+com+sucesso");
+    exit;
+}
+
 // 1. Busca os dados do cliente para o cabeçalho
 $stmtCli = $pdo->prepare("SELECT fantasia, servidor, vendedor FROM clientes WHERE id_cliente = ?");
 $stmtCli->execute([$id_cliente]);
@@ -369,6 +385,9 @@ body {
                     <button class="btn-premium btn-purple-premium" data-bs-toggle="modal" data-bs-target="#modalVisualizarObservacoes">
                         <i class="bi bi-journal-text"></i> Ver Históricos
                     </button>
+                    <button class="btn-premium btn-purple-premium opacity-75" data-bs-toggle="modal" data-bs-target="#modalNovaObservacao">
+                        <i class="bi bi-plus-circle"></i> Novo Histórico
+                    </button>
                     <a href="clientes.php" class="btn btn-outline-secondary btn-premium border-0"><i class="bi bi-arrow-left"></i> Voltar</a>
                 </div>
             </div>
@@ -550,7 +569,58 @@ body {
                     </div>
                 <?php endif; ?>
             </div>
+            <div class="modal-footer border-0 p-4">
+                <button class="btn-premium btn-purple-premium w-100" data-bs-toggle="modal" data-bs-target="#modalNovaObservacao">
+                    <i class="bi bi-plus-circle me-2"></i> Adicionar Novo Registro Agora
+                </button>
+            </div>
         </div>
+    </div>
+</div>
+
+<!-- MODAL PARA ADICIONAR NOVA OBSERVAÇÃO -->
+<div class="modal fade" id="modalNovaObservacao" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" class="modal-content">
+            <input type="hidden" name="action" value="save_observation">
+            <div class="modal-header border-0 p-4 pb-0">
+                <h5 class="fw-800 mb-0">Novo Registro de <span class="text-purple">Histórico</span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Título do Evento</label>
+                    <input type="text" name="titulo" class="form-control" placeholder="Ex: Ajuste de servidor concluído" required>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-muted">Tipo</label>
+                        <select name="tipo" class="form-select">
+                            <option value="INFORMAÇÃO">Informação</option>
+                            <option value="AJUSTE">Ajuste Técnico</option>
+                            <option value="PROBLEMA">Problema / Bug</option>
+                            <option value="MELHORIA">Sugestão / Melhoria</option>
+                            <option value="CONTATO">Contato Extra</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-muted">Autor</label>
+                        <input type="text" name="autor" class="form-control" value="Suporte" placeholder="Seu nome">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Tags (separadas por vírgula)</label>
+                    <input type="text" name="tags" class="form-control" placeholder="Ex: vps, banco de dados, configuracao">
+                </div>
+                <div class="mb-0">
+                    <label class="form-label small fw-bold text-muted">Conteúdo Detalhado</label>
+                    <textarea name="conteudo" class="form-control" rows="5" placeholder="Descreva o que foi feito ou conversado..." required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-4 pt-0">
+                <button type="submit" class="btn-premium btn-purple-premium w-100">Salvar no Histórico Permanente</button>
+            </div>
+        </form>
     </div>
 </div>
 

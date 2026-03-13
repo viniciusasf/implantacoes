@@ -4,6 +4,35 @@ date_default_timezone_set('America/Sao_Paulo');
 
 require_once 'config.php';
 
+// FUNÇÃO PARA GARANTIR QUE A TABELA DE OBSERVAÇÕES EXISTA
+function garantirTabelaObservacoes($pdo)
+{
+    try {
+        $stmt = $pdo->query("SHOW TABLES LIKE 'observacoes_cliente'");
+        if ($stmt->rowCount() === 0) {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS observacoes_cliente (
+                id_observacao INT PRIMARY KEY AUTO_INCREMENT,
+                id_cliente INT NOT NULL,
+                titulo VARCHAR(100) NOT NULL,
+                conteudo TEXT NOT NULL,
+                tipo ENUM('INFORMAÇÃO', 'AJUSTE', 'PROBLEMA', 'MELHORIA', 'ATUALIZAÇÃO', 'CONTATO') DEFAULT 'INFORMAÇÃO',
+                tags VARCHAR(255),
+                registrado_por VARCHAR(100) DEFAULT 'Sistema',
+                data_observacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_cliente (id_cliente),
+                INDEX idx_tipo (tipo),
+                INDEX idx_data (data_observacao),
+                FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        }
+    } catch (PDOException $e) {
+        error_log("Erro ao verificar/criar tabela observacoes_cliente: " . $e->getMessage());
+    }
+}
+garantirTabelaObservacoes($pdo);
+
+
+
 function treinamentosTemColuna(PDO $pdo, $coluna, $forceRefresh = false)
 {
     static $cache = [];
@@ -826,6 +855,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 
     if (isset($_POST['id_treinamento']) && !empty($_POST['id_treinamento'])) {
+
+        // --- 1. ATUALIZAÇÃO DE TREINAMENTO EXISTENTE ---
         $campos_update = [
             "id_cliente=?",
             "id_contato=?",
@@ -845,10 +876,33 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $params_update[] = $_POST['id_treinamento'];
-        $stmt = $pdo->prepare("UPDATE treinamentos SET " . implode(", ", $campos_update) . " WHERE id_treinamento=?");
-        $stmt->execute($params_update);
+        $stmt_up = $pdo->prepare("UPDATE treinamentos SET " . implode(", ", $campos_update) . " WHERE id_treinamento=?");
+        $stmt_up->execute($params_update);
         $msg = "Treinamento atualizado com sucesso";
+        $abrirGoogleAgendaTreinamentoId = (int)$_POST['id_treinamento'];
+        
+        $redirectUrl = "treinamentos.php?msg=" . urlencode($msg) . "&tipo=success";
+        header("Location: " . $redirectUrl);
+        exit;
+
+    } elseif (isset($_POST['action']) && $_POST['action'] === 'save_client_observation') {
+        // --- 2. SALVAR NOVO HISTÓRICO (OBSERVAÇÃO) ---
+        $id_c = (int)$_POST['id_cliente'];
+        $titulo = $_POST['titulo'] ?? 'Observação Geral';
+        $conteudo = $_POST['conteudo'] ?? '';
+        $tipo = $_POST['tipo'] ?? 'INFORMAÇÃO'; 
+        $tags = $_POST['tags'] ?? '';
+        $autor = $_POST['autor'] ?: 'Sistema';
+
+        if ($id_c > 0) {
+            $stmtObsAdd = $pdo->prepare("INSERT INTO observacoes_cliente (id_cliente, titulo, conteudo, tipo, tags, registrado_por) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmtObsAdd->execute([$id_c, $titulo, $conteudo, $tipo, $tags, $autor]);
+            
+            header("Location: treinamentos.php?msg=Historico+registrado+com+sucesso&id_cliente_ref=$id_c");
+            exit;
+        }
     } else {
+        // --- 3. INSERÇÃO DE NOVO TREINAMENTO ---
         $colunas_insert = ["id_cliente", "id_contato", "tema", "status", "data_treinamento", "google_event_link"];
         $params_insert = [$id_cliente, $id_contato, $tema, $status, $data_treinamento, $google_event_link];
 
@@ -858,8 +912,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $placeholders = implode(", ", array_fill(0, count($colunas_insert), "?"));
-        $stmt = $pdo->prepare("INSERT INTO treinamentos (" . implode(", ", $colunas_insert) . ") VALUES ($placeholders)");
-        $stmt->execute($params_insert);
+        $stmt_ins = $pdo->prepare("INSERT INTO treinamentos (" . implode(", ", $colunas_insert) . ") VALUES ($placeholders)");
+        $stmt_ins->execute($params_insert);
         $novo_id_treinamento = (int)$pdo->lastInsertId();
 
         $syncResult = ['success' => false];
@@ -888,19 +942,35 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $forcarModalGoogle = true;
             $abrirGoogleAgendaTreinamentoId = $novo_id_treinamento;
         }
+
+        $tipo_msg = $forcarModalGoogle ? "warning" : "success";
+        $redirectUrl = "treinamentos.php?msg=" . urlencode($msg) . "&tipo=" . $tipo_msg;
+        
+        if ($abrirGoogleAgendaLink !== '') {
+            $redirectUrl .= "&open_google_agenda=" . urlencode($abrirGoogleAgendaLink);
+            $redirectUrl .= "&open_google_agenda_treinamento_id=" . (int)$abrirGoogleAgendaTreinamentoId;
+            $redirectUrl .= "&open_google_modal_novo=1";
+        } elseif ($forcarModalGoogle && $abrirGoogleAgendaTreinamentoId > 0) {
+            $redirectUrl .= "&open_google_modal_id=" . (int)$abrirGoogleAgendaTreinamentoId;
+        }
+        
+        header("Location: " . $redirectUrl);
+        exit;
     }
-    $tipo_msg = $forcarModalGoogle ? "warning" : "success";
-    $redirectUrl = "treinamentos.php?msg=" . urlencode($msg) . "&tipo=" . $tipo_msg;
-    if ($abrirGoogleAgendaLink !== '') {
-        $redirectUrl .= "&open_google_agenda=" . urlencode($abrirGoogleAgendaLink);
-        $redirectUrl .= "&open_google_agenda_treinamento_id=" . (int)$abrirGoogleAgendaTreinamentoId;
-        $redirectUrl .= "&open_google_modal_novo=1";
-    } elseif ($forcarModalGoogle && $abrirGoogleAgendaTreinamentoId > 0) {
-        $redirectUrl .= "&open_google_modal_id=" . (int)$abrirGoogleAgendaTreinamentoId;
-    }
-    header("Location: " . $redirectUrl);
+}
+
+// --- ENDPOINT PARA BUSCAR OBSERVAÇÕES VIA AJAX (GET) ---
+if (isset($_GET['get_observations']) && isset($_GET['id_cliente'])) {
+    $id_c = (int)$_GET['id_cliente'];
+    $stmtAjax = $pdo->prepare("SELECT * FROM observacoes_cliente WHERE id_cliente = ? ORDER BY data_observacao DESC");
+    $stmtAjax->execute([$id_c]);
+    header('Content-Type: application/json');
+    echo json_encode($stmtAjax->fetchAll(PDO::FETCH_ASSOC));
     exit;
 }
+
+
+
 
 $open_google_agenda = '';
 $open_google_agenda_treinamento_id = 0;
@@ -1197,6 +1267,14 @@ include 'header.php';
                                     <div class="fw-bold mb-1" style="font-size: 0.85rem;"><?= htmlspecialchars($ci['fantasia']) ?></div>
                                     <div class="text-muted" style="font-size: 0.7rem;">
                                         <i class="bi bi-clock-history me-1"></i>Último: <?= $ci['última_data'] ? date('d/m/Y', strtotime($ci['última_data'])) : 'Nunca' ?>
+                                    </div>
+                                    <div class="mt-2 d-flex justify-content-end">
+                                        <button type="button" class="btn btn-sm btn-outline-purple btn-history-client" 
+                                                data-id="<?= $ci['id_cliente'] ?>" 
+                                                data-nome="<?= htmlspecialchars($ci['fantasia']) ?>"
+                                                style="font-size: 0.65rem; padding: 2px 8px; border-radius: 6px; color: #7209b7; border-color: #7209b730; background: #7209b708;">
+                                            <i class="bi bi-journal-text me-1"></i>Histórico
+                                        </button>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
@@ -1745,6 +1823,77 @@ include 'header.php';
         </form>
     </div>
 </div>
+
+<!-- MODAL PARA VISUALIZAR HISTÓRICO DO CLIENTE (AJAX) -->
+<div class="modal fade" id="modalHistoricoCliente" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <div class="modal-header border-0 p-4 pb-0">
+                <h5 class="fw-800 mb-0">
+                    <i class="bi bi-journal-text me-2 text-purple" style="color: #7209b7;"></i> Históricos: <span id="hist_cliente_nome" style="color: #7209b7;"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="hist_obs_container">
+                    <div class="text-center py-5">
+                        <div class="spinner-border" role="status" style="color: #7209b7;"></div>
+                        <p class="mt-2 text-muted">Carregando históricos...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-4">
+                <button type="button" class="btn btn-premium w-100" onclick="abrirModalNovaObs()" style="background: linear-gradient(135deg, #7209b7 0%, #3a0ca3 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">
+                    <i class="bi bi-plus-circle me-2"></i> Adicionar Novo Registro Agora
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PARA ADICIONAR NOVA OBSERVAÇÃO (HISTÓRICO) -->
+<div class="modal fade" id="modalNovaObsCliente" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <input type="hidden" name="action" value="save_client_observation">
+            <input type="hidden" name="id_cliente" id="nova_obs_id_cliente">
+            <div class="modal-header border-0 p-4 pb-0">
+                <h5 class="fw-800 mb-0">Novo Registro de <span style="color: #7209b7;">Histórico</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Título do Evento</label>
+                    <input type="text" name="titulo" class="form-control" placeholder="Ex: Contato via WhatsApp" required>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-muted">Tipo</label>
+                        <select name="tipo" class="form-select">
+                            <option value="INFORMAÇÃO">Informação</option>
+                            <option value="CONTATO">Contato Extra</option>
+                            <option value="AJUSTE">Ajuste Técnico</option>
+                            <option value="PROBLEMA">Problema / Bug</option>
+                            <option value="MELHORIA">Sugestão / Melhoria</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-muted">Autor</label>
+                        <input type="text" name="autor" class="form-control" value="Suporte" placeholder="Seu nome">
+                    </div>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label small fw-bold text-muted">Conteúdo Detalhado</label>
+                    <textarea name="conteudo" class="form-control" rows="5" placeholder="Descreva o que foi feito ou conversado..." required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-4 pt-0">
+                <button type="submit" class="btn btn-premium w-100 shadow-sm" style="background: linear-gradient(135deg, #7209b7 0%, #3a0ca3 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">Salvar no Histórico Permanente</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 
 <script>
     // Inicializar tooltips
@@ -2318,6 +2467,62 @@ include 'header.php';
     } else {
         // Fallback caso GSAP falhe
         document.querySelectorAll('.gsap-reveal').forEach(el => el.style.opacity = '1');
+    }
+
+    // Lógica para Histórico do Cliente (Camada extra de CRM)
+    let currentClientIdForObs = null;
+    let currentClientNameForObs = null;
+
+    document.querySelectorAll('.btn-history-client').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentClientIdForObs = this.dataset.id;
+            currentClientNameForObs = this.dataset.nome;
+            abrirModalHistorico(currentClientIdForObs, currentClientNameForObs);
+        });
+    });
+
+    function abrirModalHistorico(id, nome) {
+        document.getElementById('hist_cliente_nome').innerText = nome;
+        const container = document.getElementById('hist_obs_container');
+        container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-purple" role="status"></div><p class="mt-2 text-muted">Carregando históricos...</p></div>';
+        
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalHistoricoCliente')).show();
+
+        fetch(`treinamentos.php?get_observations=1&id_cliente=${id}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.length === 0) {
+                    container.innerHTML = '<div class="text-center py-5 opacity-50"><i class="bi bi-journal-x display-4 text-muted"></i><p class="mt-2">Nenhum registro encontrado para este cliente.</p></div>';
+                } else {
+                    container.innerHTML = '';
+                    data.forEach(obs => {
+                        const t_color = (obs.tipo == 'PROBLEMA') ? '#ef4444' : ((obs.tipo == 'AJUSTE') ? '#f59e0b' : ((obs.tipo == 'MELHORIA') ? '#10b981' : '#7209b7'));
+                        const card = `
+                            <div class="p-4 mb-3 rounded-4 border" style="background: var(--bg-body); transition: all 0.2s ease;">
+                                <div class="d-flex justify-content-between mb-3 align-items-center">
+                                    <span class="badge" style="background: ${t_color}15; color: ${t_color}; font-size: 0.65rem; padding: 0.4rem 0.8rem; border-radius: 8px;">${obs.tipo}</span>
+                                    <span class="text-muted small" style="font-size: 0.7rem;">${new Date(obs.data_observacao).toLocaleString('pt-BR')}</span>
+                                </div>
+                                <div class="fw-800 mb-2 title-main" style="font-size: 0.95rem;">${obs.titulo}</div>
+                                <div class="text-muted small mb-3" style="line-height: 1.6;">${obs.conteudo.replace(/\n/g, '<br>')}</div>
+                                <div class="d-flex justify-content-end align-items-center pt-2 border-top">
+                                    <div class="text-muted" style="font-size: 0.65rem;"><i class="bi bi-person me-1"></i>${obs.registrado_por || 'Sistema'}</div>
+                                </div>
+                            </div>
+                        `;
+                        container.insertAdjacentHTML('beforeend', card);
+                    });
+                }
+            })
+            .catch(err => {
+                container.innerHTML = '<div class="alert alert-danger">Erro ao carregar dados.</div>';
+            });
+    }
+
+    function abrirModalNovaObs() {
+        if (!currentClientIdForObs) return;
+        document.getElementById('nova_obs_id_cliente').value = currentClientIdForObs;
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalNovaObsCliente')).show();
     }
 </script>
 
