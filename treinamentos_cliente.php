@@ -1,57 +1,15 @@
 <?php
 require_once 'config.php';
 
-// FUNÇÃO PARA GARANTIR QUE A TABELA DE OBSERVAÇÕES EXISTA
-function garantirTabelaObservacoes($pdo)
-{
-    try {
-        $stmt = $pdo->query("SHOW TABLES LIKE 'observacoes_cliente'");
-        if ($stmt->rowCount() === 0) {
-            $pdo->exec("CREATE TABLE IF NOT EXISTS observacoes_cliente (
-                id_observacao INT PRIMARY KEY AUTO_INCREMENT,
-                id_cliente INT NOT NULL,
-                titulo VARCHAR(100) NOT NULL,
-                conteudo TEXT NOT NULL,
-                tipo ENUM('INFORMAÇÃO', 'AJUSTE', 'PROBLEMA', 'MELHORIA', 'ATUALIZAÇÃO', 'CONTATO') DEFAULT 'INFORMAÇÃO',
-                tags VARCHAR(255),
-                registrado_por VARCHAR(100) DEFAULT 'Sistema',
-                data_observacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_cliente (id_cliente),
-                INDEX idx_tipo (tipo),
-                INDEX idx_data (data_observacao),
-                FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        }
-    } catch (PDOException $e) {
-        error_log("Erro ao verificar/criar tabela observacoes_cliente: " . $e->getMessage());
-    }
-}
-
-// Executar a verificação
-garantirTabelaObservacoes($pdo);
-
 $id_cliente = isset($_GET['id_cliente']) ? $_GET['id_cliente'] : null;
+
 
 if (!$id_cliente) {
     header("Location: clientes.php");
     exit;
 }
 
-// Lógica para Salvar Nova Observação (Histórico)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'save_observation') {
-    $titulo = $_POST['titulo'] ?? 'Observação Geral';
-    $conteudo = $_POST['conteudo'] ?? '';
-    // Corrigindo para aceitar 'INFORMAÇÃO' com acento conforme o ENUM definido na tabela
-    $tipo = $_POST['tipo'] ?? 'INFORMAÇÃO'; 
-    $tags = $_POST['tags'] ?? '';
-    $autor = $_POST['autor'] ?: 'Sistema';
 
-    $stmtObsAdd = $pdo->prepare("INSERT INTO observacoes_cliente (id_cliente, titulo, conteudo, tipo, tags, registrado_por) VALUES (?, ?, ?, ?, ?, ?)");
-    $stmtObsAdd->execute([$id_cliente, $titulo, $conteudo, $tipo, $tags, $autor]);
-    
-    header("Location: treinamentos_cliente.php?id_cliente=$id_cliente&msg=Historico+registrado+com+sucesso");
-    exit;
-}
 
 // 1. Busca os dados do cliente para o cabeçalho
 $stmtCli = $pdo->prepare("SELECT fantasia, servidor, vendedor FROM clientes WHERE id_cliente = ?");
@@ -95,16 +53,12 @@ $stmt = $pdo->prepare("SELECT * FROM treinamentos WHERE id_cliente = ? ORDER BY 
 $stmt->execute([$id_cliente]);
 $treinamentos = $stmt->fetchAll();
 
-// 4. Buscar observações/históricos manuais (para o modal)
-$stmtObs = $pdo->prepare("SELECT * FROM observacoes_cliente WHERE id_cliente = ? ORDER BY data_observacao DESC, id_observacao DESC");
-$stmtObs->execute([$id_cliente]);
-$observacoes = $stmtObs->fetchAll();
+
 
 // 5. Estatísticas
 $total_treinamentos = count($treinamentos);
 $treinamentos_realizados = 0;
 $treinamentos_pendentes = 0;
-$total_observacoes = count($observacoes);
 $ultimo_treinamento = null;
 $primeiro_treinamento = null;
 
@@ -382,12 +336,6 @@ body {
                     <button class="btn-premium btn-primary-premium" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
                         <i class="bi bi-plus-lg"></i> Novo Treinamento
                     </button>
-                    <button class="btn-premium btn-purple-premium" data-bs-toggle="modal" data-bs-target="#modalVisualizarObservacoes">
-                        <i class="bi bi-journal-text"></i> Ver Históricos
-                    </button>
-                    <button class="btn-premium btn-purple-premium opacity-75" data-bs-toggle="modal" data-bs-target="#modalNovaObservacao">
-                        <i class="bi bi-plus-circle"></i> Novo Histórico
-                    </button>
                     <a href="clientes.php" class="btn btn-outline-secondary btn-premium border-0"><i class="bi bi-arrow-left"></i> Voltar</a>
                 </div>
             </div>
@@ -417,13 +365,7 @@ body {
             <div class="h2 fw-800 mb-1 text-warning"><?= $treinamentos_pendentes ?></div>
             <div class="text-muted small fw-bold text-uppercase letter-spacing-1">Aguardando</div>
         </div>
-        <div class="stat-card-premium">
-            <div class="stat-icon-circle bg-purple bg-opacity-10 text-purple" style="--purple: #7209b7;">
-                <i class="bi bi-chat-left-dots"></i>
-            </div>
-            <div class="h2 fw-800 mb-1 text-purple" style="color: #7209b7 !important;"><?= $total_observacoes ?></div>
-            <div class="text-muted small fw-bold text-uppercase letter-spacing-1">Anotações</div>
-        </div>
+
     </div>
 
     <!-- Timeline Area -->
@@ -526,103 +468,7 @@ body {
     </div>
 </div>
 
-<!-- MODAL PARA VISUALIZAR OBSERVAÇÕES -->
-<div class="modal fade" id="modalVisualizarObservacoes" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header border-0 p-4 pb-0">
-                <h5 class="fw-800 mb-0">
-                    <i class="bi bi-journal-text me-2 text-purple"></i> Históricos do Sistema
-                    <span class="badge bg-purple bg-opacity-10 text-purple border-purple ms-2" style="font-size: 0.65rem; border: 1px solid rgba(114, 9, 183, 0.3);"><?= $total_observacoes ?> registros</span>
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4">
-                <?php if ($total_observacoes > 0): ?>
-                    <?php foreach ($observacoes as $obs): 
-                        $tipo = $obs['tipo'] ?? 'INFORMAÇÃO';
-                        $t_color = ($tipo == 'PROBLEMA') ? '#ef4444' : (($tipo == 'AJUSTE') ? '#f59e0b' : (($tipo == 'MELHORIA') ? '#10b981' : '#7209b7'));
-                    ?>
-                        <div class="observation-card-premium p-4">
-                            <div class="d-flex justify-content-between mb-3">
-                                <span class="badge" style="background: <?= $t_color ?>15; color: <?= $t_color ?>; font-size: 0.6rem;"><?= $tipo ?></span>
-                                <span class="text-muted small"><?= date('d/m/Y H:i', strtotime($obs['data_observacao'])) ?></span>
-                            </div>
-                            <div class="fw-bold mb-2 fs-6"><?= htmlspecialchars($obs['titulo']) ?></div>
-                            <div class="text-muted small mb-3"><?= nl2br(htmlspecialchars($obs['conteudo'])) ?></div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="d-flex gap-2">
-                                    <?php if(!empty($obs['tags'])): ?>
-                                        <?php foreach(explode(',', $obs['tags']) as $tag): ?>
-                                            <span class="badge bg-secondary bg-opacity-10 text-muted border-0" style="font-size: 0.6rem;"><?= trim($tag) ?></span>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="text-muted small"><i class="bi bi-person me-1"></i><?= htmlspecialchars($obs['registrado_por'] ?: 'Sistema') ?></div>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <div class="text-center py-5 opacity-50">
-                        <i class="bi bi-journal-x display-4"></i>
-                        <p class="mt-2">Nenhum histórico manual.</p>
-                    </div>
-                <?php endif; ?>
-            </div>
-            <div class="modal-footer border-0 p-4">
-                <button class="btn-premium btn-purple-premium w-100" data-bs-toggle="modal" data-bs-target="#modalNovaObservacao">
-                    <i class="bi bi-plus-circle me-2"></i> Adicionar Novo Registro Agora
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- MODAL PARA ADICIONAR NOVA OBSERVAÇÃO -->
-<div class="modal fade" id="modalNovaObservacao" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <form method="POST" class="modal-content">
-            <input type="hidden" name="action" value="save_observation">
-            <div class="modal-header border-0 p-4 pb-0">
-                <h5 class="fw-800 mb-0">Novo Registro de <span class="text-purple">Histórico</span></h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4">
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted">Título do Evento</label>
-                    <input type="text" name="titulo" class="form-control" placeholder="Ex: Ajuste de servidor concluído" required>
-                </div>
-                <div class="row g-3 mb-3">
-                    <div class="col-6">
-                        <label class="form-label small fw-bold text-muted">Tipo</label>
-                        <select name="tipo" class="form-select">
-                            <option value="INFORMAÇÃO">Informação</option>
-                            <option value="AJUSTE">Ajuste Técnico</option>
-                            <option value="PROBLEMA">Problema / Bug</option>
-                            <option value="MELHORIA">Sugestão / Melhoria</option>
-                            <option value="CONTATO">Contato Extra</option>
-                        </select>
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label small fw-bold text-muted">Autor</label>
-                        <input type="text" name="autor" class="form-control" value="Suporte" placeholder="Seu nome">
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted">Tags (separadas por vírgula)</label>
-                    <input type="text" name="tags" class="form-control" placeholder="Ex: vps, banco de dados, configuracao">
-                </div>
-                <div class="mb-0">
-                    <label class="form-label small fw-bold text-muted">Conteúdo Detalhado</label>
-                    <textarea name="conteudo" class="form-control" rows="5" placeholder="Descreva o que foi feito ou conversado..." required></textarea>
-                </div>
-            </div>
-            <div class="modal-footer border-0 p-4 pt-0">
-                <button type="submit" class="btn-premium btn-purple-premium w-100">Salvar no Histórico Permanente</button>
-            </div>
-        </form>
-    </div>
-</div>
 
 <!-- MODAL PARA AGENDAR/EDITAR TREINAMENTO -->
 <div class="modal fade" id="modalTreinamento" tabindex="-1">
