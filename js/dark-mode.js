@@ -12,11 +12,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 toggleIcon.classList.remove('bi-moon-stars');
                 toggleIcon.classList.add('bi-sun-fill');
             }
+            if (toggleButton) {
+                toggleButton.setAttribute('title', 'Alternar Tema Claro');
+            }
         } else {
             document.documentElement.removeAttribute('data-theme');
             if (toggleIcon) {
                 toggleIcon.classList.remove('bi-sun-fill');
                 toggleIcon.classList.add('bi-moon-stars');
+            }
+            if (toggleButton) {
+                toggleButton.setAttribute('title', 'Alternar Tema Escuro');
             }
         }
     };

@@ -601,9 +601,10 @@ try {
 }
 $total_hoje = (int)$pdo->query("SELECT COUNT(*) FROM treinamentos WHERE DATE(data_treinamento) = CURDATE() AND UPPER(status) = 'PENDENTE'")->fetchColumn();
 
-// --- LÓGICA DE INATIVIDADE: CLIENTES SEM INTERAÇÃO HÁ MAIS DE 3 DIAS ---
+// --- LÓGICA DE INATIVIDADE: CLIENTES SEM INTERAÇÃO HÁ MAIS DE 5 DIAS ---
 $sql_inatividade = "
-    SELECT c.id_cliente, c.fantasia, MAX(t.data_treinamento) as última_data, c.data_inicio
+    SELECT c.id_cliente, c.fantasia, MAX(t.data_treinamento) as última_data, c.data_inicio,
+           (SELECT COUNT(*) FROM observacoes_cliente oc WHERE oc.id_cliente = c.id_cliente) as qtd_obs
     FROM clientes c
     LEFT JOIN treinamentos t ON c.id_cliente = t.id_cliente
     WHERE (c.data_fim IS NULL OR c.data_fim = '0000-00-00')
@@ -1263,18 +1264,15 @@ include 'header.php';
                         </div>
                         <div class="kanban-list" id="list-inativo">
                             <?php foreach ($clientes_inativos as $ci): ?>
-                                <div class="kanban-card" data-id="<?= $ci['id_cliente'] ?>">
-                                    <div class="fw-bold mb-1" style="font-size: 0.85rem;"><?= htmlspecialchars($ci['fantasia']) ?></div>
+                                <div class="kanban-card btn-history-client position-relative" data-id="<?= $ci['id_cliente'] ?>" data-nome="<?= htmlspecialchars($ci['fantasia']) ?>">
+                                    <div class="d-flex justify-content-between align-items-start mb-1">
+                                        <div class="fw-bold pe-2" style="font-size: 0.85rem; word-break: break-word;"><?= htmlspecialchars($ci['fantasia']) ?></div>
+                                        <span class="badge rounded-pill shadow-sm d-flex align-items-center" style="background: linear-gradient(135deg, #7209b7, #3a0ca3); color: white; font-size: 0.7rem; padding: 0.35em 0.65em;" title="<?= $ci['qtd_obs'] ?> registros no histórico">
+                                            <i class="bi bi-journal-text me-1 opacity-75"></i><?= (int)$ci['qtd_obs'] ?>
+                                        </span>
+                                    </div>
                                     <div class="text-muted" style="font-size: 0.7rem;">
                                         <i class="bi bi-clock-history me-1"></i>Último: <?= $ci['última_data'] ? date('d/m/Y', strtotime($ci['última_data'])) : 'Nunca' ?>
-                                    </div>
-                                    <div class="mt-2 d-flex justify-content-end">
-                                        <button type="button" class="btn btn-sm btn-outline-purple btn-history-client" 
-                                                data-id="<?= $ci['id_cliente'] ?>" 
-                                                data-nome="<?= htmlspecialchars($ci['fantasia']) ?>"
-                                                style="font-size: 0.65rem; padding: 2px 8px; border-radius: 6px; color: #7209b7; border-color: #7209b730; background: #7209b708;">
-                                            <i class="bi bi-journal-text me-1"></i>Histórico
-                                        </button>
                                     </div>
                                 </div>
                             <?php endforeach; ?>
