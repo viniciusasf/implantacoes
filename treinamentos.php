@@ -601,42 +601,20 @@ try {
 }
 $total_hoje = (int)$pdo->query("SELECT COUNT(*) FROM treinamentos WHERE DATE(data_treinamento) = CURDATE() AND UPPER(status) = 'PENDENTE'")->fetchColumn();
 
-// --- LÓGICA DE INATIVIDADE: CLIENTES SEM INTERAÇÃO HÁ MAIS DE 5 DIAS ---
-$sql_inatividade = "
-    SELECT c.id_cliente, c.fantasia, MAX(t.data_treinamento) as última_data, c.data_inicio,
-           (SELECT COUNT(*) FROM observacoes_cliente oc WHERE oc.id_cliente = c.id_cliente) as qtd_obs
-    FROM clientes c
-    LEFT JOIN treinamentos t ON c.id_cliente = t.id_cliente
-    WHERE (c.data_fim IS NULL OR c.data_fim = '0000-00-00')
-    AND c.id_cliente NOT IN (
-        SELECT DISTINCT id_cliente FROM treinamentos WHERE status = 'PENDENTE'
-    )
-    GROUP BY c.id_cliente, c.data_inicio
-    HAVING 
-        (MAX(t.data_treinamento) < DATE_SUB(CURDATE(), INTERVAL 5 DAY)) OR 
-        (MAX(t.data_treinamento) IS NULL AND c.data_inicio < DATE_SUB(CURDATE(), INTERVAL 5 DAY))
-    ORDER BY última_data ASC";
-$clientes_inativos = $pdo->query($sql_inatividade)->fetchAll();
+// --- PÁGINA DE TREINAMENTOS ---
+// Removida lógica de inatividade local (agora no Dashboard)
 
-// --- FILTRO POR CLIENTE ---
-$filtro_cliente = isset($_GET['filtro_cliente']) ? trim($_GET['filtro_cliente']) : '';
+// Filtros de busca por cliente removidos da UI - mantendo apenas ordenação e paginação
+$filtro_cliente = ''; // Desativado para simplificação via treinamentos.php
 $mostrar_todos = isset($_GET['mostrar_todos']) ? true : false;
-$data_inicio_export = isset($_GET['data_inicio']) ? trim($_GET['data_inicio']) : '';
-$data_fim_export = (isset($_GET['data_fim']) && trim($_GET['data_fim']) !== '') ? trim($_GET['data_fim']) : date('Y-m-d');
-$erro_exportacao = '';
-$filtros_ativos = !empty($filtro_cliente) || $mostrar_todos || !empty($data_inicio_export) || (isset($_GET['data_fim']) && trim($_GET['data_fim']) !== '');
-$where_conditions = [];
-$params = []; // Array para parâmetros posicionais
+$where_conditions = ["(c.data_fim IS NULL OR c.data_fim = '0000-00-00')"]; // Apenas clientes ativos
+$params = [];
 
-// Por padrão, mostramos apenas pendentes, a menos que 'mostrar_todos' seja solicitado
+// Por padrão, mostramos apenas pendentes
 if (!$mostrar_todos) {
     $where_conditions[] = "UPPER(t.status) = 'PENDENTE'";
 }
 
-if (!empty($filtro_cliente)) {
-    $where_conditions[] = "c.fantasia LIKE ?";
-    $params[] = "%{$filtro_cliente}%";
-}
 
 $where_sql = !empty($where_conditions) ? "WHERE " . implode(" AND ", $where_conditions) : "";
 
@@ -970,6 +948,58 @@ if (isset($_GET['get_observations']) && isset($_GET['id_cliente'])) {
     exit;
 }
 
+// --- ENDPOINT PARA O FULLCALENDAR ---
+if (isset($_GET['api_calendario'])) {
+    $sql_cal = "SELECT t.id_treinamento as id, t.tema, t.data_treinamento as start, 
+                       DATE_ADD(t.data_treinamento, INTERVAL 1 HOUR) as end,
+                       t.status, c.fantasia as cliente, co.nome as contato, co.telefone_ddd as telefone 
+                FROM treinamentos t 
+                LEFT JOIN clientes c ON t.id_cliente = c.id_cliente 
+                LEFT JOIN contatos co ON t.id_contato = co.id_contato
+                WHERE t.data_treinamento IS NOT NULL";
+    
+    // Filtro por cliente na query do calendário
+    $filtro_cliente_cal = $_GET['filtro_cliente'] ?? '';
+    $params_cal = [];
+    if (!empty($filtro_cliente_cal)) {
+        $sql_cal .= " AND c.fantasia LIKE ?";
+        $params_cal[] = "%{$filtro_cliente_cal}%";
+    }
+
+    $stmtCal = $pdo->prepare($sql_cal);
+    $stmtCal->execute($params_cal);
+    
+    $events = [];
+    foreach ($stmtCal->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $isResolvido = (strtoupper($row['status']) === 'RESOLVIDO');
+        // Cores do sistema: verde para resolvido, azul para pendente
+        $color = $isResolvido ? '#10b981' : '#4361ee'; 
+        
+        // Forçamos o cliente em caixa alta para o título
+        $title = mb_convert_case($row['cliente'], MB_CASE_UPPER, "UTF-8");
+
+        $events[] = [
+            'id' => $row['id'],
+            'title' => trim((string)$title),
+            'start' => $row['start'],
+            'end' => $row['end'],
+            'backgroundColor' => $color,
+            'borderColor' => 'transparent',
+            'textColor' => '#ffffff',
+            'extendedProps' => [
+                'tema' => $row['tema'],
+                'contato' => $row['contato'],
+                'telefone' => $row['telefone'],
+                'status' => $row['status'],
+                'cliente' => $row['cliente']
+            ]
+        ];
+    }
+    header('Content-Type: application/json');
+    echo json_encode($events);
+    exit;
+}
+
 
 
 
@@ -994,6 +1024,9 @@ if (!empty($_GET['open_google_agenda'])) {
 if (!empty($_GET['open_google_agenda_treinamento_id'])) {
     $open_google_agenda_treinamento_id = (int)$_GET['open_google_agenda_treinamento_id'];
 }
+
+// Visualização (lista ou calendario)
+$view_mode = $_GET['view'] ?? 'list';
 
 // Ordenação
 $ordenacao = isset($_GET['ordenacao']) ? $_GET['ordenacao'] : 'data_treinamento';
@@ -1108,37 +1141,6 @@ include 'header.php';
     -webkit-text-fill-color: transparent;
 }
 
-/* Search Area - Sem sobreposição */
-.search-section {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: 1.25rem;
-    margin-bottom: 2.5rem;
-    box-shadow: var(--shadow-sm);
-}
-
-.search-input-wrapper {
-    position: relative;
-    flex-grow: 1;
-}
-
-.search-input-wrapper i {
-    position: absolute;
-    left: 1.25rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--primary);
-    font-size: 1.2rem;
-}
-
-.search-input-wrapper .form-control {
-    padding-left: 3.5rem;
-    height: 52px;
-    background: var(--bg-body) !important;
-    border: 1px solid var(--border-color) !important;
-}
-
 /* Dashboard Cards - Refinados */
 .stats-card {
     background: var(--bg-card);
@@ -1205,6 +1207,8 @@ include 'header.php';
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.11/locales/pt-br.global.min.js'></script>
 
 <div class="container-fluid px-0">
     <!-- Modern Header -->
@@ -1220,6 +1224,16 @@ include 'header.php';
             <p class="text-muted small mb-0">Gestão de capacitação técnica dos clientes.</p>
         </div>
         <div class="d-flex align-items-center gap-2">
+            <!-- Botões de alternância de visualização -->
+            <div class="bg-body p-1 rounded-3 d-flex border me-2">
+                <a href="treinamentos.php?view=list&filtro_cliente=<?= urlencode($filtro_cliente) ?>" class="btn btn-sm <?= $view_mode == 'list' ? 'btn-primary shadow-sm' : 'btn-link text-muted' ?> bx-button px-3">
+                    <i class="bi bi-list"></i>
+                </a>
+                <a href="treinamentos.php?view=calendar&filtro_cliente=<?= urlencode($filtro_cliente) ?>" class="btn btn-sm <?= $view_mode == 'calendar' ? 'btn-primary shadow-sm' : 'btn-link text-muted' ?> bx-button px-3">
+                    <i class="bi bi-calendar3"></i>
+                </a>
+            </div>
+            
             <button type="button" class="btn btn-outline-success px-4 fw-bold shadow-sm d-flex align-items-center" id="btn_copiar_disponibilidade" disabled>
                 <i class="bi bi-whatsapp me-2"></i>Copiar Horas
             </button>
@@ -1230,119 +1244,10 @@ include 'header.php';
     </div>
 
     <!-- Alertas de Inatividade -->
-    <?php if (!empty($clientes_inativos)): ?>
-        <div class="alert alert-warning border-0 shadow-sm mb-4 gsap-reveal" role="alert" style="background: var(--warning-light); color: var(--warning);">
-            <div class="d-flex align-items-center">
-                <i class="bi bi-exclamation-triangle me-3 fs-5"></i>
-                <div class="flex-grow-1">
-                    <h6 class="mb-0 fw-bold">Atenção: <?= count($clientes_inativos) ?> clientes em inatividade!</h6>
-                    <span class="small opacity-75">Clientes sem agendamentos há mais de 5 dias.</span>
-                </div>
-                <button type="button" class="btn btn-sm btn-warning fw-bold px-3 ms-3" data-bs-toggle="collapse" data-bs-target="#listaInatividade">Ver Detalhes</button>
-            </div>
-            <div class="collapse mt-3" id="listaInatividade">
-                <style>
-                    .kanban-board { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; }
-                    .kanban-column { background: rgba(0,0,0,0.1); border-radius: 12px; min-width: 250px; flex: 1; min-height: 200px; display: flex; flex-direction: column; border: 1px dashed var(--border-color); }
-                    .kanban-header { padding: 0.75rem 1rem; font-weight: 800; font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-                    .kanban-list { flex-grow: 1; padding: 0.75rem; min-height: 100px; }
-                    .kanban-card { background: var(--bg-card); border: 1px solid var(--border-color); padding: 0.75rem; border-radius: 8px; margin-bottom: 0.5rem; cursor: grab; transition: all 0.2s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-                    .kanban-card:active { cursor: grabbing; }
-                    .kanban-card:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-                    .column-count { background: var(--border-color); padding: 2px 8px; border-radius: 10px; font-size: 0.65rem; color: var(--text-main); }
-                    .kanban-column[data-status="contato"] .kanban-header { color: #10b981; } /* Sistema OK (Verde) */
-                    .kanban-column[data-status="enviada"] .kanban-header { color: #f59e0b; } /* Mensagem Enviada (Laranja) */
-                    .kanban-column[data-status="nao_responde"] .kanban-header { color: #ef4444; } /* Não Responde (Vermelho) */
-                    .kanban-column[data-status="inativo"] .kanban-header { color: #3b82f6; } /* Enviar Mensagem (Azul) */
-                </style>
-                <div class="kanban-board">
-                    <!-- Coluna: Enviar Mensagem (Inativos) -->
-                    <div class="kanban-column" data-status="inativo">
-                        <div class="kanban-header">
-                            <span>Enviar Mensagem</span>
-                            <span class="column-count" id="count-inativo">0</span>
-                        </div>
-                        <div class="kanban-list" id="list-inativo">
-                            <?php foreach ($clientes_inativos as $ci): ?>
-                                <div class="kanban-card btn-history-client position-relative" data-id="<?= $ci['id_cliente'] ?>" data-nome="<?= htmlspecialchars($ci['fantasia']) ?>">
-                                    <div class="d-flex justify-content-between align-items-start mb-1">
-                                        <div class="fw-bold pe-2" style="font-size: 0.85rem; word-break: break-word;"><?= htmlspecialchars($ci['fantasia']) ?></div>
-                                        <span class="badge rounded-pill shadow-sm d-flex align-items-center" style="background: linear-gradient(135deg, #7209b7, #3a0ca3); color: white; font-size: 0.7rem; padding: 0.35em 0.65em;" title="<?= $ci['qtd_obs'] ?> registros no histórico">
-                                            <i class="bi bi-journal-text me-1 opacity-75"></i><?= (int)$ci['qtd_obs'] ?>
-                                        </span>
-                                    </div>
-                                    <div class="text-muted" style="font-size: 0.7rem;">
-                                        <i class="bi bi-clock-history me-1"></i>Último: <?= $ci['última_data'] ? date('d/m/Y', strtotime($ci['última_data'])) : 'Nunca' ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-
-                    <!-- Coluna: Mensagem Enviada -->
-                    <div class="kanban-column" data-status="enviada">
-                        <div class="kanban-header">
-                            <span>Mensagem Enviada</span>
-                            <span class="column-count" id="count-enviada">0</span>
-                        </div>
-                        <div class="kanban-list" id="list-enviada"></div>
-                    </div>
-
-                    <!-- Coluna: Sistema OK -->
-                    <div class="kanban-column" data-status="contato">
-                        <div class="kanban-header">
-                            <span>Sistema OK</span>
-                            <span class="column-count" id="count-contato">0</span>
-                        </div>
-                        <div class="kanban-list" id="list-contato"></div>
-                    </div>
-
-                    <!-- Coluna: Não Responde -->
-                    <div class="kanban-column" data-status="nao_responde">
-                        <div class="kanban-header">
-                            <span>Não Responde</span>
-                            <span class="column-count" id="count-nao_responde">0</span>
-                        </div>
-                        <div class="kanban-list" id="list-nao_responde"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    <?php endif; ?>
-
-
-
-    <!-- Search Section -->
-    <div class="search-section gsap-reveal">
-        <form method="GET" class="row g-3 align-items-center">
-            <div class="col-lg-8">
-                <div class="search-input-wrapper">
-                    <i class="bi bi-search"></i>
-                    <input type="text"
-                        name="filtro_cliente"
-                        class="form-control"
-                        placeholder="Buscar cliente por nome ou fantasia..."
-                        value="<?php echo htmlspecialchars($filtro_cliente); ?>"
-                        autofocus>
-                </div>
-            </div>
-            <div class="col-lg-2">
-                <a href="pendencias_treinamentos.php" class="btn btn-outline-danger w-100 fw-bold d-flex align-items-center justify-content-center" style="height: 52px;">
-                    Pendências <span class="badge bg-danger ms-2"><?= $total_pendencias_treinamentos ?></span>
-                </a>
-            </div>
-            <div class="col-lg-2">
-                <button type="submit" class="btn btn-primary w-100 fw-bold" style="height: 52px;">Filtrar</button>
-            </div>
-            <?php if ($filtros_ativos): ?>
-                <div class="col-12 mt-2">
-                    <a href="treinamentos.php" class="text-primary small text-decoration-none fw-bold"><i class="bi bi-x-circle me-1"></i> Limpar todos os filtros</a>
-                </div>
-            <?php endif; ?>
-        </form>
-    </div>
+    <!-- Listagem Principal -->
 
     <!-- Main Content Area -->
+    <?php if ($view_mode === 'list'): ?>
     <div class="table-premium gsap-reveal">
         <div class="p-4 border-bottom d-flex justify-content-between align-items-center bg-white">
             <h5 class="fw-bold mb-0">Listagem de Treinamentos</h5>
@@ -1447,11 +1352,20 @@ include 'header.php';
                                 </td>
                                 <td class="text-end pe-4">
                                     <div class="d-flex justify-content-end gap-1 flex-wrap">
-                                        <!-- 1. LUPA (OBSERVAÇÕES) -->
+                                        <!-- 1. HISTÓRICO (CRM) -->
+                                        <button class="btn btn-sm btn-outline-primary btn-history-client"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Ver Histórico/CRM"
+                                            data-id="<?= $t['id_cliente'] ?>"
+                                            data-nome="<?= htmlspecialchars($t['cliente_nome']) ?>">
+                                            <i class="bi bi-journal-text"></i>
+                                        </button>
+
+                                        <!-- 2. LUPA (OBSERVAÇÕES DO AGENDAMENTO) -->
                                         <?php if (!empty($t['observacoes'])): ?>
                                             <button class="btn btn-sm btn-outline-info view-obs-btn"
                                                 data-bs-toggle="tooltip"
-                                                data-bs-title="Ver Observação"
+                                                data-bs-title="Ver Obs. Agendamento"
                                                 data-obs="<?= htmlspecialchars($t['observacoes']) ?>"
                                                 data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>">
                                                 <i class="bi bi-search"></i>
@@ -1606,6 +1520,274 @@ include 'header.php';
             </div>
         <?php endif; ?>
     </div>
+    <?php endif; ?> <!-- /Fim VIEW LIST -->
+
+    <?php if ($view_mode === 'calendar'): ?>
+    <div class="dashboard-section gsap-reveal">
+        <div id="calendar-container" style="background: var(--bg-card); padding: 1rem; border-radius: var(--radius-lg); border: 1px solid var(--border-color); overflow: hidden;">
+            <div id="calendar"></div>
+        </div>
+    </div>
+    <style>
+        /* Container e Estrutura Base */
+        .fc-theme-standard {
+            background: var(--bg-card);
+            border-radius: 16px; /* Borda bem arredondada para todo o calendário */
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+        .fc-theme-standard td, .fc-theme-standard th { 
+            border-color: var(--border-color); 
+        }
+        
+        /* Toolbar e Botões */
+        .fc-toolbar {
+            padding: 1rem;
+            margin-bottom: 0 !important;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-body);
+        }
+        .fc-toolbar-title { 
+            color: var(--text-main); 
+            font-family: var(--font-heading); 
+            font-weight: 800; 
+            font-size: 1.4rem !important;
+            letter-spacing: -0.02em;
+        }
+        .fc .fc-button-primary { 
+            background-color: var(--bg-card); 
+            border: 1px solid var(--border-color); 
+            color: var(--text-main); 
+            font-weight: 600; 
+            border-radius: 8px; /* Arredondamento suave nos botões */
+            text-transform: capitalize; 
+            padding: 0.4rem 1rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            transition: all 0.2s ease;
+        }
+        .fc .fc-button-primary:hover { 
+            background-color: var(--primary-light); 
+            border-color: var(--primary); 
+            color: var(--primary); 
+        }
+        .fc .fc-button-primary:not(:disabled).fc-button-active, 
+        .fc .fc-button-primary:not(:disabled):active { 
+            background-color: var(--primary); 
+            border-color: var(--primary); 
+            color: white; 
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Cabeçalho dos Dias (Dom, Seg, Ter...) */
+        .fc-col-header-cell {
+            background: var(--bg-body);
+            padding: 12px 0;
+        }
+        .fc-theme-standard .fc-scrollgrid {
+            border: none;
+        }
+        .fc-col-header-cell-cushion { 
+            color: var(--text-muted); 
+            text-transform: uppercase; 
+            font-size: 0.75rem; 
+            font-weight: 700; 
+            letter-spacing: 0.05em; 
+            text-decoration: none;
+        }
+        .fc-col-header-cell-cushion:hover {
+            color: var(--text-main);
+            text-decoration: none;
+        }
+
+        /* Eventos - Design Técnico e Preciso */
+        .fc-event {
+            border: none;
+            border-radius: 2px !important; /* Bordas nítidas para visual premium/técnico */
+            padding: 0 !important;
+            font-size: 0.75rem; 
+            font-family: var(--font-body); 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+            cursor: pointer; 
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            margin: 2px;
+            border-left: 4px solid rgba(255,255,255,0.3) !important; /* Indicador lateral de status */
+            min-height: 60px !important; /* Garante espaço para Horário, Cliente, Contato e Telefone */
+            overflow: visible !important;
+        }
+        .fc-v-event { border: none !important; }
+        .fc-timegrid-event { margin-bottom: 2px !important; }
+        .fc-event:hover { 
+            transform: scale(1.02); 
+            filter: brightness(1.15); 
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+        .fc-event-time { 
+            font-weight: 800; 
+            background: rgba(0,0,0,0.1);
+            padding: 1px 4px;
+            border-radius: 0 0 4px 0;
+            font-size: 0.65rem;
+        }
+        .fc-event-title { font-weight: 700; }
+
+        /* Células de Dias Gerais */
+        .fc-daygrid-day-number { 
+            color: var(--text-main); 
+            font-weight: 600; 
+            font-size: 0.85rem; 
+            padding: 8px 12px; 
+            text-decoration: none;
+            opacity: 0.7;
+            transition: opacity 0.2s ease;
+        }
+        .fc-daygrid-day-number:hover {
+            opacity: 1;
+            text-decoration: none;
+        }
+        .fc-day-today { 
+            background-color: rgba(67, 97, 238, 0.05) !important; 
+        }
+        
+        /* TimeGrid (Semana/Dia) Específico */
+        .fc-timegrid-slot-label-cushion {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .fc-timegrid-slot {
+            height: 2.0rem !important; /* Aumenta a altura de cada slot de tempo para evitar sobreposição */
+        }
+        .fc-timegrid-axis-cushion {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        /* Mais/Popover */
+        .fc-daygrid-more-link {
+            color: var(--primary);
+            font-weight: 700;
+            font-size: 0.75rem;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+        .fc-daygrid-more-link:hover {
+            background: var(--primary-light);
+            text-decoration: none;
+        }
+        .fc .fc-popover { 
+            background: var(--bg-card); 
+            border: 1px solid var(--border-color); 
+            border-radius: 12px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
+            overflow: hidden; 
+        }
+        .fc .fc-popover-header { 
+            background: var(--bg-body); 
+            padding: 10px 15px; 
+        }
+        .fc .fc-popover-title { 
+            color: var(--text-main); 
+            font-weight: 700; 
+            font-size: 0.9rem; 
+            letter-spacing: -0.01em; 
+        }
+        .fc .fc-popover-close {
+            color: var(--text-muted);
+            opacity: 0.7;
+        }
+        
+        /* Ajuste do dia de Hoje (Header e Corpo) */
+        th.fc-col-header-cell.fc-day-today {
+            background-color: var(--primary) !important;
+        }
+        th.fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion {
+            color: #ffffff !important;
+        }
+        /* Ajuste do Eixo de Tempo e Canto Superior Esquerdo Branco */
+        .fc-theme-standard .fc-timegrid-axis {
+            background: var(--bg-body) !important;
+        }
+        th.fc-timegrid-axis {
+            background-color: var(--bg-body) !important; 
+        }
+        .fc-timegrid-axis-cushion, .fc-timegrid-slot-label-cushion {
+            color: var(--text-muted) !important;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+    </style>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var calendarEl = document.getElementById('calendar');
+            if(calendarEl) {
+                var calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'timeGridWeek',
+                    locale: 'pt-br',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                    },
+                    events: 'treinamentos.php?api_calendario=1&filtro_cliente=<?= urlencode($filtro_cliente) ?>',
+                    buttonText: {
+                        today:    'Hoje',
+                        month:    'Mês',
+                        week:     'Semana',
+                        day:      'Dia'
+                    },
+                    height: 'auto',
+                    expandRows: true, // Garante que as linhas ocupem o espaço disponível
+                    dayMaxEvents: true,
+                    allDaySlot: false,
+                    slotMinTime: '08:00:00',
+                    slotMaxTime: '17:30:00',
+                    hiddenDays: [0, 6],
+                    displayEventTime: false,
+                    eventContent: function(arg) {
+                        let client = arg.event.extendedProps.cliente || '';
+                        let contact = arg.event.extendedProps.contato || '';
+                        let phone = arg.event.extendedProps.telefone || '';
+                        
+                        // Formatação manual do horário (ex: 08:30)
+                        let startTime = "";
+                        if (arg.event.start) {
+                            let h = arg.event.start.getHours().toString().padStart(2, '0');
+                            let m = arg.event.start.getMinutes().toString().padStart(2, '0');
+                            startTime = h + ":" + m;
+                        }
+                        
+                        let html = `
+                            <div class="fc-event-main-frame d-flex flex-column" style="padding: 4px 6px; line-height: 1.2; height: 100%; border-radius: 2px;">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <div class="fw-900" style="font-size: 0.7rem; color: #fff;">${startTime}</div>
+                                    ${phone ? `<div style="font-size: 0.65rem; color: #fff; background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 10px; font-weight: 700;"><i class="bi bi-telephone"></i> ${phone}</div>` : ''}
+                                </div>
+                                <div class="fc-event-title-container">
+                                    <div class="fw-800 text-truncate" style="font-size: 0.75rem; color: #fff; margin-bottom: 2px;">${client.toUpperCase()}</div>
+                                    <div class="d-flex align-items-center gap-1" style="font-size: 0.65rem; color: rgba(255,255,255,0.9); white-space: nowrap; overflow: hidden;">
+                                        <i class="bi bi-person-fill"></i> ${contact}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        return { html: html };
+                    },
+                    eventClick: function(info) {
+                        try {
+                            if (info.event.extendedProps && info.event.extendedProps.cliente) {
+                                window.location.href = 'treinamentos.php?view=list&filtro_cliente=' + encodeURIComponent(info.event.extendedProps.cliente);
+                            }
+                        } catch(e) {}
+                    }
+                });
+                calendar.render();
+            }
+        });
+    </script>
+    <?php endif; ?>
+
 </div>
 
 <!-- TOAST PARA CONFIRMAÇÃO DE CÓPIA -->
@@ -1828,7 +2010,7 @@ include 'header.php';
         <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
             <div class="modal-header border-0 p-4 pb-0">
                 <h5 class="fw-800 mb-0">
-                    <i class="bi bi-journal-text me-2 text-purple" style="color: #7209b7;"></i> Históricos: <span id="hist_cliente_nome" style="color: #7209b7;"></span>
+                    <i class="bi bi-journal-text me-2 text-primary"></i> Históricos: <span id="hist_cliente_nome" class="text-primary"></span>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -1841,7 +2023,7 @@ include 'header.php';
                 </div>
             </div>
             <div class="modal-footer border-0 p-4">
-                <button type="button" class="btn btn-premium w-100" onclick="abrirModalNovaObs()" style="background: linear-gradient(135deg, #7209b7 0%, #3a0ca3 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">
+                <button type="button" class="btn btn-premium w-100" onclick="abrirModalNovaObs()" style="background: linear-gradient(135deg, var(--primary) 0%, #1e293b 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">
                     <i class="bi bi-plus-circle me-2"></i> Adicionar Novo Registro Agora
                 </button>
             </div>
@@ -1856,7 +2038,7 @@ include 'header.php';
             <input type="hidden" name="action" value="save_client_observation">
             <input type="hidden" name="id_cliente" id="nova_obs_id_cliente">
             <div class="modal-header border-0 p-4 pb-0">
-                <h5 class="fw-800 mb-0">Novo Registro de <span style="color: #7209b7;">Histórico</span></h5>
+                <h5 class="fw-800 mb-0">Novo Registro de <span class="text-primary">Histórico</span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
@@ -1886,7 +2068,7 @@ include 'header.php';
                 </div>
             </div>
             <div class="modal-footer border-0 p-4 pt-0">
-                <button type="submit" class="btn btn-premium w-100 shadow-sm" style="background: linear-gradient(135deg, #7209b7 0%, #3a0ca3 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">Salvar no Histórico Permanente</button>
+                <button type="submit" class="btn btn-premium w-100 shadow-sm" style="background: linear-gradient(135deg, var(--primary) 0%, #1e293b 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">Salvar no Histórico Permanente</button>
             </div>
         </form>
     </div>
@@ -2381,56 +2563,7 @@ include 'header.php';
         });
     }
 
-    // Lógica do Kanban de Inatividade
-    document.addEventListener('DOMContentLoaded', function() {
-        if (!document.getElementById('list-inativo')) return;
-
-        const statuses = ['inativo', 'enviada', 'contato', 'nao_responde'];
-        const kanbanState = JSON.parse(localStorage.getItem('kanban_inatividade_v2') || '{}');
-
-        // Restaurar estado do localStorage
-        statuses.forEach(status => {
-            const list = document.getElementById(`list-${status}`);
-            if (status !== 'inativo') {
-                const ids = kanbanState[status] || [];
-                ids.forEach(id => {
-                    const card = document.querySelector(`.kanban-card[data-id="${id}"]`);
-                    if (card) list.appendChild(card);
-                });
-            }
-        });
-
-        // Inicializar Sortable para cada coluna
-        statuses.forEach(status => {
-            new Sortable(document.getElementById(`list-${status}`), {
-                group: 'kanban_inatividade',
-                animation: 150,
-                ghostClass: 'opacity-50',
-                onEnd: function() {
-                    salvarEstadoKanban();
-                    atualizarContadoresKanban();
-                }
-            });
-        });
-
-        function salvarEstadoKanban() {
-            const state = {};
-            statuses.forEach(status => {
-                const list = document.getElementById(`list-${status}`);
-                state[status] = Array.from(list.children).map(c => c.dataset.id);
-            });
-            localStorage.setItem('kanban_inatividade_v2', JSON.stringify(state));
-        }
-
-        function atualizarContadoresKanban() {
-            statuses.forEach(status => {
-                const count = document.getElementById(`list-${status}`).childElementCount;
-                document.getElementById(`count-${status}`).innerText = count;
-            });
-        }
-
-        atualizarContadoresKanban();
-    });
+    // Kanban removido - centralizado no dashboard principal
 
     carregarDisponibilidadeGoogle();
 
@@ -2482,7 +2615,7 @@ include 'header.php';
     function abrirModalHistorico(id, nome) {
         document.getElementById('hist_cliente_nome').innerText = nome;
         const container = document.getElementById('hist_obs_container');
-        container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-purple" role="status"></div><p class="mt-2 text-muted">Carregando históricos...</p></div>';
+        container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Carregando históricos...</p></div>';
         
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalHistoricoCliente')).show();
 
@@ -2494,7 +2627,7 @@ include 'header.php';
                 } else {
                     container.innerHTML = '';
                     data.forEach(obs => {
-                        const t_color = (obs.tipo == 'PROBLEMA') ? '#ef4444' : ((obs.tipo == 'AJUSTE') ? '#f59e0b' : ((obs.tipo == 'MELHORIA') ? '#10b981' : '#7209b7'));
+                        const t_color = (obs.tipo == 'PROBLEMA') ? '#ef4444' : ((obs.tipo == 'AJUSTE') ? '#f59e0b' : ((obs.tipo == 'MELHORIA') ? '#10b981' : 'var(--primary)'));
                         const card = `
                             <div class="p-4 mb-3 rounded-4 border" style="background: var(--bg-body); transition: all 0.2s ease;">
                                 <div class="d-flex justify-content-between mb-3 align-items-center">

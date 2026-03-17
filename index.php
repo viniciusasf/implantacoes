@@ -58,16 +58,24 @@ foreach($treinamentos_graph as $row) {
     }
 }
 
-// 5. Clientes Críticos (Sem treinamento há mais de 5 dias)
-$sql_criticos = "SELECT c.id_cliente, c.fantasia, MAX(t.data_treinamento) as ultima_data, c.vendedor
-                 FROM clientes c
-                 LEFT JOIN treinamentos t ON c.id_cliente = t.id_cliente
-                 WHERE (c.data_fim IS NULL OR c.data_fim = '0000-00-00')
-                 GROUP BY c.id_cliente, c.fantasia, c.vendedor
-                 HAVING ultima_data IS NULL OR ultima_data < DATE_SUB(NOW(), INTERVAL 5 DAY)
-                 ORDER BY ultima_data ASC
-                 LIMIT 5";
-$clientes_criticos = $pdo->query($sql_criticos)->fetchAll();
+// 5. Clientes Críticos e Total de Inativos (Sem treinamento/interação há mais de 5 dias)
+$sql_inativos_base = "
+    FROM clientes c
+    LEFT JOIN treinamentos t ON c.id_cliente = t.id_cliente
+    WHERE (c.data_fim IS NULL OR c.data_fim = '0000-00-00')
+    AND c.id_cliente NOT IN (
+        SELECT DISTINCT id_cliente FROM treinamentos WHERE status = 'PENDENTE'
+    )
+    GROUP BY c.id_cliente, c.fantasia, c.vendedor, c.data_inicio
+    HAVING 
+        (MAX(t.data_treinamento) < DATE_SUB(CURDATE(), INTERVAL 5 DAY)) OR 
+        (MAX(t.data_treinamento) IS NULL AND c.data_inicio < DATE_SUB(CURDATE(), INTERVAL 5 DAY))";
+
+// Total para o badge/alerta
+$total_inativos = $pdo->query("SELECT COUNT(*) FROM (SELECT c.id_cliente " . $sql_inativos_base . ") as total")->fetchColumn();
+
+// Top 5 para exibição no card
+$clientes_criticos = $pdo->query("SELECT c.id_cliente, c.fantasia, MAX(t.data_treinamento) as ultima_data, c.vendedor " . $sql_inativos_base . " ORDER BY ultima_data ASC LIMIT 5")->fetchAll();
 
 // Cálculo da Meta Mensal baseada na média histórica de atendimentos realizados
 $sql_media_historica = "SELECT AVG(total_mensal) as media 
@@ -335,9 +343,26 @@ body {
         <div class="col-lg-5 gsap-reveal">
             <div class="card-glass">
                 <h5 class="fw-900 mb-4 d-flex align-items-center gap-2">
-                    <i class="bi bi-exclamation-triangle-fill text-danger"></i>
-                    Radar de Emergência
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-exclamation-triangle-fill text-danger"></i>
+                        Radar de Emergência
+                    </div>
+                    <?php if($total_inativos > 0): ?>
+                        <span class="badge rounded-pill bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25" style="font-size: 0.7rem; padding: 0.4rem 0.8rem;">
+                            <?= $total_inativos ?> INATIVOS
+                        </span>
+                    <?php endif; ?>
                 </h5>
+
+                <?php if($total_inativos > 0): ?>
+                    <div class="alert alert-warning border-0 p-3 mb-4 rounded-4 small d-flex align-items-center gap-3" style="background: var(--warning-light); color: var(--warning);">
+                        <i class="bi bi-shield-exclamation fs-5"></i>
+                        <div>
+                            <div class="fw-bold">Atenção Necessária</div>
+                            <div class="opacity-75">Existem clientes aguardando contato há mais de 5 dias.</div>
+                        </div>
+                    </div>
+                <?php endif; ?>
                 <div class="list-group list-group-flush bg-transparent">
                     <?php if(!empty($clientes_criticos)): ?>
                         <?php foreach($clientes_criticos as $cli): 
