@@ -455,6 +455,39 @@ try {
                         <span class="badge-notify text-white ms-auto"><?= $total_contatos ?></span>
                     </a>
                 </li>
+                
+                <li class="<?= $current_page == 'radar_emergencia.php' ? 'active' : '' ?>">
+                    <a href="radar_emergencia.php" style="color: #ef4444;">
+                        <i class="bi bi-radar" style="color: #ef4444;"></i> <span style="font-weight: 700;">Radar de Emergência</span>
+                        <?php
+                        // Contador simplificado para o badge apenas dos clientes "Para Contatar"
+                        $sql_radar_badge = "
+                            SELECT COUNT(*) FROM (
+                                SELECT c.id_cliente
+                                FROM clientes c
+                                LEFT JOIN treinamentos t ON c.id_cliente = t.id_cliente
+                                WHERE (c.data_fim IS NULL OR c.data_fim = '0000-00-00')
+                                AND c.id_cliente NOT IN (SELECT DISTINCT id_cliente FROM treinamentos WHERE status = 'PENDENTE')
+                                GROUP BY c.id_cliente, c.data_inicio
+                                HAVING 
+                                    (
+                                        (MAX(t.data_treinamento) < DATE_SUB(CURDATE(), INTERVAL 5 DAY)) OR 
+                                        (MAX(t.data_treinamento) IS NULL AND c.data_inicio < DATE_SUB(CURDATE(), INTERVAL 5 DAY))
+                                    )
+                                    AND (
+                                        (SELECT MAX(data_observacao) FROM observacoes_cliente oc WHERE oc.id_cliente = c.id_cliente AND oc.tipo = 'CONTATO') < DATE_SUB(CURDATE(), INTERVAL 5 DAY)
+                                        OR 
+                                        (SELECT MAX(data_observacao) FROM observacoes_cliente oc WHERE oc.id_cliente = c.id_cliente AND oc.tipo = 'CONTATO') IS NULL
+                                    )
+                            ) as inativos_radar
+                        ";
+                        $total_radar = $pdo->query($sql_radar_badge)->fetchColumn();
+                        if ($total_radar > 0):
+                        ?>
+                            <span class="badge-notify text-white ms-auto" style="background: #ef4444; padding: 2px 6px; border-radius: 6px;"><?= $total_radar ?></span>
+                        <?php endif; ?>
+                    </a>
+                </li>
 
                 <div class="menu-separator"></div>
 

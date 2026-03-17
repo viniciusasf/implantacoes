@@ -53,11 +53,13 @@ try {
     if ($client->isAccessTokenExpired()) {
         $refreshToken = $client->getRefreshToken();
         if (!$refreshToken) {
-            returnResponse(false, 'Token expirado sem refresh token. Sincronize novamente.');
+            if (file_exists($tokenPath)) unlink($tokenPath);
+            returnResponse(false, 'Sessão Google não encontrada ou expirada sem refresh token. Sincronize um treinamento primeiro.');
         }
         $novoToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
         if (isset($novoToken['error'])) {
-            returnResponse(false, 'Falha ao renovar token Google: ' . $novoToken['error']);
+            if (file_exists($tokenPath)) unlink($tokenPath);
+            returnResponse(false, 'Falha ao renovar acesso Google (' . $novoToken['error'] . '). Por favor, clique em um botão de sincronização na tabela para logar novamente.');
         }
         file_put_contents($tokenPath, json_encode($client->getAccessToken()));
     }
@@ -134,9 +136,21 @@ try {
             $cursor->modify('+30 minutes');
         }
 
+        $diasSemana = [
+            1 => 'Segunda-Feira', 2 => 'Terça-Feira', 3 => 'Quarta-Feira',
+            4 => 'Quinta-Feira', 5 => 'Sexta-Feira', 6 => 'Sábado', 7 => 'Domingo'
+        ];
+
+        $label = $dia->format('d/m');
+        if ((int)$dia->format('Ymd') === (int)$agora->format('Ymd')) {
+            $label .= ' Hoje';
+        } else {
+            $label .= ' ' . $diasSemana[(int)$dia->format('N')];
+        }
+
         $diasDisponiveis[] = [
             'data' => $dia->format('Y-m-d'),
-            'data_label' => $dia->format('d/m/Y'),
+            'data_label' => $label,
             'horarios' => $horarios,
         ];
     }

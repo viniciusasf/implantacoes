@@ -113,11 +113,17 @@ try {
     }
 
     if ($client->isAccessTokenExpired()) {
-        if ($client->getRefreshToken()) {
-            $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
+        $refreshToken = $client->getRefreshToken();
+        if ($refreshToken) {
+            $newToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
+            if (isset($newToken['error'])) {
+                if (file_exists('token.json')) unlink('token.json');
+                returnResponse(false, "Sessão expirada ({$newToken['error']}). Reautentique o sistema.", ['auth_url' => $client->createAuthUrl()]);
+            }
             file_put_contents('token.json', json_encode($client->getAccessToken()));
         } else {
-            die(json_encode(['success' => false, 'auth_url' => $client->createAuthUrl()]));
+            if (file_exists('token.json')) unlink('token.json');
+            returnResponse(false, "Sessão Google não encontrada.", ['auth_url' => $client->createAuthUrl()]);
         }
     }
 

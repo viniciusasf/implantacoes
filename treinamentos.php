@@ -2140,12 +2140,30 @@ include 'header.php';
     let diasDisponibilidadeAtual = [];
     let disponibilidadeFoiCarregada = false;
 
+    let mensagemErroGlobal = null;
+
     function atualizarBotaoCopiarDisponibilidade() {
         const botao = document.getElementById('btn_copiar_disponibilidade');
-        if (!botao) {
+        if (!botao) return;
+        
+        if (mensagemErroGlobal) {
+            botao.disabled = true;
+            botao.classList.add('opacity-50');
+            botao.title = "Erro Google: " + mensagemErroGlobal;
+            botao.innerHTML = '<i class="bi bi-exclamation-octagon me-2"></i>Erro Google';
             return;
         }
+
         botao.disabled = !disponibilidadeFoiCarregada;
+        botao.innerHTML = '<i class="bi bi-whatsapp me-2"></i>Copiar Horas';
+        
+        if (botao.disabled) {
+            botao.classList.add('opacity-50');
+            botao.title = "Carregando disponibilidade do Google...";
+        } else {
+            botao.classList.remove('opacity-50');
+            botao.title = "Copiar horários para o cliente";
+        }
     }
 
     function copiarTextoAreaTransferencia(texto, mensagemSucesso) {
@@ -2285,16 +2303,19 @@ include 'header.php';
 
     function carregarDisponibilidadeGoogle() {
         const container = document.getElementById('disponibilidade_resultado');
-        const botao = document.getElementById('btn_buscar_disponibilidade');
-        if (!container || !botao) {
-            return;
-        }
+        const botaoBusca = document.getElementById('btn_buscar_disponibilidade');
+        const botaoCopiar = document.getElementById('btn_copiar_disponibilidade');
+        
+        if (!container) return;
 
-        disponibilidadeFoiCarregada = false;
-        diasDisponibilidadeAtual = [];
-        atualizarBotaoCopiarDisponibilidade();
-        botao.disabled = true;
-        container.innerHTML = '<div class="text-muted">Consultando Google Agenda...</div>';
+        // Feedback visual de carregamento
+        if (botaoBusca) botaoBusca.disabled = true;
+        if (botaoCopiar) {
+            botaoCopiar.disabled = true;
+            botaoCopiar.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Carregando...';
+        }
+        
+        container.innerHTML = '<div class="text-muted"><div class="spinner-border spinner-border-sm me-2"></span>Consultando Google Agenda...</div>';
 
         fetch('google_calendar_disponibilidade.php?dias=2&duracao_min=60', {
                 cache: 'no-store'
@@ -2302,20 +2323,28 @@ include 'header.php';
             .then(r => r.json())
             .then(data => {
                 if (!data || !data.success) {
-                    const erro = data && data.message ? data.message : 'Falha ao carregar disponibilidade.';
-                    container.innerHTML = '<div class="text-danger">' + erro + '</div>';
+                    mensagemErroGlobal = data && data.message ? data.message : 'Falha ao carregar disponibilidade.';
+                    if (container) container.innerHTML = '<div class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>' + mensagemErroGlobal + '</div>';
+                    disponibilidadeFoiCarregada = false;
                     return;
                 }
+                mensagemErroGlobal = null;
                 diasDisponibilidadeAtual = data.dias_disponiveis || [];
                 disponibilidadeFoiCarregada = true;
-                atualizarBotaoCopiarDisponibilidade();
-                renderDisponibilidade(container, diasDisponibilidadeAtual);
+                if (container) renderDisponibilidade(container, diasDisponibilidadeAtual);
             })
-            .catch(() => {
-                container.innerHTML = '<div class="text-danger">Erro na comunicacao com o servidor.</div>';
+            .catch((err) => {
+                console.error('Erro Google:', err);
+                mensagemErroGlobal = "Erro de conexão";
+                if (container) container.innerHTML = '<div class="text-danger">Erro na comunicação com o servidor.</div>';
+                disponibilidadeFoiCarregada = false;
             })
             .finally(() => {
-                botao.disabled = false;
+                if (botaoBusca) botaoBusca.disabled = false;
+                if (botaoCopiar) {
+                    botaoCopiar.innerHTML = '<i class="bi bi-whatsapp me-2"></i>Copiar Horas';
+                }
+                atualizarBotaoCopiarDisponibilidade();
             });
     }
 
@@ -2583,13 +2612,7 @@ include 'header.php';
         const pad = (n) => String(n).padStart(2, '0');
         document.getElementById('data_treinamento').value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-        const container = document.getElementById('disponibilidade_resultado');
-        if (container) {
-            container.innerHTML = 'Clique em "Atualizar" para listar os horarios livres.';
-        }
-        diasDisponibilidadeAtual = [];
-        disponibilidadeFoiCarregada = false;
-        atualizarBotaoCopiarDisponibilidade();
+        // Nota: Não resetamos disponibilidadeFoiCarregada aqui para manter o botão "Copiar Horas" da listagem ativo
     });
 
     // GSAP Entrance

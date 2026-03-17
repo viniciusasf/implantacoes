@@ -68,8 +68,15 @@ $sql_inativos_base = "
     )
     GROUP BY c.id_cliente, c.fantasia, c.vendedor, c.data_inicio
     HAVING 
-        (MAX(t.data_treinamento) < DATE_SUB(CURDATE(), INTERVAL 5 DAY)) OR 
-        (MAX(t.data_treinamento) IS NULL AND c.data_inicio < DATE_SUB(CURDATE(), INTERVAL 5 DAY))";
+        (
+            (MAX(t.data_treinamento) < DATE_SUB(CURDATE(), INTERVAL 5 DAY)) OR 
+            (MAX(t.data_treinamento) IS NULL AND c.data_inicio < DATE_SUB(CURDATE(), INTERVAL 5 DAY))
+        )
+        AND (
+            (SELECT MAX(data_observacao) FROM observacoes_cliente oc WHERE oc.id_cliente = c.id_cliente AND oc.tipo = 'CONTATO') < DATE_SUB(CURDATE(), INTERVAL 5 DAY)
+            OR 
+            (SELECT MAX(data_observacao) FROM observacoes_cliente oc WHERE oc.id_cliente = c.id_cliente AND oc.tipo = 'CONTATO') IS NULL
+        )";
 
 // Total para o badge/alerta
 $total_inativos = $pdo->query("SELECT COUNT(*) FROM (SELECT c.id_cliente " . $sql_inativos_base . ") as total")->fetchColumn();
