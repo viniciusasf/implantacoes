@@ -3,6 +3,9 @@ date_default_timezone_set('America/Sao_Paulo');
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/google_oauth_token_helper.php';
+
+$diasSemana = ['1' => 'Segunda-Feira', '2' => 'Terça-Feira', '3' => 'Quarta-Feira', '4' => 'Quinta-Feira', '5' => 'Sexta-Feira', '6' => 'Sábado', '7' => 'Domingo'];
 
 function returnResponse($success, $message, $data = [])
 {
@@ -59,7 +62,7 @@ try {
         if (isset($novoToken['error'])) {
             returnResponse(false, 'Falha ao renovar token Google: ' . $novoToken['error']);
         }
-        file_put_contents($tokenPath, json_encode($client->getAccessToken()));
+        googlePersistToken($client);
     }
 
     $service = new Google\Service\Calendar($client);
@@ -94,7 +97,7 @@ try {
         if ($diaSemana > 5) {
             $diasDisponiveis[] = [
                 'data' => $dia->format('Y-m-d'),
-                'data_label' => $dia->format('d/m/Y'),
+                'data_label' => $dia->format('d/m') . ' ' . ($diasSemana[$dia->format('N')] ?? ''),
                 'horarios' => [],
             ];
             continue;
@@ -136,7 +139,7 @@ try {
 
         $diasDisponiveis[] = [
             'data' => $dia->format('Y-m-d'),
-            'data_label' => $dia->format('d/m/Y'),
+            'data_label' => $dia->format('d/m') . ' ' . ($diasSemana[$dia->format('N')] ?? ''),
             'horarios' => $horarios,
         ];
     }

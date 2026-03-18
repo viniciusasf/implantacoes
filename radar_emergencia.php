@@ -106,6 +106,35 @@ include 'header.php';
     --danger-light: rgba(239, 68, 68, 0.15);
 }
 
+/* Badge warning sempre com texto escuro (ambos os temas) */
+.badge-warning-dark {
+    background-color: var(--warning) !important;
+    color: #1a1a1a !important;
+}
+
+/* Botão Ficha Completa — adapta ao tema sem interferir no hover do card */
+.btn-ficha {
+    background: transparent;
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.btn-ficha:hover {
+    background: var(--border-color);
+    color: var(--text-main);
+    border-color: var(--text-muted);
+}
+[data-theme="dark"] .btn-ficha {
+    background: rgba(255,255,255,0.04);
+    border-color: var(--border-color);
+    color: var(--text-main);
+}
+[data-theme="dark"] .btn-ficha:hover {
+    background: rgba(255,255,255,0.09);
+    border-color: var(--text-muted);
+    color: #ffffff;
+}
+
 body {
     background-color: var(--bg-body) !important;
     color: var(--text-main) !important;
@@ -403,7 +432,7 @@ body {
                                             onclick="abrirModalContato(<?= $c['id_cliente'] ?>, '<?= htmlspecialchars(addslashes($c['fantasia'])) ?>')">
                                         <i class="bi bi-whatsapp"></i> Registrar Contato
                                     </button>
-                                    <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-action-premium btn-dark border-secondary w-100 justify-content-center text-white" style="background: rgba(255,255,255,0.05);">
+                                    <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-action-premium btn-ficha w-100 justify-content-center">
                                         <i class="bi bi-person-lines-fill"></i> Ficha Completa
                                     </a>
                                 </div>
@@ -441,7 +470,7 @@ body {
                                     <div class="flex-grow-1">
                                         <div class="d-flex align-items-center gap-3 mb-1">
                                             <h5 class="fw-900 mb-0"><?= htmlspecialchars($c['fantasia']) ?></h5>
-                                            <span class="badge bg-warning text-dark">Em ciclo de espera</span>
+                                            <span class="badge badge-warning-dark">Em ciclo de espera</span>
                                         </div>
                                         
                                         <div class="text-muted small mb-2">

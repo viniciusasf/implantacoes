@@ -1395,15 +1395,21 @@ include 'header.php';
                                             </button>
                                         <?php endif; ?>
 
-                                        <!-- 2. WHATSAPP -->
-                                        <?php
+                                         <?php
                                             $nome_contato_wp = trim((string)($t['contato_nome'] ?? $t['cliente_nome']));
-                                            $data_f = date('d/m/Y', strtotime($t['data_treinamento']));
-                                            $hora_f = date('H:i', strtotime($t['data_treinamento']));
-                                            $link_google_meet = trim((string)($t['google_event_link'] ?? ''));
+                                            $dt_treino = new DateTime($t['data_treinamento'], new DateTimeZone('America/Sao_Paulo'));
+                                            $dias_semana_wp = ['1' => 'Segunda-Feira', '2' => 'Terça-Feira', '3' => 'Quarta-Feira', '4' => 'Quinta-Feira', '5' => 'Sexta-Feira', '6' => 'Sábado', '7' => 'Domingo'];
+                                            $data_f  = $dt_treino->format('d/m') . ' ' . ($dias_semana_wp[$dt_treino->format('N')] ?? '');
+                                            $hora_f  = $dt_treino->format('H:i') . ' Horário de Brasília';
+                                            $tema_f  = mb_strtoupper(trim((string)($t['tema'] ?? '')));
+                                            $link_google_meet   = trim((string)($t['google_event_link'] ?? ''));
                                             $link_google_agenda = trim((string)($t['google_agenda_link'] ?? ''));
-                                            
-                                            $msg_wp = "Olá, {$nome_contato_wp}! 👋\n\n✅ Seu treinamento GestãoPRO está confirmado!\n\n📅 Data: {$data_f}\n🕒 Horário: {$hora_f}\n🎯 Tema: {$t['tema']}\n\n💻 Acesse pelo Google Meet:\n" . ($link_google_meet ?: 'não informado') . "\n";
+
+                                            $msg_wp  = "Olá, {$nome_contato_wp}! 👋\n\n✅ Seu treinamento GestãoPRO está confirmado!\n\n";
+                                            $msg_wp .= "📅 Data: {$data_f}\n";
+                                            $msg_wp .= "🕒 Horário: {$hora_f}\n";
+                                            $msg_wp .= "🎯 Tema: {$tema_f}\n";
+                                            $msg_wp .= "\n💻 Acesse pelo Google Meet:\n" . ($link_google_meet ?: 'não informado') . "\n";
                                             if ($link_google_agenda !== '') {
                                                 $msg_wp .= "\n📆 Adicione à sua agenda:\n" . $link_google_agenda . "\n";
                                             }
