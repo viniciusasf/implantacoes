@@ -6,6 +6,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/vendor/autoload.php';
 require_once 'config.php';
+require_once __DIR__ . '/google_oauth_token_helper.php';
 
 function returnResponse($success, $message, $data = [])
 {
@@ -103,13 +104,17 @@ try {
 
     if (isset($_GET['code'])) {
         $token = $client->fetchAccessTokenWithAuthCode($_GET['code']);
-        file_put_contents('token.json', json_encode($token));
+        if (isset($token['error'])) {
+            die(json_encode(['success' => false, 'message' => 'Erro ao trocar código OAuth: ' . ($token['error_description'] ?? $token['error'])]));
+        }
+        googlePersistToken($client, $token);
         header("Location: " . $redirectUri);
         exit;
     }
 
-    if (file_exists('token.json')) {
-        $client->setAccessToken(json_decode(file_get_contents('token.json'), true));
+    $tokenData = googleLoadTokenData();
+    if ($tokenData) {
+        $client->setAccessToken($tokenData);
     }
 
     if ($client->isAccessTokenExpired()) {
@@ -117,13 +122,13 @@ try {
         if ($refreshToken) {
             $newToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
             if (isset($newToken['error'])) {
-                if (file_exists('token.json')) unlink('token.json');
-                returnResponse(false, "Sessão expirada ({$newToken['error']}). Reautentique o sistema.", ['auth_url' => $client->createAuthUrl()]);
+                // Refresh token inválido ou revogado — apaga o token e pede re-autenticação
+                googleForgetToken();
+                die(json_encode(['success' => false, 'auth_url' => $client->createAuthUrl(), 'message' => 'Token expirado ou revogado. Por favor, reautorize o acesso ao Google Agenda.']));
             }
-            file_put_contents('token.json', json_encode($client->getAccessToken()));
+            googlePersistToken($client);
         } else {
-            if (file_exists('token.json')) unlink('token.json');
-            returnResponse(false, "Sessão Google não encontrada.", ['auth_url' => $client->createAuthUrl()]);
+            die(json_encode(['success' => false, 'auth_url' => $client->createAuthUrl(), 'message' => 'Autenticação necessária. Por favor, autorize o acesso ao Google Agenda.']));
         }
     }
 

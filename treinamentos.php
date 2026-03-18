@@ -3,6 +3,7 @@
 date_default_timezone_set('America/Sao_Paulo');
 
 require_once 'config.php';
+require_once __DIR__ . '/google_oauth_token_helper.php';
 
 // FUNÇÃO PARA GARANTIR QUE A TABELA DE OBSERVAÇÕES EXISTA
 function garantirTabelaObservacoes($pdo)
@@ -434,7 +435,8 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
     try {
         $autoloadPath = __DIR__ . '/vendor/autoload.php';
         $credentialsPath = __DIR__ . '/credentials.json';
-        $tokenPath = __DIR__ . '/token.json';
+        $tokenPath = googleTokenPath();
+        $authStartUrl = 'google_calendar_sync.php?id_treinamento=' . (int)$idTreinamento . '&start_auth=1';
 
         if (!file_exists($autoloadPath) || !file_exists($credentialsPath)) {
             return ['success' => false, 'message' => 'Integração Google não configurada.'];
@@ -443,12 +445,12 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
         require_once $autoloadPath;
 
         if (!file_exists($tokenPath)) {
-            return ['success' => false, 'message' => 'Token Google ausente.'];
+            return ['success' => false, 'message' => 'Autenticação Google necessária.', 'needs_auth' => true, 'auth_start_url' => $authStartUrl];
         }
 
-        $tokenData = json_decode(file_get_contents($tokenPath), true);
+        $tokenData = googleLoadTokenData($tokenPath);
         if (!is_array($tokenData)) {
-            return ['success' => false, 'message' => 'Token Google inválido.'];
+            return ['success' => false, 'message' => 'Token Google inválido.', 'needs_auth' => true, 'auth_start_url' => $authStartUrl];
         }
 
         $client = new Google\Client();
@@ -460,15 +462,27 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
         if ($client->isAccessTokenExpired()) {
             $refreshToken = $client->getRefreshToken();
             if (empty($refreshToken)) {
-                return ['success' => false, 'message' => 'Token expirado sem refresh token.'];
+                return ['success' => false, 'message' => 'Sessão Google expirada. Faça login novamente.', 'needs_auth' => true, 'auth_start_url' => $authStartUrl];
             }
 
-            $novoToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
+            try {
+                $novoToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
+            } catch (Throwable $e) {
+                if (googleIsInvalidGrantError($e)) {
+                    googleForgetToken($tokenPath);
+                    return ['success' => false, 'message' => 'Sessao Google expirada. Faca login novamente.', 'needs_auth' => true, 'auth_start_url' => $authStartUrl];
+                }
+                throw $e;
+            }
             if (isset($novoToken['error'])) {
-                return ['success' => false, 'message' => 'Falha ao renovar token Google.'];
+                if (googleIsInvalidGrantError($novoToken)) {
+                    googleForgetToken($tokenPath);
+                    return ['success' => false, 'message' => 'Sessao Google expirada. Faca login novamente.', 'needs_auth' => true, 'auth_start_url' => $authStartUrl];
+                }
+                return ['success' => false, 'message' => 'Falha ao renovar token Google.', 'needs_auth' => true, 'auth_start_url' => $authStartUrl];
             }
 
-            file_put_contents($tokenPath, json_encode($client->getAccessToken()));
+            googlePersistToken($client, $novoToken, $tokenPath);
         }
 
         $stmt = $pdo->prepare("SELECT t.*, c.fantasia as cliente_nome, co.nome as contato_nome
@@ -574,6 +588,10 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
             'google_agenda_link' => $googleAgendaLink
         ];
     } catch (Throwable $e) {
+        if (googleIsInvalidGrantError($e)) {
+            googleForgetToken($tokenPath ?? googleTokenPath());
+            return ['success' => false, 'message' => 'Sessao Google expirada. Faca login novamente.', 'needs_auth' => true, 'auth_start_url' => 'google_calendar_sync.php?id_treinamento=' . (int)$idTreinamento . '&start_auth=1'];
+        }
         return ['success' => false, 'message' => $e->getMessage()];
     }
 }
@@ -900,6 +918,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if (!$manual_link_provided) {
             $syncResult = sincronizarGoogleMeetAutomatico($pdo, $novo_id_treinamento);
+        }
+
+        if (!$manual_link_provided && !empty($syncResult['needs_auth']) && !empty($syncResult['auth_start_url'])) {
+            header("Location: " . $syncResult['auth_start_url']);
+            exit;
         }
 
         $forcarModalGoogle = false;

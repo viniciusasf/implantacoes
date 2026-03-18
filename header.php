@@ -45,6 +45,29 @@ try {
 } catch (Throwable $e) {
     $total_pendencias_treinamentos = 0;
 }
+
+// 9. STATUS DO TOKEN GOOGLE AGENDA
+$google_token_status = 'none'; // 'ok' | 'expired' | 'none'
+try {
+    if (file_exists(__DIR__ . '/google_oauth_token_helper.php') && file_exists(__DIR__ . '/token.json')) {
+        require_once __DIR__ . '/google_oauth_token_helper.php';
+        $_gt = googleLoadTokenData();
+        if ($_gt && !empty($_gt['refresh_token'])) {
+            $now = time();
+            $accessExpAt  = ($_gt['created'] ?? 0) + ($_gt['expires_in'] ?? 0);
+            $refreshExpAt = ($_gt['created'] ?? 0) + ($_gt['refresh_token_expires_in'] ?? 0);
+            if ($refreshExpAt > $now) {
+                $google_token_status = 'ok';
+            } else {
+                $google_token_status = 'expired';
+            }
+        } else {
+            $google_token_status = 'expired';
+        }
+    }
+} catch (Throwable $e) {
+    $google_token_status = 'none';
+}
 ?>
 
 <head>
@@ -513,7 +536,37 @@ try {
             </ul>
             
             <!-- // rodapé usuario -->
-            <div style="position: fixed; bottom: 0; width: var(--sidebar-width); padding: 1.5rem; border-top: 1px solid rgba(255,255,255,0.05); background: var(--sidebar-bg); z-index: 10;">
+            <div style="position: fixed; bottom: 0; width: var(--sidebar-width); padding: 1rem 1.5rem; border-top: 1px solid rgba(255,255,255,0.05); background: var(--sidebar-bg); z-index: 10;">
+
+                <?php
+                $gt_color = $google_token_status === 'ok' ? '#10b981' : '#ef4444';
+                $gt_icon  = $google_token_status === 'ok' ? 'bi-google'  : 'bi-exclamation-circle-fill';
+                $gt_label = $google_token_status === 'ok' ? 'Google Agenda conectado' : 'Google Agenda: reautorizar';
+                $gt_href  = 'google_auth_reset.php';
+                ?>
+                <a href="<?= $gt_href ?>" title="<?= $gt_label ?>" style="
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 0.45rem 0.75rem;
+                    border-radius: 8px;
+                    background: <?= $google_token_status === 'ok' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.15)' ?>;
+                    border: 1px solid <?= $google_token_status === 'ok' ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.35)' ?>;
+                    text-decoration: none;
+                    margin-bottom: 0.75rem;
+                    transition: all 0.2s ease;
+                " onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                    <span style="
+                        width: 8px; height: 8px; border-radius: 50%;
+                        background: <?= $gt_color ?>;
+                        flex-shrink: 0;
+                        <?= $google_token_status !== 'ok' ? 'animation: pulse-red 1.5s infinite;' : '' ?>
+                    "></span>
+                    <span style="font-size: 0.72rem; color: <?= $gt_color ?>; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        <i class="bi <?= $gt_icon ?> me-1"></i><?= $gt_label ?>
+                    </span>
+                </a>
+
                 <div class="d-flex align-items-center">
                     <div style="width: 36px; height: 36px; border-radius: 12px; background: linear-gradient(135deg, var(--primary), var(--purple)); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white;">
                         <i class="bi bi-person"></i>
@@ -524,6 +577,13 @@ try {
                     </div>
                 </div>
             </div>
+
+            <style>
+                @keyframes pulse-red {
+                    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+                    50%       { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
+                }
+            </style>
         </nav>
 
         <!-- // area principal -->
