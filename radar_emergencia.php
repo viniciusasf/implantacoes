@@ -559,7 +559,8 @@ body {
             opacity: 1,
             y: 0,
             stagger: 0.08,
-            ease: "power2.out"
+            ease: "power2.out",
+            clearProps: "transform"
         });
         
         // Tab transition animations
@@ -569,10 +570,10 @@ body {
                 const targetId = event.target.getAttribute('data-bs-target');
                 const pane = document.querySelector(targetId);
                 const items = pane.querySelectorAll('.gsap-reveal, .client-card-premium');
-                
-                gsap.fromTo(items, 
+
+                gsap.fromTo(items,
                     { opacity: 0, y: 15 },
-                    { opacity: 1, y: 0, duration: 0.4, stagger: 0.05, ease: "power2.out" }
+                    { opacity: 1, y: 0, duration: 0.4, stagger: 0.05, ease: "power2.out", clearProps: "transform" }
                 );
             });
         });
