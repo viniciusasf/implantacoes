@@ -1067,7 +1067,7 @@ $offset = ($pagina - 1) * $por_pagina;
 
 // Query principal com contagem para paginação
 $sql_base = "
-    SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone
+    SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor
     FROM treinamentos t
     LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
     LEFT JOIN contatos co ON t.id_contato = co.id_contato
@@ -1302,7 +1302,7 @@ include 'header.php';
                         <th>Servidor</th>
                         <th>Contato</th>
                         <th>Tema</th>
-                        <th>Status</th>
+                        <th>Vendedor</th>
                         <th class="text-center">Convite</th>
                         <th class="text-end pe-4">Ações</th>
                     </tr>
@@ -1362,7 +1362,7 @@ include 'header.php';
                                     <div class="text-dark"><?= htmlspecialchars($t['tema']) ?></div>
                                 </td>
                                 <td class="fw-bold">
-                                    <div class="text-dark text-uppercase"><?= htmlspecialchars($t['status']) ?></div>
+                                    <div class="text-dark text-uppercase"><?= htmlspecialchars($t['vendedor'] ?? '---') ?></div>
                                 </td>
                                 <td class="text-center fw-bold">
                                     <?php 
@@ -1406,8 +1406,9 @@ include 'header.php';
                                             $link_google_agenda = trim((string)($t['google_agenda_link'] ?? ''));
 
                                             $msg_wp  = "Olá, {$nome_contato_wp}! 👋\n\n✅ Seu treinamento GestãoPRO está confirmado!\n\n";
-                                            $msg_wp .= "📅 Data: {$data_f}\n";
-                                            $msg_wp .= "🕒 Horário: {$hora_f}\n";
+                                            $msg_wp .= "🔢 ID do treinamento: #{$t['id_treinamento']}\n";
+                                            $msg_wp .= "📅 *Data:* {$data_f}\n";
+                                            $msg_wp .= "🕒 *Horário:* {$hora_f}\n";
                                             $msg_wp .= "🎯 Tema: {$tema_f}\n";
                                             $msg_wp .= "\n💻 Acesse pelo Google Meet:\n" . ($link_google_meet ?: 'não informado') . "\n";
                                             if ($link_google_agenda !== '') {

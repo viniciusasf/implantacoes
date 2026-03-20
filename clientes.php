@@ -222,7 +222,11 @@ foreach ($todos_clientes as $cl) {
     }
 
     // Adiciona à lista filtrada se passar pelo filtro de estágio
-    if (empty($estagio) || $estagio == $status_cl) {
+    if ($estagio == '' ) {
+        if ($status_cl != 'encerrado') {
+            $clientes_filtrados[] = $cl;
+        }
+    } elseif ($estagio == $status_cl) {
         $clientes_filtrados[] = $cl;
     }
 }

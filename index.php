@@ -34,12 +34,12 @@ $stmt_servidores = $pdo->query($sql_servidores);
 $servidores = $stmt_servidores->fetchAll(PDO::FETCH_ASSOC);
 
 // 3. Totais gerais
-$total_clientes = $pdo->query("SELECT COUNT(*) FROM clientes")->fetchColumn();
+$total_geral_clientes = $pdo->query("SELECT COUNT(*) FROM clientes")->fetchColumn();
 $total_vendedores = $pdo->query("SELECT COUNT(DISTINCT vendedor) FROM clientes WHERE vendedor IS NOT NULL AND vendedor != ''")->fetchColumn();
 $total_servidores = $pdo->query("SELECT COUNT(DISTINCT servidor) FROM clientes WHERE servidor IS NOT NULL AND servidor != ''")->fetchColumn();
 $total_cancelados = $pdo->query("SELECT COUNT(*) FROM clientes WHERE data_fim IS NOT NULL AND data_fim != '0000-00-00' AND observacao LIKE '%CANCELADO%'")->fetchColumn();
 $total_concluidos = $pdo->query("SELECT COUNT(*) FROM clientes WHERE data_fim IS NOT NULL AND data_fim != '0000-00-00' AND observacao NOT LIKE '%CANCELADO%'")->fetchColumn();
-$total_ativos = $total_clientes - $total_concluidos - $total_cancelados;
+$total_ativos = $total_geral_clientes - $total_concluidos - $total_cancelados;
 
 // 4. Atividade de Treinamentos (Últimos 15 dias para o gráfico)
 $sql_treinamentos_graph = "SELECT DATE(data_treinamento) as dia, COUNT(*) as total 
@@ -110,6 +110,16 @@ $percent_meta = 0;
 if($meta_mensal > 0) {
     $percent_meta = round(($realizado_mes / $meta_mensal) * 100);
 }
+
+// 6. Top 5 Clientes com mais treinamentos realizados
+$sql_top_clientes = "SELECT c.fantasia, COUNT(t.id_treinamento) as total
+                     FROM clientes c
+                     JOIN treinamentos t ON c.id_cliente = t.id_cliente
+                     WHERE t.status IN ('REALIZADO', 'RESOLVIDO')
+                     GROUP BY c.id_cliente, c.fantasia
+                     ORDER BY total DESC
+                     LIMIT 5";
+$top_clientes = $pdo->query($sql_top_clientes)->fetchAll(PDO::FETCH_ASSOC);
 
 include 'header.php';
 ?>
@@ -243,6 +253,177 @@ body {
 
 /* GSAP */
 .gsap-reveal { opacity: 0; transform: translateY(30px); }
+
+/* Funnel Metric Tooltip */
+.funnel-metric-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.funnel-metric-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+}
+.funnel-tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 210px;
+    padding: 0.85rem 1rem;
+    border-radius: 14px;
+    z-index: 999;
+    text-align: left;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+    pointer-events: none;
+}
+.funnel-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 7px solid transparent;
+}
+.funnel-tooltip-success {
+    background: #0d2b1e;
+    border: 1px solid rgba(16,185,129,0.35);
+}
+.funnel-tooltip-success::after {
+    border-top-color: #0d2b1e;
+}
+.funnel-tooltip-primary {
+    background: #0d1333;
+    border: 1px solid rgba(67,97,238,0.35);
+}
+.funnel-tooltip-primary::after {
+    border-top-color: #0d1333;
+}
+.funnel-metric-card:hover .funnel-tooltip {
+    display: block;
+}
+.funnel-tooltip-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 0.4rem;
+}
+.funnel-tooltip-formula {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 0.5rem;
+    line-height: 1.4;
+}
+.funnel-tooltip-divider {
+    height: 1px;
+    background: rgba(255,255,255,0.1);
+    margin-bottom: 0.5rem;
+}
+.funnel-tooltip-result {
+    font-size: 1.4rem;
+    font-weight: 900;
+    color: #ffffff;
+    margin-bottom: 0.2rem;
+}
+.funnel-tooltip-desc {
+    font-size: 0.72rem;
+    color: rgba(255,255,255,0.6);
+    line-height: 1.4;
+}
+
+/* Funnel Styles */
+.funnel-container-mini {
+    padding: 1.5rem;
+    background: var(--bg-card);
+    border-radius: 22px;
+    border: 1px solid var(--border-color);
+}
+
+.funnel-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 5px;
+    position: relative;
+    transition: transform 0.3s ease;
+}
+
+.funnel-stage:hover {
+    transform: scale(1.01);
+    z-index: 10;
+}
+
+.funnel-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 800;
+    font-size: 1.1rem;
+    height: 60px;
+    border-radius: 10px;
+    position: relative;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+.funnel-stage:nth-child(1) .funnel-bar {
+    width: 100%;
+    background: linear-gradient(135deg, #94a3b8, #64748b);
+    clip-path: polygon(0 0, 100% 0, 97% 100%, 3% 100%);
+}
+
+.funnel-stage:nth-child(2) .funnel-bar {
+    width: 85%;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    clip-path: polygon(0 0, 100% 0, 92% 100%, 8% 100%);
+}
+
+.funnel-stage:nth-child(3) .funnel-bar {
+    width: 65%;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    clip-path: polygon(0 0, 100% 0, 90% 100%, 10% 100%);
+}
+
+.funnel-bar-lost-mini {
+    width: 45%;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    height: 50px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 800;
+    font-size: 1rem;
+    margin: 1rem auto 0;
+    box-shadow: 0 5px 15px rgba(239,68,68,0.2);
+}
+
+.funnel-label-mini {
+    position: absolute;
+    left: 45px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.85);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    letter-spacing: 0.5px;
+}
+
+.funnel-percent-mini {
+    position: absolute;
+    right: 45px;
+    font-weight: 900;
+    font-size: 1rem;
+    color: rgba(255,255,255,1);
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
@@ -265,57 +446,141 @@ body {
         </div>
     </div>
 
-    <!-- Main KPIs -->
+    <!-- Funil de Implantação (Substituindo KPIs individuais) -->
+    <?php
+    $taxa_andamento   = ($total_geral_clientes > 0) ? round(($total_ativos      / $total_geral_clientes) * 100, 1) : 0;
+    $taxa_conclusao   = ($total_geral_clientes > 0) ? round(($total_concluidos  / $total_geral_clientes) * 100, 1) : 0;
+    $taxa_cancelamento = ($total_geral_clientes > 0) ? round(($total_cancelados / $total_geral_clientes) * 100, 1) : 0;
+    // Métrica A: Eficiência — dos que encerraram, quantos foram bem-sucedidos?
+    $total_encerrados  = $total_concluidos + $total_cancelados;
+    $taxa_eficiencia   = ($total_encerrados > 0) ? round(($total_concluidos / $total_encerrados) * 100, 1) : 0;
+    // Métrica B: Retenção — da base total, quantos não foram perdidos (ativos + concluídos)?
+    $taxa_retencao     = ($total_geral_clientes > 0) ? round((($total_geral_clientes - $total_cancelados) / $total_geral_clientes) * 100, 1) : 0;
+    ?>
     <div class="row g-4 mb-5">
-        <div class="col-xl-3 col-md-6 gsap-reveal">
+        <div class="col-12 gsap-reveal">
             <div class="card-glass">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div class="indicator-icon bg-primary bg-opacity-10 text-primary">
-                        <i class="bi bi-people"></i>
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="fw-900 mb-0 d-flex align-items-center gap-2">
+                        <i class="bi bi-funnel-fill text-primary"></i>
+                        Funil de Implantação
+                    </h5>
+                    <div class="d-flex gap-4">
+                        <div class="text-center">
+                            <div class="small text-muted fw-bold uppercase" style="font-size: 0.65rem;">VENDEDORES</div>
+                            <div class="fw-900 text-warning h5 mb-0"><?= $total_vendedores ?></div>
+                        </div>
+                        <a href="funil_implantacao.php" class="btn btn-sm btn-primary bg-opacity-10 text-primary border-0 rounded-3 px-3">
+                            Detalhes <i class="bi bi-arrow-right ms-1"></i>
+                        </a>
                     </div>
-                    <span class="text-muted small fw-bold">CLIENTES ATIVOS</span>
                 </div>
-                <h2 class="h1 fw-900 mb-1 text-primary"><?= $total_ativos ?></h2>
-                <div class="small text-muted">Implantações em andamento</div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6 gsap-reveal" style="transition-delay: 0.1s">
-            <div class="card-glass border-success border-opacity-10">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div class="indicator-icon bg-success bg-opacity-10 text-success">
-                        <i class="bi bi-check2-circle"></i>
+
+                <div class="row align-items-center">
+                    <!-- Funnel Visualization -->
+                    <div class="col-lg-7">
+                        <div class="text-center py-2">
+                            <div class="funnel-stage">
+                                <div class="funnel-bar">
+                                    <span class="funnel-label-mini">Iniciados</span>
+                                    <?= $total_geral_clientes ?> <i class="bi bi-people-fill ms-2"></i>
+                                    <span class="funnel-percent-mini">100%</span>
+                                </div>
+                            </div>
+                            
+                            <div class="funnel-stage">
+                                <div class="funnel-bar">
+                                    <span class="funnel-label-mini">Em Andamento</span>
+                                    <?= $total_ativos ?> <i class="bi bi-arrow-repeat ms-2"></i>
+                                    <span class="funnel-percent-mini"><?= $taxa_andamento ?>%</span>
+                                </div>
+                            </div>
+
+                            <div class="funnel-stage">
+                                <div class="funnel-bar">
+                                    <span class="funnel-label-mini">Concluídos</span>
+                                    <?= $total_concluidos ?> <i class="bi bi-check-circle-fill ms-2"></i>
+                                    <span class="funnel-percent-mini text-white"><?= $taxa_conclusao ?>%</span>
+                                </div>
+                            </div>
+
+                            <div class="d-flex flex-column align-items-center mt-3">
+                                <div class="funnel-bar-lost-mini" style="position: relative;">
+                                    <span class="small fw-bold position-absolute" style="left: 15px; font-size: 0.6rem; opacity: 0.8;">CANCELADOS</span>
+                                    <?= $total_cancelados ?> <i class="bi bi-x-circle-fill ms-2"></i>
+                                    <span class="small fw-bold position-absolute" style="right: 15px; font-size: 0.8rem;"><?= $taxa_cancelamento ?>%</span>
+                                </div>
+                                <div class="small fw-900 text-danger mt-1">SAÍDA</div>
+                            </div>
+                        </div>
                     </div>
-                    <span class="text-muted small fw-bold">CONCLUÍDOS</span>
-                </div>
-                <h2 class="h1 fw-900 mb-1 text-success"><?= $total_concluidos ?></h2>
-                <div class="small text-muted">Sucessos registrados</div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6 gsap-reveal" style="transition-delay: 0.2s">
-            <div class="card-glass border-warning border-opacity-10">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div class="indicator-icon bg-warning bg-opacity-10 text-warning">
-                        <i class="bi bi-person-workspace"></i>
+
+                    <!-- Funnel Info Cards -->
+                    <div class="col-lg-5">
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <div class="p-3 rounded-4 border border-secondary border-opacity-10 bg-secondary bg-opacity-10 text-center">
+                                    <div class="small fw-bold text-muted mb-1">TOTAL</div>
+                                    <div class="h3 fw-900 mb-0 text-secondary"><?= $total_geral_clientes ?></div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-3 rounded-4 border border-primary border-opacity-10 bg-primary bg-opacity-10 text-center">
+                                    <div class="small fw-bold text-primary mb-1">ATIVOS</div>
+                                    <div class="h3 fw-900 mb-0 text-primary"><?= $total_ativos ?></div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-3 rounded-4 border border-success border-opacity-10 bg-success bg-opacity-10 text-center">
+                                    <div class="small fw-bold text-success mb-1">SUCESSO</div>
+                                    <div class="h3 fw-900 mb-0 text-success"><?= $total_concluidos ?></div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-3 rounded-4 border border-danger border-opacity-10 bg-danger bg-opacity-10 text-center">
+                                    <div class="small fw-bold text-danger mb-1">PERDA</div>
+                                    <div class="h3 fw-900 mb-0 text-danger"><?= $total_cancelados ?></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3 row g-2">
+                            <!-- Card Eficiência -->
+                            <div class="col-6">
+                                <div class="funnel-metric-card p-3 rounded-4 border border-success border-opacity-25 text-center position-relative" style="background: rgba(16,185,129,0.07); cursor: help;">
+                                    <div class="funnel-tooltip funnel-tooltip-success">
+                                        <div class="funnel-tooltip-title"><i class="bi bi-calculator me-1"></i>Cálculo</div>
+                                        <div class="funnel-tooltip-formula">Concluídos &divide; (Concluídos + Cancelados)</div>
+                                        <div class="funnel-tooltip-divider"></div>
+                                        <div class="funnel-tooltip-result text-success"><?= $taxa_eficiencia ?>%</div>
+                                        <div class="funnel-tooltip-desc"><?= $total_encerrados ?> encerraram &rarr; <?= $total_concluidos ?> foram sucesso</div>
+                                    </div>
+                                    <div class="small fw-bold text-muted mb-1" style="font-size: 0.65rem;">EFICIÊNCIA <i class="bi bi-info-circle text-success opacity-75" style="font-size: 0.6rem;"></i></div>
+                                    <div class="h4 fw-900 mb-0 text-success"><?= $taxa_eficiencia ?>%</div>
+                                    <div class="text-muted" style="font-size: 0.62rem;">Dos encerramentos</div>
+                                </div>
+                            </div>
+                            <!-- Card Retenção -->
+                            <div class="col-6">
+                                <div class="funnel-metric-card p-3 rounded-4 border border-primary border-opacity-25 text-center position-relative" style="background: rgba(67,97,238,0.07); cursor: help;">
+                                    <div class="funnel-tooltip funnel-tooltip-primary">
+                                        <div class="funnel-tooltip-title"><i class="bi bi-calculator me-1"></i>Cálculo</div>
+                                        <div class="funnel-tooltip-formula">(Total &minus; Cancelados) &divide; Total</div>
+                                        <div class="funnel-tooltip-divider"></div>
+                                        <div class="funnel-tooltip-result text-primary"><?= $taxa_retencao ?>%</div>
+                                        <div class="funnel-tooltip-desc">Apenas <?= $total_cancelados ?> cancelaram da base de <?= $total_geral_clientes ?></div>
+                                    </div>
+                                    <div class="small fw-bold text-muted mb-1" style="font-size: 0.65rem;">RETENÇÃO <i class="bi bi-info-circle text-primary opacity-75" style="font-size: 0.6rem;"></i></div>
+                                    <div class="h4 fw-900 mb-0 text-primary"><?= $taxa_retencao ?>%</div>
+                                    <div class="text-muted" style="font-size: 0.62rem;">Da base total</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <span class="text-muted small fw-bold">VENDEDORES</span>
                 </div>
-                <h2 class="h1 fw-900 mb-1 text-warning"><?= $total_vendedores ?></h2>
-                <div class="small text-muted">Vendedores em campo</div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6 gsap-reveal" style="transition-delay: 0.3s">
-            <div class="card-glass border-danger border-opacity-10">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div class="indicator-icon bg-danger bg-opacity-10 text-danger">
-                        <i class="bi bi-x-octagon"></i>
-                    </div>
-                    <span class="text-muted small fw-bold">CLIENTES CANCELADOS</span>
-                </div>
-                <h2 class="h1 fw-900 mb-1 text-danger"><?= $total_cancelados ?></h2>
-                <div class="small text-muted">Adesões interrompidas</div>
             </div>
         </div>
     </div>
+
 
     <!-- Charts & Insights -->
     <div class="row g-4 mb-5">
@@ -453,6 +718,98 @@ body {
             </div>
         </div>
     </div>
+
+    <!-- Terceira Linha: Servidores e Top Clientes -->
+    <div class="row g-4 mb-5">
+        <!-- Análise por Servidor -->
+        <div class="col-lg-8 gsap-reveal" style="transition-delay: 0.4s">
+            <div class="card-glass shadow-sm">
+                <h5 class="fw-900 mb-4 d-flex align-items-center gap-2">
+                    <i class="bi bi-hdd-network text-info"></i>
+                    Análise por Servidor x Clientes
+                </h5>
+                <div class="table-responsive">
+                    <table class="table-premium">
+                        <thead>
+                            <tr>
+                                <th>Servidor</th>
+                                <th class="text-center">Total</th>
+                                <th class="text-center">Ativos</th>
+                                <th class="text-center">Status (Sucesso)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach($servidores as $s): 
+                                $success_rate_s = $s['total_clientes'] > 0 ? round(($s['clientes_concluidos'] / $s['total_clientes']) * 100) : 0;
+                            ?>
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="bg-info bg-opacity-10 text-info fw-bold p-2 px-3 rounded-pill" style="font-size: 0.8rem;">
+                                                <i class="bi bi-server"></i>
+                                            </div>
+                                            <span class="fw-bold"><?= htmlspecialchars($s['servidor']) ?></span>
+                                        </div>
+                                    </td>
+                                    <td class="text-center fw-900"><?= $s['total_clientes'] ?></td>
+                                    <td class="text-center">
+                                        <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3"><?= $s['clientes_ativos'] ?></span>
+                                    </td>
+                                    <td style="min-width: 150px;">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="progress flex-grow-1" style="height: 8px; border-radius: 10px; background: rgba(0,0,0,0.05);">
+                                                <div class="progress-bar bg-info" style="width: <?= $success_rate_s ?>%; border-radius: 10px;"></div>
+                                            </div>
+                                            <span class="small fw-bold"><?= $success_rate_s ?>%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Clientes -->
+        <div class="col-lg-4 gsap-reveal" style="transition-delay: 0.5s">
+            <div class="card-glass shadow-sm">
+                <h5 class="fw-900 mb-4 d-flex align-items-center gap-2">
+                    <i class="bi bi-trophy text-warning"></i>
+                    Top 5 Clientes (Treinamentos)
+                </h5>
+                <div class="table-responsive">
+                    <table class="table-premium">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th class="text-center">Qtd</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach($top_clientes as $tc): ?>
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="bg-warning bg-opacity-10 text-warning fw-bold p-2 px-3 rounded-pill" style="font-size: 0.8rem;">
+                                                <i class="bi bi-star-fill"></i>
+                                            </div>
+                                            <span class="fw-bold text-truncate" style="max-width: 150px;"><?= htmlspecialchars($tc['fantasia']) ?></span>
+                                        </div>
+                                    </td>
+                                    <td class="text-center fw-900">
+                                        <span class="badge bg-warning bg-opacity-10 text-warning rounded-pill px-3"><?= $tc['total'] ?></span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
 </div>
 
 <script>
