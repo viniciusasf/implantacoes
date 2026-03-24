@@ -1067,7 +1067,7 @@ $offset = ($pagina - 1) * $por_pagina;
 
 // Query principal com contagem para paginação
 $sql_base = "
-    SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor
+    SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas
     FROM treinamentos t
     LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
     LEFT JOIN contatos co ON t.id_contato = co.id_contato
@@ -1149,6 +1149,36 @@ include 'header.php';
     --danger-light: rgba(220, 53, 69, 0.1);
     --info-light: rgba(13, 202, 240, 0.1);
 }
+
+/* License Badges Styles */
+.badge-license {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    border-radius: 50px;
+    border: 1px solid transparent;
+}
+.badge-license-1 { 
+    background: #fff7ed; 
+    color: #c2410c; 
+    border-color: #fdba74; 
+    font-weight: 900; 
+    box-shadow: 0 0 10px rgba(249, 115, 22, 0.1);
+    transform: scale(1.02); /* Leve destaque de escala */
+}
+[data-theme="dark"] .badge-license-1 { 
+    background: rgba(249, 115, 22, 0.25); 
+    color: #ffd8a8; 
+    border-color: rgba(249, 115, 22, 0.5); 
+    box-shadow: 0 0 15px rgba(249, 115, 22, 0.15);
+}
+.badge-license-2 { background: rgba(111, 66, 193, 0.1); color: #6f42c1; border-color: rgba(111, 66, 193, 0.2); }
+[data-theme="dark"] .badge-license-2 { background: rgba(111, 66, 193, 0.2); color: #a389f4; border-color: rgba(111, 66, 193, 0.35); }
+.badge-license-3 { background: rgba(16, 185, 129, 0.1); color: #10b981; border-color: rgba(16, 185, 129, 0.2); }
+[data-theme="dark"] .badge-license-3 { background: rgba(16, 185, 129, 0.2); color: #34d399; border-color: rgba(16, 185, 129, 0.35); }
 
 /* Page Header - Simplificado */
 .modern-header {
@@ -1350,26 +1380,44 @@ include 'header.php';
                                     </div>
                                 </td>
                                 <td class="fw-bold">
-                                    <div class="text-dark"><?= htmlspecialchars($t['cliente_nome']) ?></div>
+                                    <?php
+                                        $numLics = (int)($t['num_licencas'] ?? 0);
+                                        $badgeClass = '';
+                                        if ($numLics == 1) {
+                                            $badgeClass = 'badge-license-1';
+                                        } elseif ($numLics == 2) {
+                                            $badgeClass = 'badge-license-2';
+                                        } elseif ($numLics >= 3) {
+                                            $badgeClass = 'badge-license-3';
+                                        }
+                                    ?>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span style="color: var(--text-main);"><?= htmlspecialchars($t['cliente_nome']) ?></span>
+                                        <?php if ($numLics > 0): ?>
+                                            <span class="badge-license <?= $badgeClass ?>" title="<?= $numLics ?> licença(s)">
+                                                <?= $numLics ?> <i class="bi bi-pc-display"></i>
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
                                 </td>
                                 <td class="fw-bold">
-                                    <div class="text-dark"><?= htmlspecialchars($t['servidor'] ?: '---') ?></div>
+                                    <div class=""><?= htmlspecialchars($t['servidor'] ?: '---') ?></div>
                                 </td>
                                 <td class="fw-bold">
-                                    <div class="text-dark"><?= htmlspecialchars($contato_exibicao) ?></div>
+                                    <div class=""><?= htmlspecialchars($contato_exibicao) ?></div>
                                 </td>
                                 <td class="fw-bold">
-                                    <div class="text-dark"><?= htmlspecialchars($t['tema']) ?></div>
+                                    <div class=""><?= htmlspecialchars($t['tema']) ?></div>
                                 </td>
                                 <td class="fw-bold">
-                                    <div class="text-dark text-uppercase"><?= htmlspecialchars($t['vendedor'] ?? '---') ?></div>
+                                    <div class=" text-uppercase"><?= htmlspecialchars($t['vendedor'] ?? '---') ?></div>
                                 </td>
                                 <td class="text-center fw-bold">
                                     <?php 
                                         $id_tr = (int)$t['id_treinamento'];
                                         $conv_status = $status_convites[$id_tr] ?? ['label' => 'Sem validacao', 'badge' => 'bg-warning text-dark'];
                                     ?>
-                                    <div class="text-dark" style="font-size: 0.85rem;">
+                                    <div class="" style="font-size: 0.85rem;">
                                         <?= htmlspecialchars($conv_status['label']) ?>
                                     </div>
                                 </td>
@@ -1400,7 +1448,10 @@ include 'header.php';
                                             $dt_treino = new DateTime($t['data_treinamento'], new DateTimeZone('America/Sao_Paulo'));
                                             $dias_semana_wp = ['1' => 'Segunda-Feira', '2' => 'Terça-Feira', '3' => 'Quarta-Feira', '4' => 'Quinta-Feira', '5' => 'Sexta-Feira', '6' => 'Sábado', '7' => 'Domingo'];
                                             $data_f  = $dt_treino->format('d/m') . ' ' . ($dias_semana_wp[$dt_treino->format('N')] ?? '');
-                                            $hora_f  = $dt_treino->format('H:i') . ' Horário de Brasília';
+                                            $dt_treino_fim = clone $dt_treino;
+                                            $dt_treino_fim->modify('+1 hour');
+                                            $hora_inicio = $dt_treino->format('H:i');
+                                            $hora_fim = $dt_treino_fim->format('H:i');
                                             $tema_f  = mb_strtoupper(trim((string)($t['tema'] ?? '')));
                                             $link_google_meet   = trim((string)($t['google_event_link'] ?? ''));
                                             $link_google_agenda = trim((string)($t['google_agenda_link'] ?? ''));
@@ -1408,7 +1459,7 @@ include 'header.php';
                                             $msg_wp  = "Olá, {$nome_contato_wp}! 👋\n\n✅ Seu treinamento GestãoPRO está confirmado!\n\n";
                                             $msg_wp .= "🔢 ID do treinamento: #{$t['id_treinamento']}\n";
                                             $msg_wp .= "📅 *Data:* {$data_f}\n";
-                                            $msg_wp .= "🕒 *Horário:* {$hora_f}\n";
+                                            $msg_wp .= "🕒 Horário do treinamento: das {$hora_inicio}h às {$hora_fim}h, horário de Brasília.\n";
                                             $msg_wp .= "🎯 Tema: {$tema_f}\n";
                                             $msg_wp .= "\n💻 Acesse pelo Google Meet:\n" . ($link_google_meet ?: 'não informado') . "\n";
                                             if ($link_google_agenda !== '') {
