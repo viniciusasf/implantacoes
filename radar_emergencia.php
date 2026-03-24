@@ -76,6 +76,11 @@ foreach ($todos_inativos as $cliente) {
     }
 }
 
+// Ordenar a aba "Aguardando Resposta" do maior dia para o menor (dias_ultimo_contato desc)
+usort($lista_aguardando_resposta, function($a, $b) {
+    return $b['dias_ultimo_contato'] <=> $a['dias_ultimo_contato'];
+});
+
 include 'header.php';
 ?>
 

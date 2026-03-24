@@ -24,7 +24,8 @@ function encerrarImplantacaoCliente(PDO $pdo, $idCliente, $cancelada = false)
         if ($cancelada) {
             $stmtCliente = $pdo->prepare(
                 "UPDATE clientes
-                 SET data_fim = ?,
+                 SET status = 'CANCELADA',
+                     data_fim = ?,
                      observacao = CONCAT(IFNULL(observacao, ''), ' [IMPLANTACAO CANCELADA EM ', CURDATE(), ']'),
                      status_tratativa = 'pendente',
                      data_inicio_tratativa = NULL
@@ -34,7 +35,8 @@ function encerrarImplantacaoCliente(PDO $pdo, $idCliente, $cancelada = false)
         } else {
             $stmtCliente = $pdo->prepare(
                 "UPDATE clientes
-                 SET data_fim = ?,
+                 SET status = 'CONCLUIDA',
+                     data_fim = ?,
                      status_tratativa = 'pendente',
                      data_inicio_tratativa = NULL
                  WHERE id_cliente = ?"

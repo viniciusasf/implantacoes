@@ -448,6 +448,29 @@ try {
             <ul class="list-unstyled components">
                 <?php $current_page = basename($_SERVER['PHP_SELF']); ?>
 
+                <!-- // section: gestão -->
+                <li class="menu-group-title">Gestão</li>
+
+                <li class="<?= $current_page == 'index.php' ? 'active' : '' ?>">
+                    <a href="index.php">
+                        <i class="bi bi-pie-chart-fill"></i> <span>Dashboard</span>
+                    </a>
+                </li>
+                
+                <li class="<?= $current_page == 'funil_implantacao.php' ? 'active' : '' ?>">
+                    <a href="funil_implantacao.php">
+                        <i class="bi bi-funnel-fill" style="color: var(--primary);"></i> <span>Funil de Implantação</span>
+                    </a>
+                </li>
+
+                <li class="<?= $current_page == 'relatorios.php' ? 'active' : '' ?>">
+                    <a href="relatorios.php">
+                        <i class="bi bi-file-earmark-bar-graph"></i> <span>Relatórios</span>
+                    </a>
+                </li>
+
+                <div class="menu-separator"></div>
+
                 <!-- // section: operação -->
                 <li class="menu-group-title">Operação</li>
 
@@ -456,6 +479,24 @@ try {
                         <i class="bi bi-calendar-check text-primary"></i> <span>Treinamentos</span>
                         <?php if ($total_treinamentos_pendentes > 0): ?>
                             <span class="badge-notify text-white ms-auto" title="Pendentes"><?= $total_treinamentos_pendentes ?></span>
+                        <?php endif; ?>
+                    </a>
+                </li>
+
+                <li class="<?= $current_page == 'tarefas.php' ? 'active' : '' ?>">
+                    <a href="tarefas.php">
+                        <i class="bi bi-list-task"></i> <span>Tarefas</span>
+                        <?php if ($total_tarefas > 0): ?>
+                            <span class="badge-notify text-white ms-auto" title="Tarefas Pendentes"><?= $total_tarefas ?></span>
+                        <?php endif; ?>
+                    </a>
+                </li>
+
+                <li class="<?= $current_page == 'pendencias_treinamentos.php' ? 'active' : '' ?>">
+                    <a href="pendencias_treinamentos.php">
+                        <i class="bi bi-exclamation-diamond"></i> <span>Pendências</span>
+                        <?php if ($total_pendencias_treinamentos > 0): ?>
+                            <span class="badge-notify text-white ms-auto" style="background: #f59e0b; padding: 2px 6px; border-radius: 6px;" title="Pendências Abertas"><?= $total_pendencias_treinamentos ?></span>
                         <?php endif; ?>
                     </a>
                 </li>
@@ -513,22 +554,6 @@ try {
                 </li>
 
                 <div class="menu-separator"></div>
-
-                <!-- // section: gestão -->
-                <li class="menu-group-title">Gestão</li>
-
-                <li class="<?= $current_page == 'index.php' ? 'active' : '' ?>">
-                    <a href="index.php">
-                        <i class="bi bi-pie-chart-fill"></i> <span>Dashboard</span>
-                    </a>
-                </li>
-                
-                <li class="<?= $current_page == 'funil_implantacao.php' ? 'active' : '' ?>">
-                    <a href="funil_implantacao.php">
-                        <i class="bi bi-funnel-fill" style="color: var(--primary);"></i> <span>Funil de Implantação</span>
-                    </a>
-                </li>
-
 
                 <!-- // section: apoio -->
                 <li class="menu-group-title">Apoio</li>
