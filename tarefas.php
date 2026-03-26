@@ -6,7 +6,7 @@ $mostrar_concluidas = isset($_GET['mostrar_concluidas']) ? $_GET['mostrar_conclu
 
 // Lógica para Deletar
 if (isset($_GET['delete'])) {
-    $id = $_GET['delete'];
+    $id = (int)$_GET['delete'];
     $stmt = $pdo->prepare("DELETE FROM tarefas WHERE id_tarefa = ?");
     $stmt->execute([$id]);
     header("Location: tarefas.php?msg=Tarefa removida com sucesso&tipo=success&mostrar_concluidas=" . $mostrar_concluidas);
@@ -16,7 +16,7 @@ if (isset($_GET['delete'])) {
 // Lógica para Alterar Status Rápido
 if (isset($_GET['status']) && isset($_GET['id'])) {
     $status = $_GET['status'];
-    $id = $_GET['id'];
+    $id = (int)$_GET['id'];
     $stmt = $pdo->prepare("UPDATE tarefas SET status = ? WHERE id_tarefa = ?");
     $stmt->execute([$status, $id]);
     header("Location: tarefas.php?msg=Status da tarefa atualizado&tipo=success&mostrar_concluidas=" . $mostrar_concluidas);
@@ -25,7 +25,7 @@ if (isset($_GET['status']) && isset($_GET['id'])) {
 
 // Lógica para Adicionar/Editar
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $id_cliente = !empty($_POST['id_cliente']) ? $_POST['id_cliente'] : null;
+    $id_cliente = !empty($_POST['id_cliente']) ? (int)$_POST['id_cliente'] : null;
     $responsavel = $_POST['responsavel'];
     $titulo = $_POST['titulo'];
     $descricao = $_POST['descricao'];
@@ -34,8 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $data_entrega = !empty($_POST['data_entrega']) ? $_POST['data_entrega'] : null;
 
     if (isset($_POST['id_tarefa']) && !empty($_POST['id_tarefa'])) {
+        $id_tarefa = (int)$_POST['id_tarefa'];
         $stmt = $pdo->prepare("UPDATE tarefas SET id_cliente=?, responsavel=?, titulo=?, descricao=?, prioridade=?, status=?, data_entrega=? WHERE id_tarefa=?");
-        $stmt->execute([$id_cliente, $responsavel, $titulo, $descricao, $prioridade, $status, $data_entrega, $_POST['id_tarefa']]);
+        $stmt->execute([$id_cliente, $responsavel, $titulo, $descricao, $prioridade, $status, $data_entrega, $id_tarefa]);
         $msg = "Tarefa atualizada com sucesso";
     } else {
         $stmt = $pdo->prepare("INSERT INTO tarefas (id_cliente, responsavel, titulo, descricao, prioridade, status, data_entrega) VALUES (?, ?, ?, ?, ?, ?, ?)");

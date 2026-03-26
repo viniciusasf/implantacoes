@@ -4,7 +4,7 @@ require_once 'config.php';
 
 // Lógica para Deletar
 if (isset($_GET['delete'])) {
-    $id = $_GET['delete'];
+    $id = (int)$_GET['delete'];
     $stmt = $pdo->prepare("DELETE FROM contatos WHERE id_contato = ?");
     $stmt->execute([$id]);
     header("Location: contatos.php?msg=Contato+removido+com+sucesso&tipo=success");
@@ -13,7 +13,7 @@ if (isset($_GET['delete'])) {
 
 // Lógica para Adicionar/Editar
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $id_cliente = $_POST['id_cliente'];
+    $id_cliente = (int)$_POST['id_cliente'];
     $nome = $_POST['nome'];
     $email = isset($_POST['email']) ? trim($_POST['email']) : null;
     if ($email === '') { $email = null; }
@@ -22,8 +22,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $observacao = $_POST['observacao'];
     
     if (isset($_POST['id_contato']) && !empty($_POST['id_contato'])) {
+        $id_contato = (int)$_POST['id_contato'];
         $stmt = $pdo->prepare("UPDATE contatos SET id_cliente=?, nome=?, email=?, cargo=?, telefone_ddd=?, observacao=? WHERE id_contato=?");
-        $stmt->execute([$id_cliente, $nome, $email, $cargo, $telefone, $observacao, $_POST['id_contato']]);
+        $stmt->execute([$id_cliente, $nome, $email, $cargo, $telefone, $observacao, $id_contato]);
         $msg = "Contato atualizado com sucesso";
     } else {
         $stmt = $pdo->prepare("INSERT INTO contatos (id_cliente, nome, email, cargo, telefone_ddd, observacao) VALUES (?, ?, ?, ?, ?, ?)");

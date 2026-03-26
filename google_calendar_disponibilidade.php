@@ -60,6 +60,10 @@ try {
         }
         $novoToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
         if (isset($novoToken['error'])) {
+            if (googleIsInvalidGrantError($novoToken['error'])) {
+                googleForgetToken();
+                returnResponse(false, 'Token Google foi revogado ou é inválido. Por favor, reautorize o acesso no menu lateral.');
+            }
             returnResponse(false, 'Falha ao renovar token Google: ' . $novoToken['error']);
         }
         googlePersistToken($client);

@@ -27,9 +27,11 @@ function normalizarDataTreinamento($valor)
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $id_cliente = $_POST['id_cliente'];
-    $id_treinamento = $_POST['id_treinamento'] ?? null;
-    $id_contato = $_POST['id_contato'] ?? null;
+    // Aplicando cast para int para segurança e tipagem
+    $id_cliente = (int)$_POST['id_cliente'];
+    $id_treinamento = isset($_POST['id_treinamento']) && !empty($_POST['id_treinamento']) ? (int)$_POST['id_treinamento'] : null;
+    $id_contato = isset($_POST['id_contato']) && !empty($_POST['id_contato']) ? (int)$_POST['id_contato'] : null;
+    
     $tema = $_POST['tema'];
     $data_treinamento = normalizarDataTreinamento($_POST['data_treinamento'] ?? '');
     $status = $_POST['status'] ?? 'PENDENTE';

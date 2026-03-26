@@ -72,15 +72,29 @@ if ($tokenData) {
         : 'desconhecido';
 
     if ($hasRefresh && $isExpired) {
-        $newToken = $client->fetchAccessTokenWithRefreshToken($tokenData['refresh_token']);
-        if (!isset($newToken['error'])) {
-            googlePersistToken($client);
-            $tokenValid = true;
-            $tokenInfo  = "✅ Token renovado automaticamente!<br>Criado em: <strong>$created</strong> | Refresh expira: <strong>$refreshExpAt</strong>";
-        } else {
-            $tokenInfo = "⚠️ Refresh token inválido ou revogado. É necessário reautorizar.<br>"
-                       . "Criado em: <strong>$created</strong> | Expiração prevista: <strong>$refreshExpAt</strong><br>"
-                       . "Erro: " . htmlspecialchars($newToken['error_description'] ?? $newToken['error']);
+        try {
+            $newToken = $client->fetchAccessTokenWithRefreshToken($tokenData['refresh_token']);
+            if (isset($newToken['error'])) {
+                if (googleIsInvalidGrantError($newToken['error'])) {
+                    googleForgetToken();
+                    $tokenInfo = "⚠️ O acesso ao Google foi revogado ou o token é inválido. O arquivo de token antigo foi removido para sua segurança. Por favor, autorize novamente.";
+                } else {
+                    $tokenInfo = "⚠️ Erro ao renovar token: " . htmlspecialchars($newToken['error_description'] ?? $newToken['error']);
+                }
+                $tokenValid = false;
+            } else {
+                googlePersistToken($client);
+                $tokenValid = true;
+                $tokenInfo  = "✅ Token renovado automaticamente!<br>Criado em: <strong>$created</strong> | Refresh expira: <strong>$refreshExpAt</strong>";
+            }
+        } catch (Throwable $e) {
+            if (googleIsInvalidGrantError($e)) {
+                googleForgetToken();
+                $tokenInfo = "⚠️ Falha crítica: O token do Google Agenda foi revogado ou expirou.<br><strong>O arquivo foi limpo. Por favor, clique em Autorizar abaixo.</strong>";
+            } else {
+                $tokenInfo = "⚠️ Erro técnico ao tentar renovar: " . htmlspecialchars($e->getMessage());
+            }
+            $tokenValid = false;
         }
     } elseif (!$isExpired) {
         $tokenValid = true;

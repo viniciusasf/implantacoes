@@ -722,7 +722,7 @@ if (isset($_GET['exportar_xls'])) {
 
 // Lógica para Deletar
 if (isset($_GET['delete'])) {
-    $id = $_GET['delete'];
+    $id = (int)$_GET['delete'];
     $stmt = $pdo->prepare("DELETE FROM treinamentos WHERE id_treinamento = ?");
     $stmt->execute([$id]);
     header("Location: treinamentos.php?msg=Removido com sucesso");
@@ -2275,23 +2275,20 @@ include 'header.php';
             clienteSelect.options[clienteSelect.selectedIndex].text : '';
 
         const linhas = [];
+        const diasComSlot = diasDisponiveis.filter(dia => Array.isArray(dia.horarios) && dia.horarios.length > 0);
+
         linhas.push('Olá' + (clienteNome ? ' ' + clienteNome : '') + '! Tudo bem? 👍');
         linhas.push('');
-        linhas.push('Para agendarmos nosso treinamento, veja os horários que tenho disponíveis:');
-        linhas.push('');
-
-        if (!Array.isArray(diasDisponiveis) || diasDisponiveis.length === 0) {
-            linhas.push('Putz, não encontrei horários livres para os próximos dias. 😕');
+        
+        if (diasComSlot.length === 0) {
+            linhas.push('Para agendarmos nosso treinamento, no momento não tenho horários livres para os próximos dias, mas podemos combinar um horário específico se preferir. 😕');
         } else {
-            diasDisponiveis.forEach((dia) => {
+            linhas.push('Para agendarmos nosso treinamento, veja os horários que tenho disponíveis:');
+            linhas.push('');
+            diasComSlot.forEach((dia) => {
                 const dataLabel = dia.data_label || dia.data || 'Dia';
-                const horarios = Array.isArray(dia.horarios) ? dia.horarios : [];
-                if (horarios.length > 0) {
-                    const horas = horarios.map((slot) => slot.hora).filter(Boolean);
-                    linhas.push('*' + dataLabel + '*: ' + horas.join(', '));
-                } else {
-                    linhas.push('*' + dataLabel + '*: Sem horários disponíveis');
-                }
+                const horas = dia.horarios.map((slot) => slot.hora).filter(Boolean);
+                linhas.push('*' + dataLabel + '*: ' + horas.join(', '));
             });
         }
 

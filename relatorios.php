@@ -161,7 +161,7 @@ if (isset($_GET['exportar_xls'])) {
 
     echo "\xEF\xBB\xBF";
     echo "<table border='1'>";
-    echo "<tr><th>ID</th><th>Data</th><th>Cliente</th><th>Vendedor</th><th>Servidor</th><th>Contato</th><th>Tema</th><th>Status</th><th>Observações</th></tr>";
+    echo "<tr><th>ID</th><th>Data</th><th>Cliente</th><th>Vendedor</th><th>Servidor</th><th>Contato</th><th>Tema</th><th>Status</th><th>Observação</th></tr>";
 
     foreach ($treinamentos as $t) {
         echo "<tr>";
@@ -191,7 +191,7 @@ if (isset($_GET['exportar_csv'])) {
 
     echo "\xEF\xBB\xBF";
     $output = fopen('php://output', 'w');
-    fputcsv($output, ['ID', 'Data', 'Cliente', 'Vendedor', 'Servidor', 'Contato', 'Tema', 'Status', 'Observações'], ';');
+    fputcsv($output, ['ID', 'Data', 'Cliente', 'Vendedor', 'Servidor', 'Contato', 'Tema', 'Status', 'Observação'], ';');
 
     foreach ($treinamentos as $t) {
         fputcsv($output, [
@@ -672,6 +672,7 @@ include 'header.php';
                         <th>Contato</th>
                         <th>Tema</th>
                         <th>Status</th>
+                        <th>Observação</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -703,6 +704,7 @@ include 'header.php';
                                 <td><?= htmlspecialchars($t['contato_nome'] ?? '—') ?></td>
                                 <td class="text-truncate" style="max-width: 200px;" title="<?= htmlspecialchars($t['tema'] ?? '') ?>"><?= htmlspecialchars($t['tema'] ?? '—') ?></td>
                                 <td><span class="status-pill <?= $status_class ?>"><?= htmlspecialchars($t['status'] ?? '—') ?></span></td>
+                                <td class="text-truncate" style="max-width: 250px;" title="<?= htmlspecialchars($t['observacoes'] ?? '') ?>"><?= htmlspecialchars($t['observacoes'] ?? '—') ?></td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>

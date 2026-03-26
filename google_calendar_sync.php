@@ -122,9 +122,11 @@ try {
         if ($refreshToken) {
             $newToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
             if (isset($newToken['error'])) {
+                if (googleIsInvalidGrantError($newToken['error'])) {
+                    googleForgetToken();
+                }
                 // Refresh token inválido ou revogado — apaga o token e pede re-autenticação
-                googleForgetToken();
-                die(json_encode(['success' => false, 'auth_url' => $client->createAuthUrl(), 'message' => 'Token expirado ou revogado. Por favor, reautorize o acesso ao Google Agenda.']));
+                die(json_encode(['success' => false, 'auth_url' => $client->createAuthUrl(), 'message' => 'Token expirado ou revogado no Google. Por favor, reautorize o acesso ao Google Agenda pelo link: ' . $client->createAuthUrl()]));
             }
             googlePersistToken($client);
         } else {
