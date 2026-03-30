@@ -1067,7 +1067,7 @@ $offset = ($pagina - 1) * $por_pagina;
 
 // Query principal com contagem para paginação
 $sql_base = "
-    SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas
+    SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim
     FROM treinamentos t
     LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
     LEFT JOIN contatos co ON t.id_contato = co.id_contato
@@ -1179,6 +1179,19 @@ include 'header.php';
 [data-theme="dark"] .badge-license-2 { background: rgba(111, 66, 193, 0.2); color: #a389f4; border-color: rgba(111, 66, 193, 0.35); }
 .badge-license-3 { background: rgba(16, 185, 129, 0.1); color: #10b981; border-color: rgba(16, 185, 129, 0.2); }
 [data-theme="dark"] .badge-license-3 { background: rgba(16, 185, 129, 0.2); color: #34d399; border-color: rgba(16, 185, 129, 0.35); }
+
+/* Client Status Badges */
+.client-badge-soft {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 0.35rem 0.75rem;
+    border-radius: 50px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
 
 /* Page Header - Simplificado */
 .modern-header {
@@ -1329,6 +1342,7 @@ include 'header.php';
                             </a>
                         </th>
                         <th>Cliente</th>
+                        <th>STATUS</th>
                         <th>Servidor</th>
                         <th>Contato</th>
                         <th>Tema</th>
@@ -1399,6 +1413,33 @@ include 'header.php';
                                             </span>
                                         <?php endif; ?>
                                     </div>
+                                </td>
+                                <td>
+                                    <?php
+                                        // Cálculo do Status do Cliente (semelhante ao clientes.php)
+                                        $data_inicio_cl = !empty($t['data_inicio']) ? $t['data_inicio'] : date('Y-m-d');
+                                        $d_cl = (new DateTime($data_inicio_cl))->diff(new DateTime())->days;
+                                        $cl_encerrado = (!empty($t['data_fim']) && $t['data_fim'] !== '0000-00-00');
+                                        
+                                        $st_config = [
+                                            'integracao' => ['label' => 'Integração', 'class' => 'bg-info bg-opacity-10 text-info', 'icon' => 'bi-rocket-takeoff'],
+                                            'operacional' => ['label' => 'Operacional', 'class' => 'bg-primary bg-opacity-10 text-primary', 'icon' => 'bi-gear'],
+                                            'finalizacao' => ['label' => 'Finalização', 'class' => 'bg-success bg-opacity-10 text-success', 'icon' => 'bi-flag'],
+                                            'critico' => ['label' => 'Atenção', 'class' => 'bg-danger bg-opacity-10 text-danger', 'icon' => 'bi-exclamation-triangle'],
+                                            'encerrado' => ['label' => 'Encerrado', 'class' => 'bg-secondary bg-opacity-10 text-secondary', 'icon' => 'bi-archive']
+                                        ];
+
+                                        $curr_st = 'integracao';
+                                        if ($cl_encerrado) $curr_st = 'encerrado';
+                                        elseif ($d_cl > 60) $curr_st = 'critico';
+                                        elseif ($d_cl > 30) $curr_st = 'finalizacao';
+                                        elseif ($d_cl > 15) $curr_st = 'operacional';
+                                        
+                                        $c_st = $st_config[$curr_st] ?? $st_config['integracao'];
+                                    ?>
+                                    <span class="client-badge-soft <?= $c_st['class'] ?>" style="font-size: 0.72rem; padding: 0.25rem 0.65rem; border-radius: 50px; font-weight: 800; text-transform: uppercase;">
+                                        <i class="bi <?= $c_st['icon'] ?> me-1"></i> <?= $c_st['label'] ?>
+                                    </span>
                                 </td>
                                 <td class="fw-bold">
                                     <div class=""><?= htmlspecialchars($t['servidor'] ?: '---') ?></div>
@@ -1536,7 +1577,7 @@ include 'header.php';
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="6" class="text-center py-5">
+                            <td colspan="9" class="text-center py-5">
                                 <div class="mb-3">
                                     <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
                                 </div>
