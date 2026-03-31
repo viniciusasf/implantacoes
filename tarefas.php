@@ -286,6 +286,12 @@ include 'header.php';
     border: 1px solid rgba(13, 110, 253, 0.2) !important;
 }
 
+.bg-secondary-subtle {
+    background-color: rgba(249, 115, 22, 0.1) !important;
+    color: #f97316 !important;
+    border: 1px solid rgba(249, 115, 22, 0.2) !important;
+}
+
 /* Cards estatísticos */
 .stat-card {
     transition: transform 0.3s, box-shadow 0.3s;
@@ -972,10 +978,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const dataEntregaInput = document.getElementById('data_entrega');
     if (dataEntregaInput && !dataEntregaInput.value) {
         const now = new Date();
-        // Adicionar 7 dias como padrão
-        now.setDate(now.getDate() + 7);
-        // Format para datetime-local
-        dataEntregaInput.value = now.toISOString().slice(0, 16);
+        now.setDate(now.getDate() + 2);
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        dataEntregaInput.value = `${year}-${month}-${day}T11:00`;
     }
 });
 
@@ -1019,10 +1026,13 @@ document.getElementById('modalTarefa').addEventListener('hidden.bs.modal', funct
     document.getElementById('prioridade').value = 'Média';
     document.getElementById('status').value = 'Pendente';
     
-    // Resetar data para 7 dias à frente
+    // Resetar data para 2 dias à frente às 11:00
     const now = new Date();
-    now.setDate(now.getDate() + 7);
-    document.getElementById('data_entrega').value = now.toISOString().slice(0, 16);
+    now.setDate(now.getDate() + 2);
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    document.getElementById('data_entrega').value = `${year}-${month}-${day}T11:00`;
 });
 
 // Auto-focus no campo de busca

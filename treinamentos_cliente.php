@@ -49,31 +49,83 @@ try {
 }
 
 // 3. Busca todos os treinamentos
-$stmt = $pdo->prepare("SELECT * FROM treinamentos WHERE id_cliente = ? ORDER BY data_treinamento DESC, id_treinamento DESC");
+$stmt = $pdo->prepare("SELECT * FROM treinamentos WHERE id_cliente = ? ORDER BY data_treinamento DESC");
 $stmt->execute([$id_cliente]);
 $treinamentos = $stmt->fetchAll();
 
+// 4. Busca observações do cliente
+$stmtObs = $pdo->prepare("SELECT * FROM observacoes_cliente WHERE id_cliente = ? ORDER BY data_observacao DESC");
+$stmtObs->execute([$id_cliente]);
+$observacoes = $stmtObs->fetchAll();
 
+// 5. Busca tarefas do cliente
+$stmtTarefas = $pdo->prepare("SELECT * FROM tarefas WHERE id_cliente = ? ORDER BY COALESCE(data_entrega, '2099-12-31') DESC");
+$stmtTarefas->execute([$id_cliente]);
+$tarefas = $stmtTarefas->fetchAll();
 
-// 5. Estatísticas
+// 6. Unificar tudo em uma Timeline (Visão 360°)
+$timeline = [];
+
+foreach ($treinamentos as $t) {
+    $timeline[] = [
+        'data' => $t['data_treinamento'],
+        'tipo' => 'treinamento',
+        'titulo' => $t['tema'],
+        'status' => $t['status'],
+        'conteudo' => $t['observacoes'],
+        'original' => $t,
+        'icone' => 'bi-journal-check',
+        'cor' => '#4361ee'
+    ];
+}
+
+foreach ($observacoes as $o) {
+    $timeline[] = [
+        'data' => $o['data_observacao'],
+        'tipo' => 'observacao',
+        'titulo' => $o['titulo'],
+        'status' => $o['tipo'],
+        'conteudo' => $o['conteudo'],
+        'original' => $o,
+        'icone' => 'bi-chat-left-text',
+        'cor' => '#7209b7'
+    ];
+}
+
+foreach ($tarefas as $ta) {
+    $timeline[] = [
+        'data' => $ta['data_entrega'] ?: $ta['data_criacao'] ?? date('Y-m-d H:i:s'), // Fallback if no creation date
+        'tipo' => 'tarefa',
+        'titulo' => $ta['titulo'],
+        'status' => $ta['status'],
+        'conteudo' => $ta['descricao'],
+        'original' => $ta,
+        'icone' => 'bi-clipboard-check',
+        'cor' => '#f59e0b'
+    ];
+}
+
+// Ordenar timeline por data DESC
+usort($timeline, function($a, $b) {
+    return strtotime($b['data']) - strtotime($a['data']);
+});
+
+// 7. Estatísticas
 $total_treinamentos = count($treinamentos);
 $treinamentos_realizados = 0;
 $treinamentos_pendentes = 0;
 $ultimo_treinamento = null;
-$primeiro_treinamento = null;
 
 if ($total_treinamentos > 0) {
     foreach ($treinamentos as $t) {
-        $status = strtoupper($t['status'] ?? '');
-        if ($status == 'REALIZADO' || $status == 'RESOLVIDO') {
+        $st = strtoupper($t['status'] ?? '');
+        if ($st == 'REALIZADO' || $st == 'RESOLVIDO') {
             $treinamentos_realizados++;
-        } elseif ($status == 'PENDENTE') {
+        } elseif ($st == 'PENDENTE') {
             $treinamentos_pendentes++;
         }
     }
-
     $ultimo_treinamento = $treinamentos[0]['data_treinamento'] ?? null;
-    $primeiro_treinamento = end($treinamentos)['data_treinamento'] ?? null;
 }
 
 include 'header.php';
@@ -178,6 +230,19 @@ body {
     font-size: 1.75rem;
     margin: 0 auto 1.5rem auto;
 }
+
+/* Timeline Type Badges */
+.badge-type {
+    font-size: 0.6rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    margin-right: 8px;
+}
+.badge-treinamento { background: rgba(67, 97, 238, 0.1); color: #4361ee; }
+.badge-observacao { background: rgba(114, 9, 183, 0.1); color: #7209b7; }
+.badge-tarefa { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
 
 /* Timeline Customization */
 .timeline-container {
@@ -377,78 +442,106 @@ body {
             <h4 class="fw-800 mb-0">Jornada do Cliente</h4>
         </div>
 
-        <?php if ($total_treinamentos > 0): ?>
+        <?php if (!empty($timeline)): ?>
             <div class="timeline-container">
                 <div class="timeline-line"></div>
 
-                <?php foreach ($treinamentos as $index => $t):
-                    $status = strtoupper($t['status'] ?? 'PENDENTE');
-                    $isResolved = ($status == 'REALIZADO' || $status == 'RESOLVIDO');
-                    $status_color = $isResolved ? '#10b981' : ($status == 'PENDENTE' ? '#f59e0b' : ($status == 'CANCELADO' ? '#ef4444' : '#3b82f6'));
-                    $status_text = $isResolved ? 'Realizado' : ( ($status == 'PENDENTE') ? 'Pendente' : (($status == 'CANCELADO') ? 'Cancelado' : 'Agendado'));
-
-                    $data_t = ($t['data_treinamento'] ?? null) ? strtotime($t['data_treinamento']) : 0;
-                    $data_br = $data_t ? date('d/m/Y', $data_t) : '---';
-                    $data_full = $data_t ? date('d/m/Y H:i', $data_t) : '---';
+                <?php foreach ($timeline as $index => $item):
+                    $data_t = strtotime($item['data']);
+                    $data_br = date('d/m/Y', $data_t);
+                    $data_full = date('d/m/Y H:i', $data_t);
+                    
+                    $tipo = $item['tipo'];
+                    $status = strtoupper($item['status'] ?? 'PENDENTE');
+                    $cor = $item['cor'];
+                    
+                    // Lógica de cores baseada no tipo e status
+                    $item_cor = $cor;
+                    if ($tipo == 'treinamento') {
+                        $isResolved = ($status == 'REALIZADO' || $status == 'RESOLVIDO');
+                        $item_cor = $isResolved ? '#10b981' : ($status == 'PENDENTE' ? '#f59e0b' : ($status == 'CANCELADO' ? '#ef4444' : '#3b82f6'));
+                    } elseif ($tipo == 'tarefa') {
+                        $item_cor = ($status == 'CONCLUÍDA') ? '#10b981' : '#f59e0b';
+                    }
                 ?>
                     <div class="timeline-item">
-                        <div class="timeline-dot" style="border-color: <?= $status_color ?>;"></div>
+                        <div class="timeline-dot" style="border-color: <?= $item_cor ?>;"></div>
                         <div class="timeline-card-premium">
                             <div class="timeline-header-premium">
                                 <div class="d-flex align-items-center gap-3">
                                     <div class="fw-800 text-main fs-5"><?= $data_br ?></div>
-                                    <span class="badge" style="background: <?= $status_color ?>15; color: <?= $status_color ?>; border: 1px solid <?= $status_color ?>30; font-size: 0.65rem; padding: 0.4rem 0.8rem;">
-                                        <?= strtoupper($status_text) ?>
+                                    <span class="badge-type badge-<?= $tipo ?>"><i class="bi <?= $item['icone'] ?> me-1"></i><?= $tipo ?></span>
+                                    <span class="badge" style="background: <?= $item_cor ?>15; color: <?= $item_cor ?>; border: 1px solid <?= $item_cor ?>30; font-size: 0.65rem; padding: 0.4rem 0.8rem;">
+                                        <?= strtoupper($item['status']) ?>
                                     </span>
                                 </div>
-                                <button class="btn btn-sm btn-outline-secondary border-0 edit-treinamento-btn px-3"
-                                    data-id="<?= $t['id_treinamento'] ?? '' ?>"
-                                    data-data_treinamento="<?= $t['data_treinamento'] ?? '' ?>"
-                                    data-tema="<?= htmlspecialchars($t['tema'] ?? '') ?>"
-                                    data-status="<?= $t['status'] ?? '' ?>"
-                                    data-id_contato="<?= $t['id_contato'] ?? '' ?>"
-                                    data-google_event_link="<?= htmlspecialchars($t['google_event_link'] ?? '') ?>"
-                                    data-observacoes="<?= htmlspecialchars($t['observacoes'] ?? '') ?>"
-                                    style="background: rgba(255,255,255,0.03);">
-                                    <i class="bi bi-pencil-square me-1"></i> Ajustar
-                                </button>
-                            </div>
-                            <div class="timeline-body p-4">
-                                <h5 class="fw-800 mb-3 d-flex align-items-center gap-2">
-                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: <?= $status_color ?>;"></div>
-                                    <?= htmlspecialchars($t['tema']) ?>
-                                </h5>
                                 
-                                <?php if (!empty($t['observacoes'])): ?>
-                                    <div class="observation-box-timeline">
-                                        <?= nl2br(htmlspecialchars($t['observacoes'])) ?>
-                                    </div>
-                                <?php endif; ?>
-
-                                <div class="d-flex flex-wrap gap-4 mt-3">
-                                    <?php 
-                                        $nome_contato = '';
-                                        if(!empty($t['id_contato'])) {
-                                            foreach($contatos as $cx) {
-                                                if(($cx['id_contato'] ?? null) == $t['id_contato']) {
-                                                    $nome_contato = $cx['nome'] ?? '---';
-                                                }
-                                            }
-                                        }
-                                        if($nome_contato): 
-                                    ?>
-                                        <div class="small text-muted"><i class="bi bi-person me-1"></i> <span class="fw-bold">Interlocutor:</span> <?= htmlspecialchars($nome_contato) ?></div>
-                                    <?php endif; ?>
-                                    
-                                    <?php if (!empty($t['google_event_link'])): ?>
-                                        <a href="<?= htmlspecialchars($t['google_event_link']) ?>" target="_blank" class="small text-decoration-none text-primary fw-bold">
-                                            <i class="bi bi-calendar2-event me-1"></i> Abrir na Agenda
+                                <div class="d-flex gap-2">
+                                    <?php if ($tipo == 'treinamento'): ?>
+                                        <button class="btn btn-sm btn-outline-secondary border-0 edit-treinamento-btn px-3"
+                                            data-id="<?= $item['original']['id_treinamento'] ?>"
+                                            data-data_treinamento="<?= $item['original']['data_treinamento'] ?>"
+                                            data-tema="<?= htmlspecialchars($item['original']['tema']) ?>"
+                                            data-status="<?= $item['original']['status'] ?>"
+                                            data-id_contato="<?= $item['original']['id_contato'] ?>"
+                                            data-google_event_link="<?= htmlspecialchars($item['original']['google_event_link']) ?>"
+                                            data-observacoes="<?= htmlspecialchars($item['original']['observacoes']) ?>"
+                                            style="background: rgba(255,255,255,0.03);">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                    <?php elseif ($tipo == 'tarefa'): ?>
+                                        <a href="tarefas.php?filtro_cliente=<?= urlencode($cliente['fantasia']) ?>" class="btn btn-sm btn-outline-secondary border-0 px-3" style="background: rgba(255,255,255,0.03);">
+                                            <i class="bi bi-eye"></i>
                                         </a>
                                     <?php endif; ?>
                                 </div>
                             </div>
+                            <div class="timeline-body p-4">
+                                <h5 class="fw-800 mb-3 d-flex align-items-center gap-2">
+                                    <i class="bi <?= $item['icone'] ?>" style="color: <?= $item_cor ?>;"></i>
+                                    <?= htmlspecialchars($item['titulo']) ?>
+                                </h5>
+                                
+                                <?php if (!empty($item['conteudo'])): ?>
+                                    <div class="observation-box-timeline">
+                                        <?= nl2br(htmlspecialchars($item['conteudo'])) ?>
+                                    </div>
+                                <?php endif; ?>
+
+                                <div class="d-flex flex-wrap gap-4 mt-3">
+                                    <?php if ($tipo == 'treinamento'): ?>
+                                        <?php 
+                                            $nome_contato = '';
+                                            if(!empty($item['original']['id_contato'])) {
+                                                foreach($contatos as $cx) {
+                                                    if($cx['id_contato'] == $item['original']['id_contato']) {
+                                                        $nome_contato = $cx['nome'];
+                                                    }
+                                                }
+                                            }
+                                            if($nome_contato): 
+                                        ?>
+                                            <div class="small text-muted"><i class="bi bi-person me-1"></i> <span class="fw-bold">Interlocutor:</span> <?= htmlspecialchars($nome_contato) ?></div>
+                                        <?php endif; ?>
+                                        
+                                        <?php if (!empty($item['original']['google_event_link'])): ?>
+                                            <a href="<?= htmlspecialchars($item['original']['google_event_link']) ?>" target="_blank" class="small text-decoration-none text-primary fw-bold">
+                                                <i class="bi bi-calendar2-event me-1"></i> Abrir na Agenda
+                                            </a>
+                                        <?php endif; ?>
+                                    <?php elseif ($tipo == 'tarefa'): ?>
+                                        <div class="small text-muted"><i class="bi bi-person-badge me-1"></i> <span class="fw-bold">Responsável:</span> <?= htmlspecialchars($item['original']['responsavel']) ?></div>
+                                        <div class="small text-muted"><i class="bi bi-flag me-1"></i> <span class="fw-bold">Prioridade:</span> <?= htmlspecialchars($item['original']['prioridade']) ?></div>
+                                    <?php elseif ($tipo == 'observacao'): ?>
+                                        <div class="small text-muted"><i class="bi bi-person-check me-1"></i> <span class="fw-bold">Registrado por:</span> <?= htmlspecialchars($item['original']['registrado_por']) ?></div>
+                                        <?php if(!empty($item['original']['tags'])): ?>
+                                            <div class="small text-muted"><i class="bi bi-tags me-1"></i> <span class="fw-bold">Tags:</span> <?= htmlspecialchars($item['original']['tags']) ?></div>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
                             <div class="timeline-footer-premium d-flex justify-content-between">
-                                <span>REGISTRO PROTOCOLO #<?= $t['id_treinamento'] ?></span>
+                                <span><?= strtoupper($tipo) ?> PROCESSO #<?= $item['original']['id_treinamento'] ?? $item['original']['id_tarefa'] ?? $item['original']['id_observacao'] ?></span>
                                 <span><i class="bi bi-clock me-1"></i> <?= $data_full ?></span>
                             </div>
                         </div>

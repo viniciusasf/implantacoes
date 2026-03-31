@@ -1725,7 +1725,7 @@ include 'header.php';
         /* Eventos - Design Técnico e Preciso */
         .fc-event {
             border: none;
-            border-radius: 2px !important; /* Bordas nítidas para visual premium/técnico */
+            border-radius: 2px !important;
             padding: 0 !important;
             font-size: 0.75rem; 
             font-family: var(--font-body); 
@@ -1733,10 +1733,15 @@ include 'header.php';
             cursor: pointer; 
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             margin: 2px;
-            border-left: 4px solid rgba(255,255,255,0.3) !important; /* Indicador lateral de status */
-            min-height: 60px !important; /* Garante espaço para Horário, Cliente, Contato e Telefone */
+            border-left: 4px solid rgba(255,255,255,0.3) !important;
             overflow: visible !important;
         }
+        /* Min-height apenas para timeGrid (Semana/Dia) */
+        .fc-timegrid-event .fc-event-main { min-height: 60px; }
+        /* View Mensal: eventos compactos e horizontais */
+        .fc-daygrid-event { min-height: auto !important; border-radius: 4px !important; margin: 1px 2px !important; }
+        .fc-daygrid-event .fc-event-main { padding: 2px 6px !important; }
+        .fc-daygrid-dot-event { padding: 2px 4px !important; }
         .fc-v-event { border: none !important; }
         .fc-timegrid-event { margin-bottom: 2px !important; }
         .fc-event:hover { 
@@ -1871,6 +1876,7 @@ include 'header.php';
                         let client = arg.event.extendedProps.cliente || '';
                         let contact = arg.event.extendedProps.contato || '';
                         let phone = arg.event.extendedProps.telefone || '';
+                        let viewType = arg.view.type;
                         
                         // Formatação manual do horário (ex: 08:30)
                         let startTime = "";
@@ -1880,20 +1886,33 @@ include 'header.php';
                             startTime = h + ":" + m;
                         }
                         
-                        let html = `
-                            <div class="fc-event-main-frame d-flex flex-column" style="padding: 4px 6px; line-height: 1.2; height: 100%; border-radius: 2px;">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <div class="fw-900" style="font-size: 0.7rem; color: #fff;">${startTime}</div>
-                                    ${phone ? `<div style="font-size: 0.65rem; color: #fff; background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 10px; font-weight: 700;"><i class="bi bi-telephone"></i> ${phone}</div>` : ''}
+                        let html = '';
+                        
+                        // Layout COMPACTO para view Mensal (dayGridMonth)
+                        if (viewType === 'dayGridMonth') {
+                            html = `
+                                <div style="padding: 2px 4px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background-color: var(--primary); border-radius: 3px;">
+                                    <span class="fw-bold" style="font-size: 0.65rem; color: #fff;">${startTime}</span>
+                                    <span class="fw-bold" style="font-size: 0.7rem; color: #fff; margin-left: 4px;">${client.toUpperCase()}</span>
                                 </div>
-                                <div class="fc-event-title-container">
-                                    <div class="fw-800 text-truncate" style="font-size: 0.75rem; color: #fff; margin-bottom: 2px;">${client.toUpperCase()}</div>
-                                    <div class="d-flex align-items-center gap-1" style="font-size: 0.65rem; color: rgba(255,255,255,0.9); white-space: nowrap; overflow: hidden;">
-                                        <i class="bi bi-person-fill"></i> ${contact}
+                            `;
+                        } else {
+                            // Layout DETALHADO para Semana/Dia (timeGridWeek / timeGridDay)
+                            html = `
+                                <div class="fc-event-main-frame d-flex flex-column" style="padding: 4px 6px; line-height: 1.2; height: 100%; border-radius: 2px;">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <div class="fw-900" style="font-size: 0.7rem; color: #fff;">${startTime}</div>
+                                        ${phone ? `<div style="font-size: 0.65rem; color: #fff; background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 10px; font-weight: 700;"><i class="bi bi-telephone"></i> ${phone}</div>` : ''}
+                                    </div>
+                                    <div class="fc-event-title-container">
+                                        <div class="fw-800 text-truncate" style="font-size: 0.75rem; color: #fff; margin-bottom: 2px;">${client.toUpperCase()}</div>
+                                        <div class="d-flex align-items-center gap-1" style="font-size: 0.65rem; color: rgba(255,255,255,0.9); white-space: nowrap; overflow: hidden;">
+                                            <i class="bi bi-person-fill"></i> ${contact}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        `;
+                            `;
+                        }
                         return { html: html };
                     },
                     eventClick: function(info) {
