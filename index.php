@@ -93,6 +93,9 @@ $sql_media_historica = "SELECT AVG(total_mensal) as media
                             WHERE status IN ('REALIZADO', 'RESOLVIDO') 
                             AND data_treinamento IS NOT NULL 
                             AND data_treinamento > '2000-01-01'
+                            AND (YEAR(data_treinamento) < YEAR(CURDATE()) 
+                                 OR (YEAR(data_treinamento) = YEAR(CURDATE()) 
+                                     AND MONTH(data_treinamento) < MONTH(CURDATE())))
                             GROUP BY YEAR(data_treinamento), MONTH(data_treinamento)
                         ) as historico";
 
@@ -268,6 +271,9 @@ body {
             <p class="text-muted small mb-0"><i class="bi bi-clock-history me-1"></i> Dados atualizados em tempo real: <?= date('d/m/Y H:i') ?></p>
         </div>
         <div class="d-flex gap-3">
+            <a href="funil_implantacao.php" class="btn btn-outline-primary rounded-4 px-4 py-2 fw-bold shadow-sm">
+                <i class="bi bi-funnel-fill me-2"></i> Funil de Implantação
+            </a>
             <button class="btn btn-dark border-secondary rounded-4 px-4 py-2 fw-bold" onclick="window.print()">
                 <i class="bi bi-printer me-2"></i> Relatório
             </button>

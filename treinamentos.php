@@ -1061,13 +1061,13 @@ $ordenacao = in_array($ordenacao, $colunas_permitidas) ? $ordenacao : 'data_trei
 $direcao = $direcao === 'desc' ? 'desc' : 'asc';
 
 // Paginação
-$por_pagina = 8;
+$por_pagina = 20;
 $pagina = isset($_GET['pagina']) ? max(1, intval($_GET['pagina'])) : 1;
 $offset = ($pagina - 1) * $por_pagina;
 
 // Query principal com contagem para paginação
 $sql_base = "
-    SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim
+    SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim, c.recursos
     FROM treinamentos t
     LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
     LEFT JOIN contatos co ON t.id_contato = co.id_contato
@@ -1322,8 +1322,8 @@ include 'header.php';
                 <div class="dropdown">
                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Ordenar</button>
                     <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                        <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=data_treinamento&direcao=asc"><i class="bi bi-calendar3 me-2"></i>Data</a></li>
-                        <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=cliente_nome&direcao=asc"><i class="bi bi-building me-2"></i>Cliente</a></li>
+                        <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=data_treinamento&direcao=asc<?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>"><i class="bi bi-calendar3 me-2"></i>Data</a></li>
+                        <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=cliente_nome&direcao=asc<?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>"><i class="bi bi-building me-2"></i>Cliente</a></li>
                     </ul>
                 </div>
             </div>
@@ -1333,7 +1333,7 @@ include 'header.php';
                 <thead>
                     <tr>
                         <th class="ps-4">
-                            <a href="treinamentos.php?ordenacao=data_treinamento&direcao=<?= ($ordenacao == 'data_treinamento' && $direcao == 'asc') ? 'desc' : 'asc' ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>"
+                            <a href="treinamentos.php?ordenacao=data_treinamento&direcao=<?= ($ordenacao == 'data_treinamento' && $direcao == 'asc') ? 'desc' : 'asc' ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?><?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>"
                                 class="text-decoration-none d-flex align-items-center">
                                 <span>Data Agendada</span>
                                 <?php if ($ordenacao == 'data_treinamento'): ?>
@@ -1347,7 +1347,7 @@ include 'header.php';
                         <th>Contato</th>
                         <th>Tema</th>
                         <th>Vendedor</th>
-                        <th class="text-center">Convite</th>
+                        <th class="text-center">Recursos Utilizados</th>
                         <th class="text-end pe-4">Ações</th>
                     </tr>
                 </thead>
@@ -1453,14 +1453,22 @@ include 'header.php';
                                 <td class="fw-bold">
                                     <div class=" text-uppercase"><?= htmlspecialchars($t['vendedor'] ?? '---') ?></div>
                                 </td>
-                                <td class="text-center fw-bold">
+                                <td class="text-center">
                                     <?php 
                                         $id_tr = (int)$t['id_treinamento'];
-                                        $conv_status = $status_convites[$id_tr] ?? ['label' => 'Sem validacao', 'badge' => 'bg-warning text-dark'];
+                                        $recursos_cliente = trim((string)($t['recursos'] ?? ''));
+                                        if ($recursos_cliente !== ''):
+                                            $lista_recursos = explode(',', $recursos_cliente);
+                                            foreach($lista_recursos as $rec):
+                                                $rec = trim($rec);
                                     ?>
-                                    <div class="" style="font-size: 0.85rem;">
-                                        <?= htmlspecialchars($conv_status['label']) ?>
-                                    </div>
+                                        <span class="badge bg-light text-dark border d-block mb-1" style="font-size: 0.70rem;"><?= htmlspecialchars($rec) ?></span>
+                                    <?php 
+                                            endforeach;
+                                        else: 
+                                    ?>
+                                        <span class="text-muted small">---</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="text-end pe-4">
                                     <div class="d-flex justify-content-end gap-1 flex-wrap">
@@ -1611,7 +1619,7 @@ include 'header.php';
                     <ul class="pagination justify-content-center mb-0 gap-1">
                         <?php if ($pagina > 1): ?>
                             <li class="page-item">
-                                <a class="page-link rounded-3 border-0 bg-light" href="treinamentos.php?pagina=<?= $pagina - 1 ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>">
+                                <a class="page-link rounded-3 border-0 bg-light" href="treinamentos.php?pagina=<?= $pagina - 1 ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?><?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>">
                                     <i class="bi bi-chevron-left"></i>
                                 </a>
                             </li>
@@ -1624,7 +1632,7 @@ include 'header.php';
                         for ($i = $inicio; $i <= $fim; $i++):
                         ?>
                             <li class="page-item <?= ($i == $pagina) ? 'active' : '' ?>">
-                                <a class="page-link rounded-3 border-0 <?= ($i == $pagina) ? 'bg-primary text-white' : 'bg-light text-muted' ?>" href="treinamentos.php?pagina=<?= $i ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>">
+                                <a class="page-link rounded-3 border-0 <?= ($i == $pagina) ? 'bg-primary text-white' : 'bg-light text-muted' ?>" href="treinamentos.php?pagina=<?= $i ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?><?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>">
                                     <?= $i ?>
                                 </a>
                             </li>
@@ -1632,7 +1640,7 @@ include 'header.php';
 
                         <?php if ($pagina < $total_paginas): ?>
                             <li class="page-item">
-                                <a class="page-link rounded-3 border-0 bg-light" href="treinamentos.php?pagina=<?= $pagina + 1 ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>">
+                                <a class="page-link rounded-3 border-0 bg-light" href="treinamentos.php?pagina=<?= $pagina + 1 ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?><?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>">
                                     <i class="bi bi-chevron-right"></i>
                                 </a>
                             </li>

@@ -9,6 +9,11 @@ $estagio = isset($_GET['estagio']) ? $_GET['estagio'] : 'integracao';
 $busca = isset($_GET['busca']) ? trim($_GET['busca']) : '';
 $mostrar_encerrados = isset($_GET['mostrar_encerrados']) ? $_GET['mostrar_encerrados'] : '0';
 
+// Ao realizar uma busca, queremos procurar em TODOS os estágios simultaneamente
+if (!empty($busca)) {
+    $estagio = '';
+}
+
 function encerrarImplantacaoCliente(PDO $pdo, $idCliente, $cancelada = false)
 {
     $idCliente = (int)$idCliente;
@@ -106,13 +111,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // NOVOS CAMPOS
     $num_licencas = $_POST['num_licencas'] ?? 0;
     $anexo = $_POST['anexo'] ?? '';
+    
+    // CAMPO DE RECURSOS
+    $recursos_arr = $_POST['recursos'] ?? [];
+    $recursos = is_array($recursos_arr) ? implode(', ', $recursos_arr) : (string)$recursos_arr;
 
     if (isset($_POST['id_cliente']) && !empty($_POST['id_cliente'])) {
         // UPDATE com novos campos
         $stmt = $pdo->prepare("UPDATE clientes SET 
             fantasia=?, servidor=?, vendedor=?, telefone_ddd=?, 
             data_inicio=?, data_fim=?, observacao=?, 
-            emitir_nf=?, configurado=?, num_licencas=?, anexo=? 
+            emitir_nf=?, configurado=?, num_licencas=?, anexo=?, recursos=? 
             WHERE id_cliente=?");
         $stmt->execute([
             $fantasia,
@@ -126,6 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $configurado,
             $num_licencas,
             $anexo,
+            $recursos,
             $_POST['id_cliente']
         ]);
     } else {
@@ -133,8 +143,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("INSERT INTO clientes (
             fantasia, servidor, vendedor, telefone_ddd, 
             data_inicio, data_fim, observacao, 
-            emitir_nf, configurado, num_licencas, anexo
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            emitir_nf, configurado, num_licencas, anexo, recursos
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
             $fantasia,
             $servidor,
@@ -146,7 +156,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $emitir_nf,
             $configurado,
             $num_licencas,
-            $anexo
+            $anexo,
+            $recursos
         ]);
     }
     header("Location: clientes.php?msg=Dados+atualizados&view=" . $view_mode);
@@ -626,6 +637,7 @@ body, html {
                                     data-cfg="<?= $c['configurado'] ?>" 
                                     data-licencas="<?= $c['num_licencas'] ?>" 
                                     data-anexo="<?= $c['anexo'] ?>" 
+                                    data-recursos="<?= htmlspecialchars($c['recursos'] ?? '') ?>" 
                                     title="Editar" onclick="openEditModal(this)">
                                 <i class="bi bi-pencil"></i>
                             </button>
@@ -720,6 +732,7 @@ body, html {
                                                     data-cfg="<?= $c['configurado'] ?>" 
                                                     data-licencas="<?= $c['num_licencas'] ?>" 
                                                     data-anexo="<?= $c['anexo'] ?>" 
+                                                    data-recursos="<?= htmlspecialchars($c['recursos'] ?? '') ?>" 
                                                     onclick="openEditModal(this)">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
@@ -811,12 +824,30 @@ body, html {
                                         <option value="Sim">Sim</option>
                                     </select>
                                 </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-muted">Nº de Licenças</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-key text-primary"></i></span>
+                                        <input type="number" name="num_licencas" id="num_licencas" class="form-control border-start-0 ps-0" placeholder="0">
+                                    </div>
+                                </div>
                                 <div class="col-md-6" id="div_configurado" style="display: none;">
                                     <label class="form-label small fw-bold text-muted">Já Configurado?</label>
                                     <select name="configurado" id="configurado" class="form-select bg-warning bg-opacity-10 border-warning border-opacity-25">
                                         <option value="Não">Não</option>
                                         <option value="Sim">Sim</option>
                                     </select>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label small fw-bold text-muted">Google Drive / Anexo</label>
+                                    <div class="input-group mb-1">
+                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-link-45deg text-primary"></i></span>
+                                        <input type="text" name="anexo" id="anexo" class="form-control border-start-0 ps-0" placeholder="Link do Drive">
+                                        <button class="btn btn-primary" type="button" onclick="abrirAnexo()">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                        </button>
+                                    </div>
+                                    <small class="text-muted" style="font-size: 0.7rem;">Link do contrato ou documentos</small>
                                 </div>
                             </div>
                         </div>
@@ -826,23 +857,18 @@ body, html {
                             <h6 class="text-main fw-bold mb-3 d-flex align-items-center">
                                 <i class="bi bi-plus-circle me-2"></i> Extras
                             </h6>
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold text-muted">Nº de Licenças</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-key text-primary"></i></span>
-                                    <input type="number" name="num_licencas" id="num_licencas" class="form-control border-start-0 ps-0" placeholder="0">
-                                </div>
-                            </div>
                             <div class="mb-0">
-                                <label class="form-label small fw-bold text-muted">Google Drive / Anexo</label>
-                                <div class="input-group mb-1">
-                                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-link-45deg text-primary"></i></span>
-                                    <input type="text" name="anexo" id="anexo" class="form-control border-start-0 ps-0" placeholder="Link do Drive">
-                                    <button class="btn btn-primary" type="button" onclick="abrirAnexo()">
-                                        <i class="bi bi-box-arrow-up-right"></i>
-                                    </button>
+                                <label class="form-label small fw-bold text-muted">Recursos Utilizados</label>
+                                <div class="p-2 border rounded bg-white">
+                                    <?php 
+                                    $lista_recursos = ['ORÇAMENTO', 'CATÁLOGO', 'GESTAOWEB', 'SERVIÇO/OS', 'PRODUÇÃO/OS', 'PDV'];
+                                    foreach($lista_recursos as $rec): ?>
+                                    <div class="form-check mb-1">
+                                      <input class="form-check-input recurso-checkbox" type="checkbox" name="recursos[]" value="<?= $rec ?>" id="rec_<?= md5($rec) ?>">
+                                      <label class="form-check-label small" for="rec_<?= md5($rec) ?>"><?= $rec ?></label>
+                                    </div>
+                                    <?php endforeach; ?>
                                 </div>
-                                <small class="text-muted" style="font-size: 0.7rem;">Link do contrato ou documentos</small>
                             </div>
                         </div>
                     </div>
@@ -927,6 +953,17 @@ body, html {
         document.getElementById('configurado').value = d.cfg || 'Não';
         document.getElementById('num_licencas').value = d.licencas || 0;
         document.getElementById('anexo').value = d.anexo || '';
+        
+        // Limpar e preencher checkbox de recursos
+        document.querySelectorAll('.recurso-checkbox').forEach(cb => cb.checked = false);
+        if (d.recursos) {
+            const recursosArray = d.recursos.split(',').map(r => r.trim());
+            document.querySelectorAll('.recurso-checkbox').forEach(cb => {
+                if(recursosArray.includes(cb.value)) {
+                    cb.checked = true;
+                }
+            });
+        }
         
         toggleConfigurado(d.nf);
         

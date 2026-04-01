@@ -447,9 +447,38 @@ include 'header.php';
 
 /* Print Styles */
 @media print {
+    /* Layout */
     #sidebar, .filter-panel, .btn-export, .report-header .d-flex.gap-2 { display: none !important; }
+
     #content { margin-left: 0 !important; width: 100% !important; padding: 0 !important; }
-    .kpi-card, .chart-card, .report-table-container { break-inside: avoid; box-shadow: none !important; border: 1px solid #ddd !important; }
+    body { background: #fff !important; color: #000 !important; }
+
+    /* Corrige título cortado: desativa o gradiente clip que não renderiza em PDF */
+    .title-accent {
+        background: transparent !important;
+        -webkit-text-fill-color: initial !important;
+        color: #4361ee !important;
+    }
+
+    /* Cards e gráficos (não quebrar no meio) */
+    .kpi-card, .chart-card { break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; border: 1px solid #ddd !important; }
+    .report-table-container { box-shadow: none !important; border: 1px solid #ddd !important; }
+
+    /* Remove o scroll da tabela para mostrar TODOS os registros na impressão */
+    .table-scroll, .table-responsive {
+        max-height: none !important;
+        overflow: visible !important;
+        height: auto !important;
+    }
+
+    /* Garante que a tabela completa apareça sem quebra de coluna */
+    .report-table-container { break-inside: auto; }
+    .report-table { width: 100% !important; }
+    .report-table tr { break-inside: avoid; page-break-inside: avoid; }
+
+    /* Rodapé da tabela — ocultar botões de exportação */
+    .report-table-header .d-flex { display: none !important; }
+
     .gsap-reveal { opacity: 1 !important; transform: none !important; }
 }
 </style>

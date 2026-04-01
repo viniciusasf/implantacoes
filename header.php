@@ -456,12 +456,6 @@ try {
                         <i class="bi bi-pie-chart-fill"></i> <span>Dashboard</span>
                     </a>
                 </li>
-                
-                <li class="<?= $current_page == 'funil_implantacao.php' ? 'active' : '' ?>">
-                    <a href="funil_implantacao.php">
-                        <i class="bi bi-funnel-fill" style="color: var(--primary);"></i> <span>Funil de Implantação</span>
-                    </a>
-                </li>
 
                 <li class="<?= $current_page == 'relatorios.php' ? 'active' : '' ?>">
                     <a href="relatorios.php">

@@ -154,6 +154,11 @@ $authUrl = $client->createAuthUrl();
                onclick="return confirm('Tem certeza? O token atual será removido e você precisará reautorizar.')">
                 🗑️ Apagar token e reautorizar
             </a>
+
+            <hr>
+            <a href="index.php" class="btn btn-secondary w-100">
+                ← Voltar ao sistema
+            </a>
         </div>
         <div class="card-footer text-muted small">
             <strong>Arquivo do token:</strong> <?= htmlspecialchars($tokenPath) ?>
