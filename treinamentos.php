@@ -964,10 +964,51 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 // --- ENDPOINT PARA BUSCAR OBSERVAÇÕES VIA AJAX (GET) ---
 if (isset($_GET['get_observations']) && isset($_GET['id_cliente'])) {
     $id_c = (int)$_GET['id_cliente'];
+    
+    // Observações normais de CRM
     $stmtAjax = $pdo->prepare("SELECT * FROM observacoes_cliente WHERE id_cliente = ? ORDER BY data_observacao DESC");
     $stmtAjax->execute([$id_c]);
+    $obs_cliente = $stmtAjax->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Observações (relatório) de fechamento de treinamentos
+    $stmtTreinamentos = $pdo->prepare("SELECT id_treinamento, tema, observacoes, data_treinamento_encerrado, data_treinamento FROM treinamentos WHERE id_cliente = ? AND UPPER(status) = 'RESOLVIDO' AND observacoes IS NOT NULL AND TRIM(observacoes) != ''");
+    $stmtTreinamentos->execute([$id_c]);
+    $treinamentos_encerrados = $stmtTreinamentos->fetchAll(PDO::FETCH_ASSOC);
+
+    $todas_obs = [];
+    foreach($obs_cliente as $obs) {
+        $todas_obs[] = [
+            'id' => 'obs_' . $obs['id_observacao'],
+            'titulo' => $obs['titulo'],
+            'conteudo' => $obs['conteudo'],
+            'tipo' => $obs['tipo'],
+            'data_observacao' => $obs['data_observacao'],
+            'registrado_por' => $obs['registrado_por']
+        ];
+    }
+    
+    foreach($treinamentos_encerrados as $t) {
+        // Usa a data de encerramento se existir, senão a data original do treinamento
+        $data_obs = !empty($t['data_treinamento_encerrado']) ? $t['data_treinamento_encerrado'] : $t['data_treinamento'];
+        if (!$data_obs) $data_obs = date('Y-m-d H:i:s'); // fallback de segurança
+        
+        $todas_obs[] = [
+            'id' => 'trein_' . $t['id_treinamento'],
+            'titulo' => 'Treinamento Encerrado: ' . $t['tema'],
+            'conteudo' => $t['observacoes'],
+            'tipo' => 'ATUALIZAÇÃO',
+            'data_observacao' => $data_obs,
+            'registrado_por' => 'Sistema (Encerramento)'
+        ];
+    }
+    
+    // Ordenar do mais recente para o mais antigo cronologicamente
+    usort($todas_obs, function($a, $b) {
+        return strtotime($b['data_observacao']) - strtotime($a['data_observacao']);
+    });
+
     header('Content-Type: application/json');
-    echo json_encode($stmtAjax->fetchAll(PDO::FETCH_ASSOC));
+    echo json_encode($todas_obs);
     exit;
 }
 
@@ -1508,11 +1549,11 @@ include 'header.php';
                                             $msg_wp  = "Olá, {$nome_contato_wp}! 👋\n\n✅ Seu treinamento GestãoPRO está confirmado!\n\n";
                                             $msg_wp .= "🔢 ID do treinamento: #{$t['id_treinamento']}\n";
                                             $msg_wp .= "📅 *Data:* {$data_f}\n";
-                                            $msg_wp .= "🕒 Horário do treinamento: das {$hora_inicio}h às {$hora_fim}h, horário de Brasília.\n";
-                                            $msg_wp .= "🎯 Tema: {$tema_f}\n";
-                                            $msg_wp .= "\n💻 Acesse pelo Google Meet:\n" . ($link_google_meet ?: 'não informado') . "\n";
+                                            $msg_wp .= "🕒 *Horário do treinamento:* das {$hora_inicio}h às {$hora_fim}h, horário de Brasília.\n";
+                                            $msg_wp .= "🎯 *Tema:* {$tema_f}\n";
+                                            $msg_wp .= "\n💻 *Acesse pelo Google Meet:*\n" . ($link_google_meet ?: 'não informado') . "\n";
                                             if ($link_google_agenda !== '') {
-                                                $msg_wp .= "\n📆 Adicione à sua agenda:\n" . $link_google_agenda . "\n";
+                                                $msg_wp .= "\n📆 *Adicione à sua agenda:*\n" . $link_google_agenda . "\n";
                                             }
                                             $msg_wp .= "\n📌 *Lembrete importante:* no momento do treinamento, tenha o *TeamViewer* ou *AnyDesk* instalado e pronto para uso.\n\nQualquer dúvida, é só me chamar. Até lá! 🚀";
                                             $msg_wp_attr = htmlspecialchars($msg_wp, ENT_QUOTES, 'UTF-8');
@@ -2353,10 +2394,15 @@ include 'header.php';
         } else {
             linhas.push('Para agendarmos nosso treinamento, veja os horários que tenho disponíveis:');
             linhas.push('');
-            diasComSlot.forEach((dia) => {
+            diasDisponiveis.forEach((dia) => {
                 const dataLabel = dia.data_label || dia.data || 'Dia';
-                const horas = dia.horarios.map((slot) => slot.hora).filter(Boolean);
-                linhas.push('*' + dataLabel + '*: ' + horas.join(', '));
+                const horarios = Array.isArray(dia.horarios) ? dia.horarios : [];
+                if (horarios.length > 0) {
+                    const horas = horarios.map((slot) => slot.hora).filter(Boolean);
+                    linhas.push('*' + dataLabel + '*: ' + horas.join(', '));
+                } else {
+                    linhas.push('*' + dataLabel + '*: Sem horários disponíveis');
+                }
             });
         }
 
