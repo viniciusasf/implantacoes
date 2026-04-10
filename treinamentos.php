@@ -44,7 +44,7 @@ function treinamentosTemColuna(PDO $pdo, $coluna, $forceRefresh = false)
     try {
         $stmt = $pdo->prepare("SHOW COLUMNS FROM treinamentos LIKE ?");
         $stmt->execute([$coluna]);
-        $cache[$coluna] = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+        $cache[$coluna] = (bool) $stmt->fetch(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
         $cache[$coluna] = false;
     }
@@ -64,7 +64,7 @@ function obterColunaEmailContato(PDO $pdo)
 
     $mapa = [];
     foreach ($colunas as $colunaReal) {
-        $mapa[strtolower((string)$colunaReal)] = (string)$colunaReal;
+        $mapa[strtolower((string) $colunaReal)] = (string) $colunaReal;
     }
     foreach ($candidatas as $coluna) {
         $chave = strtolower($coluna);
@@ -78,7 +78,7 @@ function obterColunaEmailContato(PDO $pdo)
 
 function extrairEmailsValidos($valor)
 {
-    $valor = trim((string)$valor);
+    $valor = trim((string) $valor);
     if ($valor === '') {
         return [];
     }
@@ -97,7 +97,7 @@ function extrairEmailsValidos($valor)
 
 function normalizarDataTreinamento($valor)
 {
-    $valor = trim((string)$valor);
+    $valor = trim((string) $valor);
     if ($valor === '') {
         return null;
     }
@@ -122,7 +122,7 @@ function normalizarDataTreinamento($valor)
 
 function existeConflitoHorarioTreinamento(PDO $pdo, $dataTreinamento, $idTreinamentoAtual = null)
 {
-    $dataTreinamento = trim((string)$dataTreinamento);
+    $dataTreinamento = trim((string) $dataTreinamento);
     if ($dataTreinamento === '') {
         return false;
     }
@@ -133,7 +133,7 @@ function existeConflitoHorarioTreinamento(PDO $pdo, $dataTreinamento, $idTreinam
         return false;
     }
 
-    $inicio->setTime((int)$inicio->format('H'), (int)$inicio->format('i'), 0);
+    $inicio->setTime((int) $inicio->format('H'), (int) $inicio->format('i'), 0);
     $fim = clone $inicio;
     $fim->modify('+1 minute');
 
@@ -143,7 +143,7 @@ function existeConflitoHorarioTreinamento(PDO $pdo, $dataTreinamento, $idTreinam
               AND data_treinamento < ?";
     $params = [$inicio->format('Y-m-d H:i:s'), $fim->format('Y-m-d H:i:s')];
 
-    $idTreinamentoAtual = (int)$idTreinamentoAtual;
+    $idTreinamentoAtual = (int) $idTreinamentoAtual;
     if ($idTreinamentoAtual > 0) {
         $sql .= " AND id_treinamento <> ?";
         $params[] = $idTreinamentoAtual;
@@ -154,7 +154,7 @@ function existeConflitoHorarioTreinamento(PDO $pdo, $dataTreinamento, $idTreinam
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
 
-    return (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+    return (bool) $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
 function obterConvidadosCliente(PDO $pdo, $idCliente)
@@ -172,7 +172,7 @@ function obterConvidadosCliente(PDO $pdo, $idCliente)
     $emailsUnicos = [];
 
     foreach ($contatos as $contato) {
-        $nome = trim((string)($contato['nome'] ?? ''));
+        $nome = trim((string) ($contato['nome'] ?? ''));
         $emails = extrairEmailsValidos($contato['contato_email'] ?? '');
 
         foreach ($emails as $email) {
@@ -322,7 +322,7 @@ function criarServicoGoogleCalendarStatus()
 
             $novoToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
             if (isset($novoToken['error'])) {
-                if ((string)$novoToken['error'] === 'invalid_grant') {
+                if ((string) $novoToken['error'] === 'invalid_grant') {
                     return [null, 'token_revogado'];
                 }
                 return [null, 'falha_renovar_token'];
@@ -346,12 +346,12 @@ function obterStatusConvitesGoogle(array $listaTreinamentos)
     $itensComEvento = [];
 
     foreach ($listaTreinamentos as $t) {
-        $idTreinamento = (int)($t['id_treinamento'] ?? 0);
+        $idTreinamento = (int) ($t['id_treinamento'] ?? 0);
         if ($idTreinamento <= 0) {
             continue;
         }
 
-        $googleEventId = trim((string)($t['google_event_id'] ?? ''));
+        $googleEventId = trim((string) ($t['google_event_id'] ?? ''));
         if ($googleEventId === '') {
             $statusPorTreinamento[$idTreinamento] = [
                 'tipo' => 'sem_evento',
@@ -410,7 +410,7 @@ function obterStatusConvitesGoogle(array $listaTreinamentos)
                 ];
             }
         } catch (Throwable $e) {
-            $codigo = (int)$e->getCode();
+            $codigo = (int) $e->getCode();
             if ($codigo === 404) {
                 $statusPorTreinamento[$idTreinamento] = [
                     'tipo' => 'evento_inexistente',
@@ -436,7 +436,7 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
         $autoloadPath = __DIR__ . '/vendor/autoload.php';
         $credentialsPath = __DIR__ . '/credentials.json';
         $tokenPath = googleTokenPath();
-        $authStartUrl = 'google_calendar_sync.php?id_treinamento=' . (int)$idTreinamento . '&start_auth=1';
+        $authStartUrl = 'google_calendar_sync.php?id_treinamento=' . (int) $idTreinamento . '&start_auth=1';
 
         if (!file_exists($autoloadPath) || !file_exists($credentialsPath)) {
             return ['success' => false, 'message' => 'Integração Google não configurada.'];
@@ -502,13 +502,13 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
         $endDate = clone $startDate;
         $endDate->modify('+60 minutes');
 
-        $convidados = obterConvidadosCliente($pdo, (int)$treinamento['id_cliente']);
+        $convidados = obterConvidadosCliente($pdo, (int) $treinamento['id_cliente']);
         $descricaoConvidados = 'Sem e-mail cadastrado';
         if (!empty($convidados)) {
             $itensDescricao = [];
             foreach ($convidados as $convidado) {
-                $displayName = trim((string)($convidado['displayName'] ?? ''));
-                $email = trim((string)($convidado['email'] ?? ''));
+                $displayName = trim((string) ($convidado['displayName'] ?? ''));
+                $email = trim((string) ($convidado['email'] ?? ''));
                 if ($email === '') {
                     continue;
                 }
@@ -537,7 +537,7 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
         }
 
         $event = new Google\Service\Calendar\Event($eventData);
-        $googleEventIdExistente = trim((string)($treinamento['google_event_id'] ?? ''));
+        $googleEventIdExistente = trim((string) ($treinamento['google_event_id'] ?? ''));
 
         if ($googleEventIdExistente !== '') {
             $eventDataUpdate = $eventData;
@@ -555,7 +555,7 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
 
         $googleEventId = $createdEvent->getId();
         $googleMeetLink = $createdEvent->getHangoutLink();
-        $googleAgendaLink = trim((string)$createdEvent->htmlLink);
+        $googleAgendaLink = trim((string) $createdEvent->htmlLink);
 
         if (empty($googleMeetLink)) {
             $conferenceData = $createdEvent->getConferenceData();
@@ -590,7 +590,7 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
     } catch (Throwable $e) {
         if (googleIsInvalidGrantError($e)) {
             googleForgetToken($tokenPath ?? googleTokenPath());
-            return ['success' => false, 'message' => 'Sessao Google expirada. Faca login novamente.', 'needs_auth' => true, 'auth_start_url' => 'google_calendar_sync.php?id_treinamento=' . (int)$idTreinamento . '&start_auth=1'];
+            return ['success' => false, 'message' => 'Sessao Google expirada. Faca login novamente.', 'needs_auth' => true, 'auth_start_url' => 'google_calendar_sync.php?id_treinamento=' . (int) $idTreinamento . '&start_auth=1'];
         }
         return ['success' => false, 'message' => $e->getMessage()];
     }
@@ -607,17 +607,17 @@ $sql_alerta = "SELECT fantasia FROM clientes
 $clientes_sem_agenda = $pdo->query($sql_alerta)->fetchAll(PDO::FETCH_COLUMN);
 
 // --- CONTAGENS PARA OS CARDS ---
-$total_clientes = (int)$pdo->query("SELECT COUNT(*) FROM clientes WHERE (data_fim IS NULL OR data_fim = '0000-00-00')")->fetchColumn();
-$total_treinamentos = (int)$pdo->query("SELECT COUNT(*) FROM treinamentos")->fetchColumn();
-$treinamentos_pendentes = (int)$pdo->query("SELECT COUNT(*) FROM treinamentos WHERE UPPER(status) = 'PENDENTE'")->fetchColumn();
-$treinamentos_resolvidos = (int)$pdo->query("SELECT COUNT(*) FROM treinamentos WHERE UPPER(status) = 'RESOLVIDO'")->fetchColumn();
+$total_clientes = (int) $pdo->query("SELECT COUNT(*) FROM clientes WHERE (data_fim IS NULL OR data_fim = '0000-00-00')")->fetchColumn();
+$total_treinamentos = (int) $pdo->query("SELECT COUNT(*) FROM treinamentos")->fetchColumn();
+$treinamentos_pendentes = (int) $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE UPPER(status) = 'PENDENTE'")->fetchColumn();
+$treinamentos_resolvidos = (int) $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE UPPER(status) = 'RESOLVIDO'")->fetchColumn();
 $total_pendencias_treinamentos = 0;
 try {
-    $total_pendencias_treinamentos = (int)$pdo->query("SELECT COUNT(*) FROM pendencias_treinamentos WHERE status_pendencia = 'ABERTA'")->fetchColumn();
+    $total_pendencias_treinamentos = (int) $pdo->query("SELECT COUNT(*) FROM pendencias_treinamentos WHERE status_pendencia = 'ABERTA'")->fetchColumn();
 } catch (Throwable $e) {
     $total_pendencias_treinamentos = 0;
 }
-$total_hoje = (int)$pdo->query("SELECT COUNT(*) FROM treinamentos WHERE DATE(data_treinamento) = CURDATE() AND UPPER(status) = 'PENDENTE'")->fetchColumn();
+$total_hoje = (int) $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE DATE(data_treinamento) = CURDATE() AND UPPER(status) = 'PENDENTE'")->fetchColumn();
 
 // --- PÁGINA DE TREINAMENTOS ---
 // Removida lógica de inatividade local (agora no Dashboard)
@@ -722,7 +722,7 @@ if (isset($_GET['exportar_xls'])) {
 
 // Lógica para Deletar
 if (isset($_GET['delete'])) {
-    $id = (int)$_GET['delete'];
+    $id = (int) $_GET['delete'];
     $stmt = $pdo->prepare("DELETE FROM treinamentos WHERE id_treinamento = ?");
     $stmt->execute([$id]);
     header("Location: treinamentos.php?msg=Removido com sucesso");
@@ -732,10 +732,10 @@ if (isset($_GET['delete'])) {
 // Lógica para Adicionar/Editar
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['confirmar_encerramento'])) {
-        $id = (int)($_POST['id_treinamento'] ?? 0);
-        $obs = trim((string)($_POST['observacoes'] ?? ''));
-        $temPendencia = trim((string)($_POST['tem_pendencia'] ?? ''));
-        $referenciaChamado = trim((string)($_POST['referencia_chamado'] ?? ''));
+        $id = (int) ($_POST['id_treinamento'] ?? 0);
+        $obs = trim((string) ($_POST['observacoes'] ?? ''));
+        $temPendencia = trim((string) ($_POST['tem_pendencia'] ?? ''));
+        $referenciaChamado = trim((string) ($_POST['referencia_chamado'] ?? ''));
         $tipoPendencia = null;
         if ($temPendencia === 'sim') {
             $tipoPendencia = 'COM_PENDENCIA';
@@ -766,7 +766,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             $stmtCliente = $pdo->prepare("SELECT id_cliente FROM treinamentos WHERE id_treinamento = ?");
             $stmtCliente->execute([$id]);
-            $idCliente = (int)($stmtCliente->fetchColumn() ?: 0);
+            $idCliente = (int) ($stmtCliente->fetchColumn() ?: 0);
 
             if ($tipoPendencia === 'COM_PENDENCIA' && $tabelaPendenciasDisponivel) {
                 $stmtPendencia = $pdo->prepare(
@@ -815,7 +815,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     if (isset($_POST['salvar_link_google'])) {
         $id = $_POST['id_treinamento'] ?? null;
-        $google_event_link_input = trim((string)($_POST['google_event_link'] ?? ''));
+        $google_event_link_input = trim((string) ($_POST['google_event_link'] ?? ''));
         $mensagem_retorno = "Link do Google Agenda salvo com sucesso";
 
         if (!empty($id)) {
@@ -837,7 +837,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $tema = $_POST['tema'];
     $status = $_POST['status'];
     $data_treinamento = !empty($_POST['data_treinamento']) ? normalizarDataTreinamento($_POST['data_treinamento']) : null;
-    $id_treinamento_atual = isset($_POST['id_treinamento']) ? (int)$_POST['id_treinamento'] : 0;
+    $id_treinamento_atual = isset($_POST['id_treinamento']) ? (int) $_POST['id_treinamento'] : 0;
     $has_google_event_link = array_key_exists('google_event_link', $_POST);
     $has_google_agenda_link = array_key_exists('google_agenda_link', $_POST);
     $google_event_link = $has_google_event_link && !empty($_POST['google_event_link']) ? trim($_POST['google_event_link']) : null;
@@ -876,25 +876,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt_up = $pdo->prepare("UPDATE treinamentos SET " . implode(", ", $campos_update) . " WHERE id_treinamento=?");
         $stmt_up->execute($params_update);
         $msg = "Treinamento atualizado com sucesso";
-        $abrirGoogleAgendaTreinamentoId = (int)$_POST['id_treinamento'];
-        
+        $abrirGoogleAgendaTreinamentoId = (int) $_POST['id_treinamento'];
+
         $redirectUrl = "treinamentos.php?msg=" . urlencode($msg) . "&tipo=success";
         header("Location: " . $redirectUrl);
         exit;
 
     } elseif (isset($_POST['action']) && $_POST['action'] === 'save_client_observation') {
         // --- 2. SALVAR NOVO HISTÓRICO (OBSERVAÇÃO) ---
-        $id_c = (int)$_POST['id_cliente'];
+        $id_c = (int) $_POST['id_cliente'];
         $titulo = $_POST['titulo'] ?? 'Observação Geral';
         $conteudo = $_POST['conteudo'] ?? '';
-        $tipo = $_POST['tipo'] ?? 'INFORMAÇÃO'; 
+        $tipo = $_POST['tipo'] ?? 'INFORMAÇÃO';
         $tags = $_POST['tags'] ?? '';
         $autor = $_POST['autor'] ?: 'Sistema';
 
         if ($id_c > 0) {
             $stmtObsAdd = $pdo->prepare("INSERT INTO observacoes_cliente (id_cliente, titulo, conteudo, tipo, tags, registrado_por) VALUES (?, ?, ?, ?, ?, ?)");
             $stmtObsAdd->execute([$id_c, $titulo, $conteudo, $tipo, $tags, $autor]);
-            
+
             header("Location: treinamentos.php?msg=Historico+registrado+com+sucesso&id_cliente_ref=$id_c");
             exit;
         }
@@ -911,7 +911,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $placeholders = implode(", ", array_fill(0, count($colunas_insert), "?"));
         $stmt_ins = $pdo->prepare("INSERT INTO treinamentos (" . implode(", ", $colunas_insert) . ") VALUES ($placeholders)");
         $stmt_ins->execute($params_insert);
-        $novo_id_treinamento = (int)$pdo->lastInsertId();
+        $novo_id_treinamento = (int) $pdo->lastInsertId();
 
         $syncResult = ['success' => false];
         $manual_link_provided = (!empty($google_event_link) || !empty($google_agenda_link));
@@ -932,7 +932,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } elseif (!empty($syncResult['success'])) {
             $msg = "Treinamento adicionado e sincronizado com Google Meet";
             if (!empty($syncResult['google_agenda_link'])) {
-                $abrirGoogleAgendaLink = trim((string)$syncResult['google_agenda_link']);
+                $abrirGoogleAgendaLink = trim((string) $syncResult['google_agenda_link']);
                 $abrirGoogleAgendaTreinamentoId = $novo_id_treinamento;
             }
         } elseif (!empty($syncResult['message'])) {
@@ -947,15 +947,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $tipo_msg = $forcarModalGoogle ? "warning" : "success";
         $redirectUrl = "treinamentos.php?msg=" . urlencode($msg) . "&tipo=" . $tipo_msg;
-        
+
         if ($abrirGoogleAgendaLink !== '') {
             $redirectUrl .= "&open_google_agenda=" . urlencode($abrirGoogleAgendaLink);
-            $redirectUrl .= "&open_google_agenda_treinamento_id=" . (int)$abrirGoogleAgendaTreinamentoId;
+            $redirectUrl .= "&open_google_agenda_treinamento_id=" . (int) $abrirGoogleAgendaTreinamentoId;
             $redirectUrl .= "&open_google_modal_novo=1";
         } elseif ($forcarModalGoogle && $abrirGoogleAgendaTreinamentoId > 0) {
-            $redirectUrl .= "&open_google_modal_id=" . (int)$abrirGoogleAgendaTreinamentoId;
+            $redirectUrl .= "&open_google_modal_id=" . (int) $abrirGoogleAgendaTreinamentoId;
         }
-        
+
         header("Location: " . $redirectUrl);
         exit;
     }
@@ -963,20 +963,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 // --- ENDPOINT PARA BUSCAR OBSERVAÇÕES VIA AJAX (GET) ---
 if (isset($_GET['get_observations']) && isset($_GET['id_cliente'])) {
-    $id_c = (int)$_GET['id_cliente'];
-    
+    $id_c = (int) $_GET['id_cliente'];
+
     // Observações normais de CRM
     $stmtAjax = $pdo->prepare("SELECT * FROM observacoes_cliente WHERE id_cliente = ? ORDER BY data_observacao DESC");
     $stmtAjax->execute([$id_c]);
     $obs_cliente = $stmtAjax->fetchAll(PDO::FETCH_ASSOC);
-    
+
     // Observações (relatório) de fechamento de treinamentos
     $stmtTreinamentos = $pdo->prepare("SELECT id_treinamento, tema, observacoes, data_treinamento_encerrado, data_treinamento FROM treinamentos WHERE id_cliente = ? AND UPPER(status) = 'RESOLVIDO' AND observacoes IS NOT NULL AND TRIM(observacoes) != ''");
     $stmtTreinamentos->execute([$id_c]);
     $treinamentos_encerrados = $stmtTreinamentos->fetchAll(PDO::FETCH_ASSOC);
 
     $todas_obs = [];
-    foreach($obs_cliente as $obs) {
+    foreach ($obs_cliente as $obs) {
         $todas_obs[] = [
             'id' => 'obs_' . $obs['id_observacao'],
             'titulo' => $obs['titulo'],
@@ -986,12 +986,13 @@ if (isset($_GET['get_observations']) && isset($_GET['id_cliente'])) {
             'registrado_por' => $obs['registrado_por']
         ];
     }
-    
-    foreach($treinamentos_encerrados as $t) {
+
+    foreach ($treinamentos_encerrados as $t) {
         // Usa a data de encerramento se existir, senão a data original do treinamento
         $data_obs = !empty($t['data_treinamento_encerrado']) ? $t['data_treinamento_encerrado'] : $t['data_treinamento'];
-        if (!$data_obs) $data_obs = date('Y-m-d H:i:s'); // fallback de segurança
-        
+        if (!$data_obs)
+            $data_obs = date('Y-m-d H:i:s'); // fallback de segurança
+
         $todas_obs[] = [
             'id' => 'trein_' . $t['id_treinamento'],
             'titulo' => 'Treinamento Encerrado: ' . $t['tema'],
@@ -1001,9 +1002,9 @@ if (isset($_GET['get_observations']) && isset($_GET['id_cliente'])) {
             'registrado_por' => 'Sistema (Encerramento)'
         ];
     }
-    
+
     // Ordenar do mais recente para o mais antigo cronologicamente
-    usort($todas_obs, function($a, $b) {
+    usort($todas_obs, function ($a, $b) {
         return strtotime($b['data_observacao']) - strtotime($a['data_observacao']);
     });
 
@@ -1021,7 +1022,7 @@ if (isset($_GET['api_calendario'])) {
                 LEFT JOIN clientes c ON t.id_cliente = c.id_cliente 
                 LEFT JOIN contatos co ON t.id_contato = co.id_contato
                 WHERE t.data_treinamento IS NOT NULL";
-    
+
     // Filtro por cliente na query do calendário
     $filtro_cliente_cal = $_GET['filtro_cliente'] ?? '';
     $params_cal = [];
@@ -1032,19 +1033,19 @@ if (isset($_GET['api_calendario'])) {
 
     $stmtCal = $pdo->prepare($sql_cal);
     $stmtCal->execute($params_cal);
-    
+
     $events = [];
     foreach ($stmtCal->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $isResolvido = (strtoupper($row['status']) === 'RESOLVIDO');
         // Cores do sistema: verde para resolvido, azul para pendente
-        $color = $isResolvido ? '#10b981' : '#4361ee'; 
-        
+        $color = $isResolvido ? '#10b981' : '#4361ee';
+
         // Forçamos o cliente em caixa alta para o título
         $title = mb_convert_case($row['cliente'], MB_CASE_UPPER, "UTF-8");
 
         $events[] = [
             'id' => $row['id'],
-            'title' => trim((string)$title),
+            'title' => trim((string) $title),
             'start' => $row['start'],
             'end' => $row['end'],
             'backgroundColor' => $color,
@@ -1070,12 +1071,12 @@ if (isset($_GET['api_calendario'])) {
 $open_google_agenda = '';
 $open_google_agenda_treinamento_id = 0;
 if (!empty($_GET['open_google_agenda'])) {
-    $open_google_agenda_candidate = trim((string)$_GET['open_google_agenda']);
+    $open_google_agenda_candidate = trim((string) $_GET['open_google_agenda']);
     if (filter_var($open_google_agenda_candidate, FILTER_VALIDATE_URL)) {
         $parsedAgendaUrl = parse_url($open_google_agenda_candidate);
-        $agendaScheme = strtolower((string)($parsedAgendaUrl['scheme'] ?? ''));
-        $agendaHost = strtolower((string)($parsedAgendaUrl['host'] ?? ''));
-        $agendaPath = (string)($parsedAgendaUrl['path'] ?? '');
+        $agendaScheme = strtolower((string) ($parsedAgendaUrl['scheme'] ?? ''));
+        $agendaHost = strtolower((string) ($parsedAgendaUrl['host'] ?? ''));
+        $agendaPath = (string) ($parsedAgendaUrl['path'] ?? '');
 
         $hostValido = in_array($agendaHost, ['calendar.google.com', 'www.google.com', 'google.com'], true);
         $pathValido = ($agendaHost === 'calendar.google.com') || (stripos($agendaPath, '/calendar/') === 0);
@@ -1086,7 +1087,7 @@ if (!empty($_GET['open_google_agenda'])) {
     }
 }
 if (!empty($_GET['open_google_agenda_treinamento_id'])) {
-    $open_google_agenda_treinamento_id = (int)$_GET['open_google_agenda_treinamento_id'];
+    $open_google_agenda_treinamento_id = (int) $_GET['open_google_agenda_treinamento_id'];
 }
 
 // Visualização (lista ou calendario)
@@ -1173,144 +1174,212 @@ include 'header.php';
 ?>
 
 <style>
-/* // Design System Clean & Modern (Perplexity Style) */
-:root {
-    --glass-bg: rgba(255, 255, 255, 0.03);
-    --glass-border: rgba(255, 255, 255, 0.08);
-}
+    /* // Design System Clean & Modern (Perplexity Style) */
+    :root {
+        --glass-bg: rgba(255, 255, 255, 0.03);
+        --glass-border: rgba(255, 255, 255, 0.08);
+    }
 
-[data-theme="dark"] {
-    --bg-body: #0d0e12;
-    --bg-card: #14151a;
-    --border-color: #2b2e35;
-    --text-main: #e2e8f0;
-    --text-muted: #94a3b8;
-    --primary-light: rgba(67, 97, 238, 0.15);
-    --warning-light: rgba(255, 193, 7, 0.1);
-    --danger-light: rgba(220, 53, 69, 0.1);
-    --info-light: rgba(13, 202, 240, 0.1);
-}
+    [data-theme="dark"] {
+        --bg-body: #0d0e12;
+        --bg-card: #14151a;
+        --border-color: #2b2e35;
+        --text-main: #e2e8f0;
+        --text-muted: #94a3b8;
+        --primary-light: rgba(67, 97, 238, 0.15);
+        --warning-light: rgba(255, 193, 7, 0.1);
+        --danger-light: rgba(220, 53, 69, 0.1);
+        --info-light: rgba(13, 202, 240, 0.1);
+    }
 
-/* License Badges Styles */
-.badge-license {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 0.35rem 0.65rem;
-    font-size: 0.72rem;
-    font-weight: 800;
-    border-radius: 50px;
-    border: 1px solid transparent;
-}
-.badge-license-1 { 
-    background: #fff7ed; 
-    color: #c2410c; 
-    border-color: #fdba74; 
-    font-weight: 900; 
-    box-shadow: 0 0 10px rgba(249, 115, 22, 0.1);
-    transform: scale(1.02); /* Leve destaque de escala */
-}
-[data-theme="dark"] .badge-license-1 { 
-    background: rgba(249, 115, 22, 0.25); 
-    color: #ffd8a8; 
-    border-color: rgba(249, 115, 22, 0.5); 
-    box-shadow: 0 0 15px rgba(249, 115, 22, 0.15);
-}
-.badge-license-2 { background: rgba(111, 66, 193, 0.1); color: #6f42c1; border-color: rgba(111, 66, 193, 0.2); }
-[data-theme="dark"] .badge-license-2 { background: rgba(111, 66, 193, 0.2); color: #a389f4; border-color: rgba(111, 66, 193, 0.35); }
-.badge-license-3 { background: rgba(16, 185, 129, 0.1); color: #10b981; border-color: rgba(16, 185, 129, 0.2); }
-[data-theme="dark"] .badge-license-3 { background: rgba(16, 185, 129, 0.2); color: #34d399; border-color: rgba(16, 185, 129, 0.35); }
+    /* License Badges Styles */
+    .badge-license {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0.35rem 0.65rem;
+        font-size: 0.72rem;
+        font-weight: 800;
+        border-radius: 50px;
+        border: 1px solid transparent;
+    }
 
-/* Client Status Badges */
-.client-badge-soft {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.72rem;
-    font-weight: 800;
-    padding: 0.35rem 0.75rem;
-    border-radius: 50px;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
+    .badge-license-1 {
+        background: #fff7ed;
+        color: #c2410c;
+        border-color: #fdba74;
+        font-weight: 900;
+        box-shadow: 0 0 10px rgba(249, 115, 22, 0.1);
+        transform: scale(1.02);
+        /* Leve destaque de escala */
+    }
 
-/* Page Header - Simplificado */
-.modern-header {
-    padding: 1rem 0 2rem 0;
-    border-bottom: 1px solid var(--border-color);
-    margin-bottom: 2rem;
-}
+    [data-theme="dark"] .badge-license-1 {
+        background: rgba(249, 115, 22, 0.25);
+        color: #ffd8a8;
+        border-color: rgba(249, 115, 22, 0.5);
+        box-shadow: 0 0 15px rgba(249, 115, 22, 0.15);
+    }
 
-.title-accent {
-    color: var(--primary);
-    background: linear-gradient(120deg, var(--primary), var(--purple));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
+    .badge-license-2 {
+        background: rgba(111, 66, 193, 0.1);
+        color: #6f42c1;
+        border-color: rgba(111, 66, 193, 0.2);
+    }
 
-/* Dashboard Cards - Refinados */
-.stats-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 1.25rem;
-    transition: all 0.25s ease;
-    height: 100%;
-}
+    [data-theme="dark"] .badge-license-2 {
+        background: rgba(111, 66, 193, 0.2);
+        color: #a389f4;
+        border-color: rgba(111, 66, 193, 0.35);
+    }
 
-.stats-card:hover {
-    border-color: var(--primary);
-    transform: translateY(-3px);
-}
+    .badge-license-3 {
+        background: rgba(16, 185, 129, 0.1);
+        color: #10b981;
+        border-color: rgba(16, 185, 129, 0.2);
+    }
 
-.stats-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.4rem;
-    margin-bottom: 1rem;
-}
+    [data-theme="dark"] .badge-license-3 {
+        background: rgba(16, 185, 129, 0.2);
+        color: #34d399;
+        border-color: rgba(16, 185, 129, 0.35);
+    }
 
-/* Table Style */
-.table-premium {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    margin-bottom: 3rem;
-}
+    /* Client Status Badges */
+    .client-badge-soft {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        font-weight: 800;
+        padding: 0.35rem 0.75rem;
+        border-radius: 50px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
 
-.table-premium thead th {
-    background: var(--bg-body);
-    font-size: 0.75rem !important;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-muted) !important;
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border-color) !important;
-}
+    /* Page Header - Simplificado */
+    .modern-header {
+        padding: 1rem 0 2rem 0;
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: 2rem;
+    }
 
-.table-premium tbody td {
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border-color) !important;
-    font-size: 0.9rem;
-    color: var(--text-main);
-}
+    .title-accent {
+        color: var(--primary);
+        background: linear-gradient(120deg, var(--primary), var(--purple));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
 
-/* Animations */
-.gsap-reveal {
-    opacity: 0;
-    transform: translateY(15px);
-}
+    /* Dashboard Cards - Refinados */
+    .stats-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 1.25rem;
+        transition: all 0.25s ease;
+        height: 100%;
+    }
 
-.fw-800 { font-weight: 800; }
+    .stats-card:hover {
+        border-color: var(--primary);
+        transform: translateY(-3px);
+    }
 
-/* Overrides para visibilidade de botões */
-.btn-outline-primary { border-color: var(--primary); color: var(--primary); }
-.btn-outline-primary:hover { background: var(--primary); color: #fff; }
+    .stats-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Table Style */
+    .table-premium {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        overflow: hidden;
+        margin-bottom: 3rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    }
+
+    .table-premium table {
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
+    }
+
+    .table-premium thead th {
+        background: var(--bg-body);
+        font-size: 0.75rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-muted) !important;
+        padding: 1rem 1rem;
+        /* Espaçamento melhorado */
+        border-bottom: 2px solid var(--border-color) !important;
+        border-top: none;
+    }
+
+    .table-premium tbody tr {
+        transition: all 0.2s ease;
+    }
+
+    .table-premium tbody tr:hover {
+        background-color: var(--primary-light) !important;
+    }
+
+    .table-premium tbody td {
+        padding: 1rem 1rem;
+        /* Espaçamento melhorado */
+        border-bottom: 1px solid var(--border-color) !important;
+        font-size: 0.9rem;
+        /* Fonte original */
+        color: var(--text-main);
+        vertical-align: middle;
+    }
+
+    /* Action Buttons Styling */
+    .table-premium .btn-sm {
+        padding: 0.25rem 0.4rem;
+        border-radius: 6px;
+    }
+
+    /* Compactar colunas específicas */
+    .col-mini {
+        width: 1%;
+        white-space: nowrap;
+    }
+
+    .col-recursos {
+        max-width: 150px;
+    }
+
+    /* Animations */
+    .gsap-reveal {
+        opacity: 0;
+        transform: translateY(15px);
+    }
+
+    .fw-800 {
+        font-weight: 800;
+    }
+
+    /* Overrides para visibilidade de botões */
+    .btn-outline-primary {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+
+    .btn-outline-primary:hover {
+        background: var(--primary);
+        color: #fff;
+    }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
@@ -1321,30 +1390,28 @@ include 'header.php';
     <!-- Modern Header -->
     <div class="modern-header d-flex justify-content-between align-items-end gsap-reveal">
         <div>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb mb-2" style="font-size: 0.8rem;">
-                    <li class="breadcrumb-item"><a href="index.php" class="text-decoration-none text-muted">Dashboard</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Treinamentos</li>
-                </ol>
-            </nav>
             <h2 class="fw-800 mb-0">Agenda de <span class="title-accent">Treinamentos</span></h2>
             <p class="text-muted small mb-0">Gestão de capacitação técnica dos clientes.</p>
         </div>
         <div class="d-flex align-items-center gap-2">
             <!-- Botões de alternância de visualização -->
             <div class="bg-body p-1 rounded-3 d-flex border me-2">
-                <a href="treinamentos.php?view=list&filtro_cliente=<?= urlencode($filtro_cliente) ?>" class="btn btn-sm <?= $view_mode == 'list' ? 'btn-primary shadow-sm' : 'btn-link text-muted' ?> bx-button px-3">
+                <a href="treinamentos.php?view=list&filtro_cliente=<?= urlencode($filtro_cliente) ?>"
+                    class="btn btn-sm <?= $view_mode == 'list' ? 'btn-primary shadow-sm' : 'btn-link text-muted' ?> bx-button px-3">
                     <i class="bi bi-list"></i>
                 </a>
-                <a href="treinamentos.php?view=calendar&filtro_cliente=<?= urlencode($filtro_cliente) ?>" class="btn btn-sm <?= $view_mode == 'calendar' ? 'btn-primary shadow-sm' : 'btn-link text-muted' ?> bx-button px-3">
+                <a href="treinamentos.php?view=calendar&filtro_cliente=<?= urlencode($filtro_cliente) ?>"
+                    class="btn btn-sm <?= $view_mode == 'calendar' ? 'btn-primary shadow-sm' : 'btn-link text-muted' ?> bx-button px-3">
                     <i class="bi bi-calendar3"></i>
                 </a>
             </div>
-            
-            <button type="button" class="btn btn-outline-success px-4 fw-bold shadow-sm d-flex align-items-center" id="btn_copiar_disponibilidade" disabled>
+
+            <button type="button" class="btn btn-outline-success px-4 fw-bold shadow-sm d-flex align-items-center"
+                id="btn_copiar_disponibilidade" disabled>
                 <i class="bi bi-whatsapp me-2"></i>Copiar Horas
             </button>
-            <button class="btn btn-primary px-4 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
+            <button class="btn btn-primary px-4 shadow-sm fw-bold" data-bs-toggle="modal"
+                data-bs-target="#modalTreinamento">
                 <i class="bi bi-calendar-plus me-2"></i>Novo Agendamento
             </button>
         </div>
@@ -1355,88 +1422,97 @@ include 'header.php';
 
     <!-- Main Content Area -->
     <?php if ($view_mode === 'list'): ?>
-    <div class="table-premium gsap-reveal">
-        <div class="p-4 border-bottom d-flex justify-content-between align-items-center bg-white">
-            <h5 class="fw-bold mb-0">Listagem de Treinamentos</h5>
-            <div class="d-flex gap-2">
-                <a href="treinamentos.php?mostrar_todos=1" class="btn btn-sm btn-light border px-3">Ver Resolvidos</a>
-                <div class="dropdown">
-                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Ordenar</button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                        <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=data_treinamento&direcao=asc<?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>"><i class="bi bi-calendar3 me-2"></i>Data</a></li>
-                        <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=cliente_nome&direcao=asc<?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>"><i class="bi bi-building me-2"></i>Cliente</a></li>
-                    </ul>
+        <div class="table-premium gsap-reveal">
+            <div class="p-4 border-bottom d-flex justify-content-between align-items-center bg-white">
+                <h5 class="fw-bold mb-0">Listagem de Treinamentos</h5>
+                <div class="d-flex gap-2">
+                    <a href="treinamentos.php?mostrar_todos=1" class="btn btn-sm btn-light border px-3">Ver Resolvidos</a>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                            data-bs-toggle="dropdown">Ordenar</button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                            <li><a class="dropdown-item py-2"
+                                    href="treinamentos.php?ordenacao=data_treinamento&direcao=asc<?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>"><i
+                                        class="bi bi-calendar3 me-2"></i>Data</a></li>
+                            <li><a class="dropdown-item py-2"
+                                    href="treinamentos.php?ordenacao=cliente_nome&direcao=asc<?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>"><i
+                                        class="bi bi-building me-2"></i>Cliente</a></li>
+                        </ul>
+                    </div>
                 </div>
             </div>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead>
-                    <tr>
-                        <th class="ps-4">
-                            <a href="treinamentos.php?ordenacao=data_treinamento&direcao=<?= ($ordenacao == 'data_treinamento' && $direcao == 'asc') ? 'desc' : 'asc' ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?><?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>"
-                                class="text-decoration-none d-flex align-items-center">
-                                <span>Data Agendada</span>
-                                <?php if ($ordenacao == 'data_treinamento'): ?>
-                                    <i class="bi bi-caret-<?= $direcao == 'asc' ? 'up' : 'down' ?>-fill ms-1 small text-primary"></i>
-                                <?php endif; ?>
-                            </a>
-                        </th>
-                        <th>Cliente</th>
-                        <th>STATUS</th>
-                        <th>Servidor</th>
-                        <th>Contato</th>
-                        <th>Tema</th>
-                        <th>Vendedor</th>
-                        <th class="text-center">Recursos Utilizados</th>
-                        <th class="text-end pe-4">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if ($total_resultados > 0): ?>
-                        <?php
-                        // Obter data/hora atual
-                        $data_atual = new DateTime();
-                        $timestamp_atual = $data_atual->getTimestamp();
-
-                        foreach ($treinamentos as $t):
-                            $link_google_agenda = trim((string)($t['google_agenda_link'] ?? ''));
-                            $link_google_agenda_exibicao = $link_google_agenda !== '' ? $link_google_agenda : trim((string)($t['google_event_link'] ?? ''));
-                            // LÓGICA CORRIGIDA PARA VERIFICAR VENCIMENTO
-                            $isVencido = false;
-
-                            if ($t['status'] == 'PENDENTE' && !empty($t['data_treinamento'])) {
-                                $data_treinamento = new DateTime($t['data_treinamento']);
-                                $timestamp_treinamento = $data_treinamento->getTimestamp();
-
-                                // Verifica se a data/hora do treinamento já passou
-                                if ($timestamp_treinamento < $timestamp_atual) {
-                                    $isVencido = true;
-                                }
-                            }
-                        ?>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th class="ps-3 col-mini">
+                                <a href="treinamentos.php?ordenacao=data_treinamento&direcao=<?= ($ordenacao == 'data_treinamento' && $direcao == 'asc') ? 'desc' : 'asc' ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?><?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>"
+                                    class="text-decoration-none d-flex align-items-center">
+                                    <span>Data</span>
+                                    <?php if ($ordenacao == 'data_treinamento'): ?>
+                                        <i
+                                            class="bi bi-caret-<?= $direcao == 'asc' ? 'up' : 'down' ?>-fill ms-1 small text-primary"></i>
+                                    <?php endif; ?>
+                                </a>
+                            </th>
+                            <th>Cliente</th>
+                            <th class="col-mini">Status</th>
+                            <th class="col-mini">Serv.</th>
+                            <th>Contato</th>
+                            <th>Tema</th>
+                            <th>Vendedor</th>
+                            <th class="col-mini text-center">Recursos</th>
+                            <th class="text-end pe-3 col-mini">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if ($total_resultados > 0): ?>
                             <?php
+                            // Obter data/hora atual
+                            $data_atual = new DateTime();
+                            $timestamp_atual = $data_atual->getTimestamp();
+
+                            foreach ($treinamentos as $t):
+                                $link_google_agenda = trim((string) ($t['google_agenda_link'] ?? ''));
+                                $link_google_agenda_exibicao = $link_google_agenda !== '' ? $link_google_agenda : trim((string) ($t['google_event_link'] ?? ''));
+                                // LÓGICA CORRIGIDA PARA VERIFICAR VENCIMENTO
+                                $isVencido = false;
+
+                                if ($t['status'] == 'PENDENTE' && !empty($t['data_treinamento'])) {
+                                    $data_treinamento = new DateTime($t['data_treinamento']);
+                                    $timestamp_treinamento = $data_treinamento->getTimestamp();
+
+                                    // Verifica se a data/hora do treinamento já passou
+                                    if ($timestamp_treinamento < $timestamp_atual) {
+                                        $isVencido = true;
+                                    }
+                                }
+                                ?>
+                                <?php
                                 $data_t = $t['data_treinamento'] ? strtotime($t['data_treinamento']) : 0;
                                 $e_hoje = date('Y-m-d', $data_t) === date('Y-m-d');
                                 $bg_class = $e_hoje ? 'bg-primary bg-opacity-10' : '';
-                                
+
                                 $contato_exibicao = $t['contato_nome'] ?: '---';
                                 if (!empty($t['contato_telefone'])) {
                                     $contato_exibicao .= " - " . $t['contato_telefone'];
                                 }
-                            ?>
-                            <tr class="<?= $bg_class ?>">
-                                <td class="ps-4 fw-bold">
-                                    <div class="text-dark">
-                                        <?= $data_t ? date('d/m/Y H:i', $data_t) : '---' ?>
-                                        <?php if($e_hoje): ?>
-                                            <span class="badge bg-primary text-white ms-1" style="font-size: 0.6rem;">HOJE</span>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
-                                <td class="fw-bold">
-                                    <?php
-                                        $numLics = (int)($t['num_licencas'] ?? 0);
+                                ?>
+                                <tr class="<?= $bg_class ?>">
+                                    <td class="ps-4">
+                                        <div class="text-dark fw-bold" style="font-size: 0.85rem; line-height: 1.1;">
+                                            <?= $data_t ? date('d/m/Y', $data_t) : '---' ?>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-1 mt-1">
+                                            <span class="text-dark small fw-bold" style="font-size: 0.75rem;"><?= $data_t ? date('H:i', $data_t) : '' ?></span>
+                                            <?php if ($e_hoje): ?>
+                                                <span class="badge bg-primary text-white" style="font-size: 0.55rem; padding: 1.5px 3.5px; line-height: 1;">HOJE</span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
+                                    <td class="fw-bold">
+                                        <?php
+                                        $numLics = (int) ($t['num_licencas'] ?? 0);
                                         $badgeClass = '';
                                         if ($numLics == 1) {
                                             $badgeClass = 'badge-license-1';
@@ -1445,23 +1521,24 @@ include 'header.php';
                                         } elseif ($numLics >= 3) {
                                             $badgeClass = 'badge-license-3';
                                         }
-                                    ?>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span style="color: var(--text-main);"><?= htmlspecialchars($t['cliente_nome']) ?></span>
-                                        <?php if ($numLics > 0): ?>
-                                            <span class="badge-license <?= $badgeClass ?>" title="<?= $numLics ?> licença(s)">
-                                                <?= $numLics ?> <i class="bi bi-pc-display"></i>
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
-                                <td>
-                                    <?php
+                                        ?>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span
+                                                style="color: var(--text-main);"><?= htmlspecialchars($t['cliente_nome']) ?></span>
+                                            <?php if ($numLics > 0): ?>
+                                                <span class="badge-license <?= $badgeClass ?>" title="<?= $numLics ?> licença(s)">
+                                                    <?= $numLics ?> <i class="bi bi-pc-display"></i>
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <?php
                                         // Cálculo do Status do Cliente (semelhante ao clientes.php)
                                         $data_inicio_cl = !empty($t['data_inicio']) ? $t['data_inicio'] : date('Y-m-d');
                                         $d_cl = (new DateTime($data_inicio_cl))->diff(new DateTime())->days;
                                         $cl_encerrado = (!empty($t['data_fim']) && $t['data_fim'] !== '0000-00-00');
-                                        
+
                                         $st_config = [
                                             'integracao' => ['label' => 'Integração', 'class' => 'bg-info bg-opacity-10 text-info', 'icon' => 'bi-rocket-takeoff'],
                                             'operacional' => ['label' => 'Operacional', 'class' => 'bg-primary bg-opacity-10 text-primary', 'icon' => 'bi-gear'],
@@ -1471,82 +1548,87 @@ include 'header.php';
                                         ];
 
                                         $curr_st = 'integracao';
-                                        if ($cl_encerrado) $curr_st = 'encerrado';
-                                        elseif ($d_cl > 60) $curr_st = 'critico';
-                                        elseif ($d_cl > 30) $curr_st = 'finalizacao';
-                                        elseif ($d_cl > 15) $curr_st = 'operacional';
-                                        
+                                        if ($cl_encerrado)
+                                            $curr_st = 'encerrado';
+                                        elseif ($d_cl > 60)
+                                            $curr_st = 'critico';
+                                        elseif ($d_cl > 30)
+                                            $curr_st = 'finalizacao';
+                                        elseif ($d_cl > 15)
+                                            $curr_st = 'operacional';
+
                                         $c_st = $st_config[$curr_st] ?? $st_config['integracao'];
-                                    ?>
-                                    <span class="client-badge-soft <?= $c_st['class'] ?>" style="font-size: 0.72rem; padding: 0.25rem 0.65rem; border-radius: 50px; font-weight: 800; text-transform: uppercase;">
-                                        <i class="bi <?= $c_st['icon'] ?> me-1"></i> <?= $c_st['label'] ?>
-                                    </span>
-                                </td>
-                                <td class="fw-bold">
-                                    <div class=""><?= htmlspecialchars($t['servidor'] ?: '---') ?></div>
-                                </td>
-                                <td class="fw-bold">
-                                    <div class=""><?= htmlspecialchars($contato_exibicao) ?></div>
-                                </td>
-                                <td class="fw-bold">
-                                    <div class=""><?= htmlspecialchars($t['tema']) ?></div>
-                                </td>
-                                <td class="fw-bold">
-                                    <div class=" text-uppercase"><?= htmlspecialchars($t['vendedor'] ?? '---') ?></div>
-                                </td>
-                                <td class="text-center">
-                                    <?php 
-                                        $id_tr = (int)$t['id_treinamento'];
-                                        $recursos_cliente = trim((string)($t['recursos'] ?? ''));
+                                        ?>
+                                        <span class="client-badge-soft <?= $c_st['class'] ?>"
+                                            style="font-size: 0.72rem; padding: 0.25rem 0.65rem; border-radius: 50px; font-weight: 800; text-transform: uppercase;">
+                                            <i class="bi <?= $c_st['icon'] ?> me-1"></i> <?= $c_st['label'] ?>
+                                        </span>
+                                    </td>
+                                    <td class="fw-bold">
+                                        <div class="small"><?= htmlspecialchars($t['servidor'] ?: '---') ?></div>
+                                    </td>
+                                    <td>
+                                        <div class="small fw-bold"><?= htmlspecialchars($contato_exibicao) ?></div>
+                                    </td>
+                                    <td>
+                                        <div class="small fw-bold"><?= htmlspecialchars($t['tema']) ?></div>
+                                    </td>
+                                    <td>
+                                        <div class="small text-uppercase fw-bold"><?= htmlspecialchars($t['vendedor'] ?? '---') ?>
+                                        </div>
+                                    </td>
+                                    <td class="text-center col-recursos">
+                                        <?php
+                                        $id_tr = (int) $t['id_treinamento'];
+                                        $recursos_cliente = trim((string) ($t['recursos'] ?? ''));
                                         if ($recursos_cliente !== ''):
                                             $lista_recursos = explode(',', $recursos_cliente);
-                                            foreach($lista_recursos as $rec):
+                                            foreach ($lista_recursos as $rec):
                                                 $rec = trim($rec);
-                                    ?>
-                                        <span class="badge bg-light text-dark border d-block mb-1" style="font-size: 0.70rem;"><?= htmlspecialchars($rec) ?></span>
-                                    <?php 
+                                                ?>
+                                                <span class="badge bg-light text-dark border p-1" style="font-size: 0.65rem;"
+                                                    title="<?= htmlspecialchars($rec) ?>"><?= mb_strimwidth(htmlspecialchars($rec), 0, 10, "...") ?></span>
+                                            <?php
                                             endforeach;
-                                        else: 
-                                    ?>
-                                        <span class="text-muted small">---</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="text-end pe-4">
-                                    <div class="d-flex justify-content-end gap-1 flex-wrap">
-                                        <!-- 1. HISTÓRICO (CRM) -->
-                                        <button class="btn btn-sm btn-outline-primary btn-history-client"
-                                            data-bs-toggle="tooltip"
-                                            data-bs-title="Ver Histórico/CRM"
-                                            data-id="<?= $t['id_cliente'] ?>"
-                                            data-nome="<?= htmlspecialchars($t['cliente_nome']) ?>">
-                                            <i class="bi bi-journal-text"></i>
-                                        </button>
-
-                                        <!-- 2. LUPA (OBSERVAÇÕES DO AGENDAMENTO) -->
-                                        <?php if (!empty($t['observacoes'])): ?>
-                                            <button class="btn btn-sm btn-outline-info view-obs-btn"
-                                                data-bs-toggle="tooltip"
-                                                data-bs-title="Ver Obs. Agendamento"
-                                                data-obs="<?= htmlspecialchars($t['observacoes']) ?>"
-                                                data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>">
-                                                <i class="bi bi-search"></i>
-                                            </button>
+                                        else:
+                                            ?>
+                                            <span class="text-muted small">---</span>
                                         <?php endif; ?>
+                                    </td>
+                                    <td class="text-end pe-3 col-mini">
+                                        <div class="d-flex justify-content-end gap-1 flex-nowrap">
+                                            <!-- 1. HISTÓRICO (CRM) -->
+                                            <button class="btn btn-sm btn-outline-primary btn-history-client"
+                                                data-bs-toggle="tooltip" data-bs-title="Ver Histórico/CRM"
+                                                data-id="<?= $t['id_cliente'] ?>"
+                                                data-nome="<?= htmlspecialchars($t['cliente_nome']) ?>">
+                                                <i class="bi bi-journal-text"></i>
+                                            </button>
 
-                                         <?php
-                                            $nome_contato_wp = trim((string)($t['contato_nome'] ?? $t['cliente_nome']));
+                                            <!-- 2. LUPA (OBSERVAÇÕES DO AGENDAMENTO) -->
+                                            <?php if (!empty($t['observacoes'])): ?>
+                                                <button class="btn btn-sm btn-outline-info view-obs-btn" data-bs-toggle="tooltip"
+                                                    data-bs-title="Ver Obs. Agendamento"
+                                                    data-obs="<?= htmlspecialchars($t['observacoes']) ?>"
+                                                    data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>">
+                                                    <i class="bi bi-search"></i>
+                                                </button>
+                                            <?php endif; ?>
+
+                                            <?php
+                                            $nome_contato_wp = trim((string) ($t['contato_nome'] ?? $t['cliente_nome']));
                                             $dt_treino = new DateTime($t['data_treinamento'], new DateTimeZone('America/Sao_Paulo'));
                                             $dias_semana_wp = ['1' => 'Segunda-Feira', '2' => 'Terça-Feira', '3' => 'Quarta-Feira', '4' => 'Quinta-Feira', '5' => 'Sexta-Feira', '6' => 'Sábado', '7' => 'Domingo'];
-                                            $data_f  = $dt_treino->format('d/m') . ' ' . ($dias_semana_wp[$dt_treino->format('N')] ?? '');
+                                            $data_f = $dt_treino->format('d/m') . ' ' . ($dias_semana_wp[$dt_treino->format('N')] ?? '');
                                             $dt_treino_fim = clone $dt_treino;
                                             $dt_treino_fim->modify('+1 hour');
                                             $hora_inicio = $dt_treino->format('H:i');
                                             $hora_fim = $dt_treino_fim->format('H:i');
-                                            $tema_f  = mb_strtoupper(trim((string)($t['tema'] ?? '')));
-                                            $link_google_meet   = trim((string)($t['google_event_link'] ?? ''));
-                                            $link_google_agenda = trim((string)($t['google_agenda_link'] ?? ''));
+                                            $tema_f = mb_strtoupper(trim((string) ($t['tema'] ?? '')));
+                                            $link_google_meet = trim((string) ($t['google_event_link'] ?? ''));
+                                            $link_google_agenda = trim((string) ($t['google_agenda_link'] ?? ''));
 
-                                            $msg_wp  = "Olá, {$nome_contato_wp}! 👋\n\n✅ Seu treinamento GestãoPRO está confirmado!\n\n";
+                                            $msg_wp = "Olá, {$nome_contato_wp}! 👋\n\n✅ Seu treinamento GestãoPRO está confirmado!\n\n";
                                             $msg_wp .= "🔢 ID do treinamento: #{$t['id_treinamento']}\n";
                                             $msg_wp .= "📅 *Data:* {$data_f}\n";
                                             $msg_wp .= "🕒 *Horário do treinamento:* das {$hora_inicio}h às {$hora_fim}h, horário de Brasília.\n";
@@ -1557,397 +1639,414 @@ include 'header.php';
                                             }
                                             $msg_wp .= "\n📌 *Lembrete importante:* no momento do treinamento, tenha o *TeamViewer* ou *AnyDesk* instalado e pronto para uso.\n\nQualquer dúvida, é só me chamar. Até lá! 🚀";
                                             $msg_wp_attr = htmlspecialchars($msg_wp, ENT_QUOTES, 'UTF-8');
-                                        ?>
-                                        <button class="btn btn-sm btn-outline-success copy-whatsapp-message"
-                                            data-bs-toggle="tooltip"
-                                            data-bs-title="Copiar WhatsApp"
-                                            data-message="<?= $msg_wp_attr ?>">
-                                            <i class="bi bi-whatsapp"></i>
-                                        </button>
+                                            ?>
+                                            <button class="btn btn-sm btn-outline-success copy-whatsapp-message"
+                                                data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp"
+                                                data-message="<?= $msg_wp_attr ?>">
+                                                <i class="bi bi-whatsapp"></i>
+                                            </button>
 
-                                        <!-- 3. GOOGLE AGENDA (LINK OU SYNC) -->
-                                        <?php if ($link_google_agenda_exibicao !== ''): ?>
-                                            <button type="button"
-                                                    class="btn btn-sm btn-outline-primary open-google-link-modal"
-                                                    data-id="<?= $id_tr ?>"
+                                            <!-- 3. FINALIZAR -->
+                                            <?php if (strtoupper($t['status']) == 'PENDENTE'): ?>
+                                                <button class="btn btn-sm btn-outline-success open-finish-modal" data-id="<?= $id_tr ?>"
                                                     data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>"
-                                                    data-google-link="<?= htmlspecialchars($link_google_agenda) ?>"
-                                                    title="Link Google Agenda"
+                                                    data-tema="<?= htmlspecialchars($t['tema']) ?>" title="Finalizar"
                                                     data-bs-toggle="tooltip">
-                                                <i class="bi bi-calendar-check"></i>
-                                            </button>
-                                        <?php else: ?>
-                                            <button class="btn btn-sm btn-outline-danger sync-google-btn"
-                                                data-bs-toggle="tooltip"
-                                                data-bs-title="Sincronizar Google"
-                                                data-id="<?= $id_tr ?>"
-                                                data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>">
-                                                <i class="bi bi-google"></i>
-                                            </button>
-                                        <?php endif; ?>
+                                                    <i class="bi bi-check-lg"></i>
+                                                </button>
+                                            <?php endif; ?>
 
-                                        <!-- 4. EDITAR -->
-                                        <button class="btn btn-sm btn-outline-secondary edit-btn"
-                                            data-bs-toggle="tooltip"
-                                            data-bs-title="Editar"
-                                            data-id="<?= $id_tr ?>"
-                                            data-cliente="<?= $t['id_cliente'] ?>"
-                                            data-contato="<?= $t['id_contato'] ?>"
-                                            data-tema="<?= htmlspecialchars($t['tema']) ?>"
-                                            data-status="<?= $t['status'] ?>"
-                                            data-google-link="<?= htmlspecialchars($link_google_agenda_exibicao) ?>"
-                                            data-data="<?= $t['data_treinamento'] ? date('Y-m-d\TH:i', strtotime($t['data_treinamento'])) : '' ?>">
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
-
-                                        <!-- 5. FINALIZAR -->
-                                        <?php if (strtoupper($t['status']) == 'PENDENTE'): ?>
-                                            <button class="btn btn-sm btn-outline-success open-finish-modal"
-                                                data-id="<?= $id_tr ?>"
-                                                data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>"
-                                                data-tema="<?= htmlspecialchars($t['tema']) ?>"
-                                                title="Finalizar"
-                                                data-bs-toggle="tooltip">
-                                                <i class="bi bi-check-lg"></i>
-                                            </button>
-                                        <?php endif; ?>
-
-                                        <!-- 6. EXCLUIR -->
-                                        <a href="?delete=<?= $id_tr ?>&pagina=<?= $pagina ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>"
-                                            class="btn btn-sm btn-outline-danger"
-                                            data-bs-toggle="tooltip"
-                                            data-bs-title="Excluir"
-                                            onclick="return confirm('Excluir este treinamento?')">
-                                            <i class="bi bi-trash"></i>
-                                        </a>
+                                            <!-- 4. EXCLUIR -->
+                                            <a href="?delete=<?= $id_tr ?>&pagina=<?= $pagina ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>"
+                                                class="btn btn-sm btn-outline-danger" data-bs-toggle="tooltip"
+                                                data-bs-title="Excluir" onclick="return confirm('Excluir este treinamento?')">
+                                                <i class="bi bi-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="9" class="text-center py-5">
+                                    <div class="mb-3">
+                                        <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
                                     </div>
+                                    <h5 class="text-muted mb-2">Nenhum treinamento encontrado</h5>
+                                    <p class="text-muted mb-4">
+                                        <?php if (!empty($filtro_cliente)): ?>
+                                            Não foram encontrados treinamentos para o cliente
+                                            "<?= htmlspecialchars($filtro_cliente) ?>"
+                                        <?php else: ?>
+                                            Você ainda não possui treinamentos cadastrados.
+                                        <?php endif; ?>
+                                    </p>
+                                    <button class="btn btn-primary d-flex align-items-center mx-auto" data-bs-toggle="modal"
+                                        data-bs-target="#modalTreinamento">
+                                        <i class="bi bi-plus-lg me-2"></i>Criar Primeiro Treinamento
+                                    </button>
+                                    <?php if (!empty($filtro_cliente)): ?>
+                                        <a href="treinamentos.php" class="btn btn-outline-secondary ms-2 d-flex align-items-center">
+                                            <i class="bi bi-x-lg me-1"></i>Limpar Filtro
+                                        </a>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr>
-                            <td colspan="9" class="text-center py-5">
-                                <div class="mb-3">
-                                    <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
-                                </div>
-                                <h5 class="text-muted mb-2">Nenhum treinamento encontrado</h5>
-                                <p class="text-muted mb-4">
-                                    <?php if (!empty($filtro_cliente)): ?>
-                                        Não foram encontrados treinamentos para o cliente "<?= htmlspecialchars($filtro_cliente) ?>"
-                                    <?php else: ?>
-                                        Você ainda não possui treinamentos cadastrados.
-                                    <?php endif; ?>
-                                </p>
-                                <button class="btn btn-primary d-flex align-items-center mx-auto" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
-                                    <i class="bi bi-plus-lg me-2"></i>Criar Primeiro Treinamento
-                                </button>
-                                <?php if (!empty($filtro_cliente)): ?>
-                                    <a href="treinamentos.php" class="btn btn-outline-secondary ms-2 d-flex align-items-center">
-                                        <i class="bi bi-x-lg me-1"></i>Limpar Filtro
-                                    </a>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Paginação -->
-        <?php if ($total_paginas > 1): ?>
-            <div class="p-4 border-top">
-                <nav aria-label="Navegação de páginas">
-                    <ul class="pagination justify-content-center mb-0 gap-1">
-                        <?php if ($pagina > 1): ?>
-                            <li class="page-item">
-                                <a class="page-link rounded-3 border-0 bg-light" href="treinamentos.php?pagina=<?= $pagina - 1 ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?><?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>">
-                                    <i class="bi bi-chevron-left"></i>
-                                </a>
-                            </li>
                         <?php endif; ?>
-
-                        <?php
-                        $inicio = max(1, $pagina - 2);
-                        $fim = min($total_paginas, $pagina + 2);
-
-                        for ($i = $inicio; $i <= $fim; $i++):
-                        ?>
-                            <li class="page-item <?= ($i == $pagina) ? 'active' : '' ?>">
-                                <a class="page-link rounded-3 border-0 <?= ($i == $pagina) ? 'bg-primary text-white' : 'bg-light text-muted' ?>" href="treinamentos.php?pagina=<?= $i ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?><?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>">
-                                    <?= $i ?>
-                                </a>
-                            </li>
-                        <?php endfor; ?>
-
-                        <?php if ($pagina < $total_paginas): ?>
-                            <li class="page-item">
-                                <a class="page-link rounded-3 border-0 bg-light" href="treinamentos.php?pagina=<?= $pagina + 1 ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?><?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>">
-                                    <i class="bi bi-chevron-right"></i>
-                                </a>
-                            </li>
-                        <?php endif; ?>
-                    </ul>
-                </nav>
+                    </tbody>
+                </table>
             </div>
-        <?php endif; ?>
-    </div>
+
+            <!-- Paginação -->
+            <?php if ($total_paginas > 1): ?>
+                <div class="p-4 border-top">
+                    <nav aria-label="Navegação de páginas">
+                        <ul class="pagination justify-content-center mb-0 gap-1">
+                            <?php if ($pagina > 1): ?>
+                                <li class="page-item">
+                                    <a class="page-link rounded-3 border-0 bg-light"
+                                        href="treinamentos.php?pagina=<?= $pagina - 1 ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?><?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>">
+                                        <i class="bi bi-chevron-left"></i>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+
+                            <?php
+                            $inicio = max(1, $pagina - 2);
+                            $fim = min($total_paginas, $pagina + 2);
+
+                            for ($i = $inicio; $i <= $fim; $i++):
+                                ?>
+                                <li class="page-item <?= ($i == $pagina) ? 'active' : '' ?>">
+                                    <a class="page-link rounded-3 border-0 <?= ($i == $pagina) ? 'bg-primary text-white' : 'bg-light text-muted' ?>"
+                                        href="treinamentos.php?pagina=<?= $i ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?><?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>">
+                                        <?= $i ?>
+                                    </a>
+                                </li>
+                            <?php endfor; ?>
+
+                            <?php if ($pagina < $total_paginas): ?>
+                                <li class="page-item">
+                                    <a class="page-link rounded-3 border-0 bg-light"
+                                        href="treinamentos.php?pagina=<?= $pagina + 1 ?>&ordenacao=<?= $ordenacao ?>&direcao=<?= $direcao ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?><?= $mostrar_todos ? '&mostrar_todos=1' : '' ?>">
+                                        <i class="bi bi-chevron-right"></i>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                        </ul>
+                    </nav>
+                </div>
+            <?php endif; ?>
+        </div>
     <?php endif; ?> <!-- /Fim VIEW LIST -->
 
     <?php if ($view_mode === 'calendar'): ?>
-    <div class="dashboard-section gsap-reveal">
-        <div id="calendar-container" style="background: var(--bg-card); padding: 1rem; border-radius: var(--radius-lg); border: 1px solid var(--border-color); overflow: hidden;">
-            <div id="calendar"></div>
+        <div class="dashboard-section gsap-reveal">
+            <div id="calendar-container"
+                style="background: var(--bg-card); padding: 1rem; border-radius: var(--radius-lg); border: 1px solid var(--border-color); overflow: hidden;">
+                <div id="calendar"></div>
+            </div>
         </div>
-    </div>
-    <style>
-        /* Container e Estrutura Base */
-        .fc-theme-standard {
-            background: var(--bg-card);
-            border-radius: 16px; /* Borda bem arredondada para todo o calendário */
-            border: 1px solid var(--border-color);
-            overflow: hidden;
-            box-shadow: var(--shadow-sm);
-        }
-        .fc-theme-standard td, .fc-theme-standard th { 
-            border-color: var(--border-color); 
-        }
-        
-        /* Toolbar e Botões */
-        .fc-toolbar {
-            padding: 1rem;
-            margin-bottom: 0 !important;
-            border-bottom: 1px solid var(--border-color);
-            background: var(--bg-body);
-        }
-        .fc-toolbar-title { 
-            color: var(--text-main); 
-            font-family: var(--font-heading); 
-            font-weight: 800; 
-            font-size: 1.4rem !important;
-            letter-spacing: -0.02em;
-        }
-        .fc .fc-button-primary { 
-            background-color: var(--bg-card); 
-            border: 1px solid var(--border-color); 
-            color: var(--text-main); 
-            font-weight: 600; 
-            border-radius: 8px; /* Arredondamento suave nos botões */
-            text-transform: capitalize; 
-            padding: 0.4rem 1rem;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            transition: all 0.2s ease;
-        }
-        .fc .fc-button-primary:hover { 
-            background-color: var(--primary-light); 
-            border-color: var(--primary); 
-            color: var(--primary); 
-        }
-        .fc .fc-button-primary:not(:disabled).fc-button-active, 
-        .fc .fc-button-primary:not(:disabled):active { 
-            background-color: var(--primary); 
-            border-color: var(--primary); 
-            color: white; 
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        /* Cabeçalho dos Dias (Dom, Seg, Ter...) */
-        .fc-col-header-cell {
-            background: var(--bg-body);
-            padding: 12px 0;
-        }
-        .fc-theme-standard .fc-scrollgrid {
-            border: none;
-        }
-        .fc-col-header-cell-cushion { 
-            color: var(--text-muted); 
-            text-transform: uppercase; 
-            font-size: 0.75rem; 
-            font-weight: 700; 
-            letter-spacing: 0.05em; 
-            text-decoration: none;
-        }
-        .fc-col-header-cell-cushion:hover {
-            color: var(--text-main);
-            text-decoration: none;
-        }
+        <style>
+            /* Container e Estrutura Base */
+            .fc-theme-standard {
+                background: var(--bg-card);
+                border-radius: 16px;
+                /* Borda bem arredondada para todo o calendário */
+                border: 1px solid var(--border-color);
+                overflow: hidden;
+                box-shadow: var(--shadow-sm);
+            }
 
-        /* Eventos - Design Técnico e Preciso */
-        .fc-event {
-            border: none;
-            border-radius: 2px !important;
-            padding: 0 !important;
-            font-size: 0.75rem; 
-            font-family: var(--font-body); 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
-            cursor: pointer; 
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            margin: 2px;
-            border-left: 4px solid rgba(255,255,255,0.3) !important;
-            overflow: visible !important;
-        }
-        /* Min-height apenas para timeGrid (Semana/Dia) */
-        .fc-timegrid-event .fc-event-main { min-height: 60px; }
-        /* View Mensal: eventos compactos e horizontais */
-        .fc-daygrid-event { min-height: auto !important; border-radius: 4px !important; margin: 1px 2px !important; }
-        .fc-daygrid-event .fc-event-main { padding: 2px 6px !important; }
-        .fc-daygrid-dot-event { padding: 2px 4px !important; }
-        .fc-v-event { border: none !important; }
-        .fc-timegrid-event { margin-bottom: 2px !important; }
-        .fc-event:hover { 
-            transform: scale(1.02); 
-            filter: brightness(1.15); 
-            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-            z-index: 10;
-        }
-        .fc-event-time { 
-            font-weight: 800; 
-            background: rgba(0,0,0,0.1);
-            padding: 1px 4px;
-            border-radius: 0 0 4px 0;
-            font-size: 0.65rem;
-        }
-        .fc-event-title { font-weight: 700; }
+            .fc-theme-standard td,
+            .fc-theme-standard th {
+                border-color: var(--border-color);
+            }
 
-        /* Células de Dias Gerais */
-        .fc-daygrid-day-number { 
-            color: var(--text-main); 
-            font-weight: 600; 
-            font-size: 0.85rem; 
-            padding: 8px 12px; 
-            text-decoration: none;
-            opacity: 0.7;
-            transition: opacity 0.2s ease;
-        }
-        .fc-daygrid-day-number:hover {
-            opacity: 1;
-            text-decoration: none;
-        }
-        .fc-day-today { 
-            background-color: rgba(67, 97, 238, 0.05) !important; 
-        }
-        
-        /* TimeGrid (Semana/Dia) Específico */
-        .fc-timegrid-slot-label-cushion {
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        .fc-timegrid-slot {
-            height: 2.0rem !important; /* Aumenta a altura de cada slot de tempo para evitar sobreposição */
-        }
-        .fc-timegrid-axis-cushion {
-            color: var(--text-muted);
-            font-size: 0.75rem;
-        }
+            /* Toolbar e Botões */
+            .fc-toolbar {
+                padding: 1rem;
+                margin-bottom: 0 !important;
+                border-bottom: 1px solid var(--border-color);
+                background: var(--bg-body);
+            }
 
-        /* Mais/Popover */
-        .fc-daygrid-more-link {
-            color: var(--primary);
-            font-weight: 700;
-            font-size: 0.75rem;
-            padding: 2px 4px;
-            border-radius: 4px;
-        }
-        .fc-daygrid-more-link:hover {
-            background: var(--primary-light);
-            text-decoration: none;
-        }
-        .fc .fc-popover { 
-            background: var(--bg-card); 
-            border: 1px solid var(--border-color); 
-            border-radius: 12px; 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
-            overflow: hidden; 
-        }
-        .fc .fc-popover-header { 
-            background: var(--bg-body); 
-            padding: 10px 15px; 
-        }
-        .fc .fc-popover-title { 
-            color: var(--text-main); 
-            font-weight: 700; 
-            font-size: 0.9rem; 
-            letter-spacing: -0.01em; 
-        }
-        .fc .fc-popover-close {
-            color: var(--text-muted);
-            opacity: 0.7;
-        }
-        
-        /* Ajuste do dia de Hoje (Header e Corpo) */
-        th.fc-col-header-cell.fc-day-today {
-            background-color: var(--primary) !important;
-        }
-        th.fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion {
-            color: #ffffff !important;
-        }
-        /* Ajuste do Eixo de Tempo e Canto Superior Esquerdo Branco */
-        .fc-theme-standard .fc-timegrid-axis {
-            background: var(--bg-body) !important;
-        }
-        th.fc-timegrid-axis {
-            background-color: var(--bg-body) !important; 
-        }
-        .fc-timegrid-axis-cushion, .fc-timegrid-slot-label-cushion {
-            color: var(--text-muted) !important;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-    </style>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var calendarEl = document.getElementById('calendar');
-            if(calendarEl) {
-                var calendar = new FullCalendar.Calendar(calendarEl, {
-                    initialView: 'timeGridWeek',
-                    locale: 'pt-br',
-                    headerToolbar: {
-                        left: 'prev,next today',
-                        center: 'title',
-                        right: 'dayGridMonth,timeGridWeek,timeGridDay'
-                    },
-                    events: 'treinamentos.php?api_calendario=1&filtro_cliente=<?= urlencode($filtro_cliente) ?>',
-                    buttonText: {
-                        today:    'Hoje',
-                        month:    'Mês',
-                        week:     'Semana',
-                        day:      'Dia'
-                    },
-                    height: 'auto',
-                    expandRows: true, // Garante que as linhas ocupem o espaço disponível
-                    dayMaxEvents: true,
-                    allDaySlot: false,
-                    slotMinTime: '08:00:00',
-                    slotMaxTime: '17:30:00',
-                    hiddenDays: [0, 6],
-                    displayEventTime: false,
-                    eventContent: function(arg) {
-                        let client = arg.event.extendedProps.cliente || '';
-                        let contact = arg.event.extendedProps.contato || '';
-                        let phone = arg.event.extendedProps.telefone || '';
-                        let viewType = arg.view.type;
-                        
-                        // Formatação manual do horário (ex: 08:30)
-                        let startTime = "";
-                        if (arg.event.start) {
-                            let h = arg.event.start.getHours().toString().padStart(2, '0');
-                            let m = arg.event.start.getMinutes().toString().padStart(2, '0');
-                            startTime = h + ":" + m;
-                        }
-                        
-                        let html = '';
-                        
-                        // Layout COMPACTO para view Mensal (dayGridMonth)
-                        if (viewType === 'dayGridMonth') {
-                            html = `
+            .fc-toolbar-title {
+                color: var(--text-main);
+                font-family: var(--font-heading);
+                font-weight: 800;
+                font-size: 1.4rem !important;
+                letter-spacing: -0.02em;
+            }
+
+            .fc .fc-button-primary {
+                background-color: var(--bg-card);
+                border: 1px solid var(--border-color);
+                color: var(--text-main);
+                font-weight: 600;
+                border-radius: 8px;
+                /* Arredondamento suave nos botões */
+                text-transform: capitalize;
+                padding: 0.4rem 1rem;
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+                transition: all 0.2s ease;
+            }
+
+            .fc .fc-button-primary:hover {
+                background-color: var(--primary-light);
+                border-color: var(--primary);
+                color: var(--primary);
+            }
+
+            .fc .fc-button-primary:not(:disabled).fc-button-active,
+            .fc .fc-button-primary:not(:disabled):active {
+                background-color: var(--primary);
+                border-color: var(--primary);
+                color: white;
+                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+
+            /* Cabeçalho dos Dias (Dom, Seg, Ter...) */
+            .fc-col-header-cell {
+                background: var(--bg-body);
+                padding: 12px 0;
+            }
+
+            .fc-theme-standard .fc-scrollgrid {
+                border: none;
+            }
+
+            .fc-col-header-cell-cushion {
+                color: var(--text-muted);
+                text-transform: uppercase;
+                font-size: 0.75rem;
+                font-weight: 700;
+                letter-spacing: 0.05em;
+                text-decoration: none;
+            }
+
+            .fc-col-header-cell-cushion:hover {
+                color: var(--text-main);
+                text-decoration: none;
+            }
+
+            /* Eventos - Design Técnico e Preciso */
+            .fc-event {
+                border: none;
+                border-radius: 2px !important;
+                padding: 0 !important;
+                font-size: 0.75rem;
+                font-family: var(--font-body);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                cursor: pointer;
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                margin: 2px;
+                border-left: 4px solid rgba(255, 255, 255, 0.3) !important;
+                overflow: visible !important;
+            }
+
+            /* Min-height apenas para timeGrid (Semana/Dia) */
+            .fc-timegrid-event .fc-event-main {
+                min-height: 60px;
+            }
+
+            /* View Mensal: eventos compactos e horizontais */
+            .fc-daygrid-event {
+                min-height: auto !important;
+                border-radius: 4px !important;
+                margin: 1px 2px !important;
+            }
+
+            .fc-daygrid-event .fc-event-main {
+                padding: 2px 6px !important;
+            }
+
+            .fc-daygrid-dot-event {
+                padding: 2px 4px !important;
+            }
+
+            .fc-v-event {
+                border: none !important;
+            }
+
+            .fc-timegrid-event {
+                margin-bottom: 2px !important;
+            }
+
+            .fc-event:hover {
+                transform: scale(1.02);
+                filter: brightness(1.15);
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+                z-index: 10;
+            }
+
+            .fc-event-time {
+                font-weight: 800;
+                background: rgba(0, 0, 0, 0.1);
+                padding: 1px 4px;
+                border-radius: 0 0 4px 0;
+                font-size: 0.65rem;
+            }
+
+            .fc-event-title {
+                font-weight: 700;
+            }
+
+            /* Células de Dias Gerais */
+            .fc-daygrid-day-number {
+                color: var(--text-main);
+                font-weight: 600;
+                font-size: 0.85rem;
+                padding: 8px 12px;
+                text-decoration: none;
+                opacity: 0.7;
+                transition: opacity 0.2s ease;
+            }
+
+            .fc-daygrid-day-number:hover {
+                opacity: 1;
+                text-decoration: none;
+            }
+
+            .fc-day-today {
+                background-color: rgba(67, 97, 238, 0.05) !important;
+            }
+
+            /* TimeGrid (Semana/Dia) Específico */
+            .fc-timegrid-slot-label-cushion {
+                color: var(--text-muted);
+                font-size: 0.75rem;
+                font-weight: 600;
+            }
+
+            .fc-timegrid-slot {
+                height: 2.0rem !important;
+                /* Aumenta a altura de cada slot de tempo para evitar sobreposição */
+            }
+
+            .fc-timegrid-axis-cushion {
+                color: var(--text-muted);
+                font-size: 0.75rem;
+            }
+
+            /* Mais/Popover */
+            .fc-daygrid-more-link {
+                color: var(--primary);
+                font-weight: 700;
+                font-size: 0.75rem;
+                padding: 2px 4px;
+                border-radius: 4px;
+            }
+
+            .fc-daygrid-more-link:hover {
+                background: var(--primary-light);
+                text-decoration: none;
+            }
+
+            .fc .fc-popover {
+                background: var(--bg-card);
+                border: 1px solid var(--border-color);
+                border-radius: 12px;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+                overflow: hidden;
+            }
+
+            .fc .fc-popover-header {
+                background: var(--bg-body);
+                padding: 10px 15px;
+            }
+
+            .fc .fc-popover-title {
+                color: var(--text-main);
+                font-weight: 700;
+                font-size: 0.9rem;
+                letter-spacing: -0.01em;
+            }
+
+            .fc .fc-popover-close {
+                color: var(--text-muted);
+                opacity: 0.7;
+            }
+
+            /* Ajuste do dia de Hoje (Header e Corpo) */
+            th.fc-col-header-cell.fc-day-today {
+                background-color: var(--primary) !important;
+            }
+
+            th.fc-col-header-cell.fc-day-today .fc-col-header-cell-cushion {
+                color: #ffffff !important;
+            }
+
+            /* Ajuste do Eixo de Tempo e Canto Superior Esquerdo Branco */
+            .fc-theme-standard .fc-timegrid-axis {
+                background: var(--bg-body) !important;
+            }
+
+            th.fc-timegrid-axis {
+                background-color: var(--bg-body) !important;
+            }
+
+            .fc-timegrid-axis-cushion,
+            .fc-timegrid-slot-label-cushion {
+                color: var(--text-muted) !important;
+                font-size: 0.75rem;
+                font-weight: 600;
+            }
+        </style>
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                var calendarEl = document.getElementById('calendar');
+                if (calendarEl) {
+                    var calendar = new FullCalendar.Calendar(calendarEl, {
+                        initialView: 'timeGridWeek',
+                        locale: 'pt-br',
+                        headerToolbar: {
+                            left: 'prev,next today',
+                            center: 'title',
+                            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                        },
+                        events: 'treinamentos.php?api_calendario=1&filtro_cliente=<?= urlencode($filtro_cliente) ?>',
+                        buttonText: {
+                            today: 'Hoje',
+                            month: 'Mês',
+                            week: 'Semana',
+                            day: 'Dia'
+                        },
+                        height: 'auto',
+                        expandRows: true, // Garante que as linhas ocupem o espaço disponível
+                        dayMaxEvents: true,
+                        allDaySlot: false,
+                        slotMinTime: '08:00:00',
+                        slotMaxTime: '17:30:00',
+                        hiddenDays: [0, 6],
+                        displayEventTime: false,
+                        eventContent: function (arg) {
+                            let client = arg.event.extendedProps.cliente || '';
+                            let contact = arg.event.extendedProps.contato || '';
+                            let phone = arg.event.extendedProps.telefone || '';
+                            let viewType = arg.view.type;
+
+                            // Formatação manual do horário (ex: 08:30)
+                            let startTime = "";
+                            if (arg.event.start) {
+                                let h = arg.event.start.getHours().toString().padStart(2, '0');
+                                let m = arg.event.start.getMinutes().toString().padStart(2, '0');
+                                startTime = h + ":" + m;
+                            }
+
+                            let html = '';
+
+                            // Layout COMPACTO para view Mensal (dayGridMonth)
+                            if (viewType === 'dayGridMonth') {
+                                html = `
                                 <div style="padding: 2px 4px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background-color: var(--primary); border-radius: 3px;">
                                     <span class="fw-bold" style="font-size: 0.65rem; color: #fff;">${startTime}</span>
                                     <span class="fw-bold" style="font-size: 0.7rem; color: #fff; margin-left: 4px;">${client.toUpperCase()}</span>
                                 </div>
                             `;
-                        } else {
-                            // Layout DETALHADO para Semana/Dia (timeGridWeek / timeGridDay)
-                            html = `
+                            } else {
+                                // Layout DETALHADO para Semana/Dia (timeGridWeek / timeGridDay)
+                                html = `
                                 <div class="fc-event-main-frame d-flex flex-column" style="padding: 4px 6px; line-height: 1.2; height: 100%; border-radius: 2px;">
                                     <div class="d-flex justify-content-between align-items-center mb-1">
                                         <div class="fw-900" style="font-size: 0.7rem; color: #fff;">${startTime}</div>
@@ -1961,21 +2060,21 @@ include 'header.php';
                                     </div>
                                 </div>
                             `;
-                        }
-                        return { html: html };
-                    },
-                    eventClick: function(info) {
-                        try {
-                            if (info.event.extendedProps && info.event.extendedProps.cliente) {
-                                window.location.href = 'treinamentos.php?view=list&filtro_cliente=' + encodeURIComponent(info.event.extendedProps.cliente);
                             }
-                        } catch(e) {}
-                    }
-                });
-                calendar.render();
-            }
-        });
-    </script>
+                            return { html: html };
+                        },
+                        eventClick: function (info) {
+                            try {
+                                if (info.event.extendedProps && info.event.extendedProps.cliente) {
+                                    window.location.href = 'treinamentos.php?view=list&filtro_cliente=' + encodeURIComponent(info.event.extendedProps.cliente);
+                                }
+                            } catch (e) { }
+                        }
+                    });
+                    calendar.render();
+                }
+            });
+        </script>
     <?php endif; ?>
 
 </div>
@@ -1999,7 +2098,8 @@ include 'header.php';
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
             <div class="modal-header border-0 px-4 pt-4">
-                <h5 class="fw-bold text-dark"><i class="bi bi-chat-left-text me-2 text-info"></i>Observações do Treinamento</h5>
+                <h5 class="fw-bold text-dark"><i class="bi bi-chat-left-text me-2 text-info"></i>Observações do
+                    Treinamento</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body px-4 pb-4">
@@ -2011,7 +2111,8 @@ include 'header.php';
                 </div>
                 <div class="p-3 bg-light rounded-3 border">
                     <h6 class="fw-bold text-muted mb-2">Observações da Finalização:</h6>
-                    <div id="view_obs_text" class="mb-0 text-dark" style="white-space: pre-wrap; line-height: 1.6;"></div>
+                    <div id="view_obs_text" class="mb-0 text-dark" style="white-space: pre-wrap; line-height: 1.6;">
+                    </div>
                 </div>
             </div>
         </div>
@@ -2021,7 +2122,8 @@ include 'header.php';
 <!-- Modal para Agendar/Editar Treinamento -->
 <div class="modal fade" id="modalTreinamento" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+        <form method="POST" class="modal-content border-0 shadow-lg" id="formAgendaTreinamento"
+            style="border-radius: 15px;">
             <div class="modal-header border-0 px-4 pt-4">
                 <h5 class="fw-bold" id="modalTitle">Agendar Treinamento</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -2031,7 +2133,8 @@ include 'header.php';
 
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted">Cliente</label>
-                    <select name="id_cliente" id="id_cliente" class="form-select" required onchange="filterContatos(this.value)">
+                    <select name="id_cliente" id="id_cliente" class="form-select" required
+                        onchange="filterContatos(this.value)">
                         <option value="">Selecione o cliente...</option>
                         <?php
                         // CONSULTA MODIFICADA: Apenas clientes ativos
@@ -2057,11 +2160,11 @@ include 'header.php';
                         <option value="VENDAS">VENDAS</option>
                         <option value="COMPRAS">COMPRAS</option>
                         <option value="FATURAMENTO/NF">FATURAMENTO/NF</option>
-                        <option value="FINANCEIRO/CAIXA">FINANCEIRO/CAIXA</option>                        
-                        <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>                
+                        <option value="FINANCEIRO/CAIXA">FINANCEIRO/CAIXA</option>
+                        <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
                         <option value="RELATÓRIOS">RELATÓRIOS</option>
                         <option value="ATENDIMENTOS">ATENDIMENTOS</option>
-                        <option value="DUVIDAS">DUVIDAS</option>                        
+                        <option value="DUVIDAS">DUVIDAS</option>
                     </select>
                 </div>
 
@@ -2081,9 +2184,11 @@ include 'header.php';
 
                 <div class="mt-3">
                     <div class="d-flex align-items-center justify-content-between mb-2">
-                        <label class="form-label small fw-bold text-muted mb-0">Horários disponíveis (hoje, amanhã e depois)</label>
+                        <label class="form-label small fw-bold text-muted mb-0">Horários disponíveis (hoje, amanhã e
+                            depois)</label>
                         <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-sm btn-outline-primary" id="btn_buscar_disponibilidade">
+                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                id="btn_buscar_disponibilidade">
                                 <i class="bi bi-calendar-week me-1"></i>Atualizar
                             </button>
                         </div>
@@ -2107,38 +2212,61 @@ include 'header.php';
     <div class="modal-dialog modal-dialog-centered">
         <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
             <div class="modal-header border-0 px-4 pt-4">
-                <h5 class="fw-bold text-dark"><i class="bi bi-journal-check me-2 text-success"></i>Finalizar Treinamento</h5>
+                <h5 class="fw-bold text-dark"><i class="bi bi-journal-check me-2 text-success"></i>Finalizar Treinamento
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body px-4 text-start">
                 <input type="hidden" name="id_treinamento" id="modal_id_treinamento">
                 <input type="hidden" name="confirmar_encerramento" value="1">
-                
+
                 <div class="mb-3 p-3 bg-light rounded-3 border">
-                    <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">Informações:</div>
+                    <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">Informações:
+                    </div>
                     <div class="fw-bold text-primary" id="modal_cliente_info"></div>
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">O que ficou acordado com o cliente?</label>
-                    <textarea name="observacoes" class="form-control" rows="4" placeholder="Descreva os detalhes da sessão..." required></textarea>
+                    <label class="form-label small fw-bold text-muted text-uppercase">O que ficou acordado com o
+                        cliente?</label>
+                    <textarea name="observacoes" class="form-control" rows="4"
+                        placeholder="Descreva os detalhes da sessão..." required></textarea>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Pendencias relacionadas a este encerramento</label>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input pendencia-opcao" type="radio" name="tem_pendencia" id="tem_pendencia_nao" value="nao" required>
-                        <label class="form-check-label text-dark" for="tem_pendencia_nao">Sem pendencia</label>
-                    </div>
-                    <div class="form-check form-check-inline">
-                        <input class="form-check-input pendencia-opcao" type="radio" name="tem_pendencia" id="tem_pendencia_sim" value="sim" required>
-                        <label class="form-check-label text-dark" for="tem_pendencia_sim">Com pendencia</label>
+                    <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Pendências após o
+                        fim?</label>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <input class="btn-check pendencia-opcao" type="radio" name="tem_pendencia"
+                                id="tem_pendencia_nao" value="nao" required>
+                            <label
+                                class="btn btn-outline-success w-100 p-3 h-100 d-flex flex-column align-items-center justify-content-center"
+                                for="tem_pendencia_nao">
+                                <i class="bi bi-check-circle fs-4 mb-1"></i>
+                                <span class="fw-bold" style="font-size: 0.8rem;">Sem Pendência</span>
+                            </label>
+                        </div>
+                        <div class="col-6">
+                            <input class="btn-check pendencia-opcao" type="radio" name="tem_pendencia"
+                                id="tem_pendencia_sim" value="sim" required>
+                            <label
+                                class="btn btn-outline-warning w-100 p-3 h-100 d-flex flex-column align-items-center justify-content-center"
+                                for="tem_pendencia_sim">
+                                <i class="bi bi-exclamation-triangle fs-4 mb-1"></i>
+                                <span class="fw-bold" style="font-size: 0.8rem;">Com Pendência</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
-                <div class="mb-2 d-none" id="referencia_chamado_wrapper">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Referencia do chamado externo (opcional)</label>
-                    <input type="text" class="form-control" name="referencia_chamado" id="referencia_chamado" maxlength="255" placeholder="Ex: SUP-12345, DEV-90210">
+                <div class="mb-2 d-none" id="referencia_chamado_wrapper" style="transition: all 0.3s ease;">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Referência do chamado
+                        (Obrigatório)</label>
+                    <input type="text" class="form-control border-warning bg-warning bg-opacity-10"
+                        name="referencia_chamado" id="referencia_chamado" maxlength="255"
+                        placeholder="Ex: SUP-12345, DEV-90210">
                 </div>
-                <div class="form-text small opacity-75">A marcacao com/sem pendencia e obrigatoria para concluir o treinamento.</div>
+                <div class="form-text small opacity-75">A marcacao com/sem pendencia e obrigatoria para concluir o
+                    treinamento.</div>
             </div>
             <div class="modal-footer border-0 p-4">
                 <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
@@ -2161,20 +2289,19 @@ include 'header.php';
                 <input type="hidden" name="salvar_link_google" value="1">
 
                 <div class="mb-3 p-3 bg-light rounded-3 border">
-                    <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">Treinamento:</div>
+                    <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">Treinamento:
+                    </div>
                     <div class="fw-bold text-primary" id="google_modal_cliente_info"></div>
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted text-uppercase">Convite Google Agenda</label>
-                    <input type="url"
-                           name="google_event_link"
-                           id="google_event_link_field"
-                           class="form-control mb-2"
-                           placeholder="https://calendar.app.google/...">
-                    
+                    <input type="url" name="google_event_link" id="google_event_link_field" class="form-control mb-2"
+                        placeholder="https://calendar.app.google/...">
+
                     <div class="d-flex gap-2 flex-wrap mb-3">
-                        <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick="window.open(document.getElementById('google_event_link_field').value || 'https://calendar.google.com', '_blank')">
+                        <button type="button" class="btn btn-outline-primary btn-sm px-3"
+                            onclick="window.open(document.getElementById('google_event_link_field').value || 'https://calendar.google.com', '_blank')">
                             <i class="bi bi-box-arrow-up-right me-1"></i>Testar Link
                         </button>
                         <button type="button" class="btn btn-outline-success btn-sm px-3" onclick="colarLinkManual()">
@@ -2200,7 +2327,8 @@ include 'header.php';
         <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
             <div class="modal-header border-0 p-4 pb-0">
                 <h5 class="fw-800 mb-0">
-                    <i class="bi bi-journal-text me-2 text-primary"></i> Históricos: <span id="hist_cliente_nome" class="text-primary"></span>
+                    <i class="bi bi-journal-text me-2 text-primary"></i> Históricos: <span id="hist_cliente_nome"
+                        class="text-primary"></span>
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -2213,7 +2341,8 @@ include 'header.php';
                 </div>
             </div>
             <div class="modal-footer border-0 p-4">
-                <button type="button" class="btn btn-premium w-100" onclick="abrirModalNovaObs()" style="background: linear-gradient(135deg, var(--primary) 0%, #1e293b 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">
+                <button type="button" class="btn btn-premium w-100" onclick="abrirModalNovaObs()"
+                    style="background: linear-gradient(135deg, var(--primary) 0%, #1e293b 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">
                     <i class="bi bi-plus-circle me-2"></i> Adicionar Novo Registro Agora
                 </button>
             </div>
@@ -2234,7 +2363,8 @@ include 'header.php';
             <div class="modal-body p-4">
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted">Título do Evento</label>
-                    <input type="text" name="titulo" class="form-control" placeholder="Ex: Contato via WhatsApp" required>
+                    <input type="text" name="titulo" class="form-control" placeholder="Ex: Contato via WhatsApp"
+                        required>
                 </div>
                 <div class="row g-3 mb-3">
                     <div class="col-6">
@@ -2254,11 +2384,14 @@ include 'header.php';
                 </div>
                 <div class="mb-0">
                     <label class="form-label small fw-bold text-muted">Conteúdo Detalhado</label>
-                    <textarea name="conteudo" class="form-control" rows="5" placeholder="Descreva o que foi feito ou conversado..." required></textarea>
+                    <textarea name="conteudo" class="form-control" rows="5"
+                        placeholder="Descreva o que foi feito ou conversado..." required></textarea>
                 </div>
             </div>
             <div class="modal-footer border-0 p-4 pt-0">
-                <button type="submit" class="btn btn-premium w-100 shadow-sm" style="background: linear-gradient(135deg, var(--primary) 0%, #1e293b 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">Salvar no Histórico Permanente</button>
+                <button type="submit" class="btn btn-premium w-100 shadow-sm"
+                    style="background: linear-gradient(135deg, var(--primary) 0%, #1e293b 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">Salvar
+                    no Histórico Permanente</button>
             </div>
         </form>
     </div>
@@ -2267,9 +2400,9 @@ include 'header.php';
 
 <script>
     // Inicializar tooltips
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         const openGoogleAgendaLink = <?= json_encode($open_google_agenda, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-        const openGoogleAgendaTreinamentoId = <?= (int)$open_google_agenda_treinamento_id ?>;
+        const openGoogleAgendaTreinamentoId = <?= (int) $open_google_agenda_treinamento_id ?>;
         if (openGoogleAgendaLink) {
             const win = window.open(openGoogleAgendaLink, '_blank', 'noopener');
             if (!win) {
@@ -2277,14 +2410,14 @@ include 'header.php';
             }
             if (openGoogleAgendaTreinamentoId > 0) {
                 const redirectUrl = 'treinamentos.php?msg=Link+do+Google+Agenda+copiado.+Cole+no+campo+manual+abaixo.&tipo=info&open_google_modal_id=' + openGoogleAgendaTreinamentoId;
-                setTimeout(function() {
+                setTimeout(function () {
                     window.location.href = redirectUrl;
                 }, 450);
             }
         }
 
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl)
         })
 
@@ -2335,7 +2468,7 @@ include 'header.php';
     function atualizarBotaoCopiarDisponibilidade() {
         const botao = document.getElementById('btn_copiar_disponibilidade');
         if (!botao) return;
-        
+
         if (mensagemErroGlobal) {
             botao.disabled = true;
             botao.classList.add('opacity-50');
@@ -2346,7 +2479,7 @@ include 'header.php';
 
         botao.disabled = !disponibilidadeFoiCarregada;
         botao.innerHTML = '<i class="bi bi-whatsapp me-2"></i>Copiar Horas';
-        
+
         if (botao.disabled) {
             botao.classList.add('opacity-50');
             botao.title = "Carregando disponibilidade do Google...";
@@ -2388,7 +2521,7 @@ include 'header.php';
 
         linhas.push('Olá' + (clienteNome ? ' ' + clienteNome : '') + '! Tudo bem? 👍');
         linhas.push('');
-        
+
         if (diasComSlot.length === 0) {
             linhas.push('Para agendarmos nosso treinamento, no momento não tenho horários livres para os próximos dias, mas podemos combinar um horário específico se preferir. 😕');
         } else {
@@ -2466,7 +2599,7 @@ include 'header.php';
                     botao.className = isProximo ? 'btn btn-sm btn-success' : 'btn btn-sm btn-outline-success';
                     botao.textContent = slot.hora || '--:--';
                     botao.dataset.datetime = slot.datetime_local || '';
-                    botao.addEventListener('click', function() {
+                    botao.addEventListener('click', function () {
                         const dataTreinamentoInput = document.getElementById('data_treinamento');
                         if (dataTreinamentoInput && this.dataset.datetime) {
                             dataTreinamentoInput.value = this.dataset.datetime;
@@ -2497,7 +2630,7 @@ include 'header.php';
         const container = document.getElementById('disponibilidade_resultado');
         const botaoBusca = document.getElementById('btn_buscar_disponibilidade');
         const botaoCopiar = document.getElementById('btn_copiar_disponibilidade');
-        
+
         if (!container) return;
 
         // Feedback visual de carregamento
@@ -2506,12 +2639,12 @@ include 'header.php';
             botaoCopiar.disabled = true;
             botaoCopiar.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Carregando...';
         }
-        
+
         container.innerHTML = '<div class="text-muted"><div class="spinner-border spinner-border-sm me-2"></span>Consultando Google Agenda...</div>';
 
         fetch('google_calendar_disponibilidade.php?dias=2&duracao_min=60', {
-                cache: 'no-store'
-            })
+            cache: 'no-store'
+        })
             .then(r => r.json())
             .then(data => {
                 if (!data || !data.success) {
@@ -2591,7 +2724,7 @@ include 'header.php';
 
     // 1. Modal Observação
     document.querySelectorAll('.view-obs-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function () {
             document.getElementById('view_obs_cliente').innerText = this.dataset.cliente;
             document.getElementById('view_obs_text').innerText = this.dataset.obs;
             new bootstrap.Modal(document.getElementById('modalViewObs')).show();
@@ -2600,7 +2733,7 @@ include 'header.php';
 
     // 2. Sincronização Google
     document.querySelectorAll('.sync-google-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function () {
             const id = this.dataset.id;
             const icon = this.querySelector('i');
             const originalClass = icon.className;
@@ -2632,7 +2765,7 @@ include 'header.php';
 
     // 3. Remover do Google Agenda (Função adicional se necessário)
     document.querySelectorAll('.delete-google-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function () {
             if (confirm('Deseja remover este evento do Google Agenda?')) {
                 const id = this.dataset.id;
                 const eventId = this.dataset.eventId;
@@ -2662,7 +2795,7 @@ include 'header.php';
 
     // 4. Editar Agendamento - ATUALIZADO COM GOOGLE LINK
     document.querySelectorAll('.edit-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function () {
             document.getElementById('modalTitle').innerHTML = '<i class="bi bi-pencil-square me-2"></i>Editar Treinamento';
             document.getElementById('id_treinamento').value = this.dataset.id;
             document.getElementById('id_cliente').value = this.dataset.cliente;
@@ -2685,8 +2818,11 @@ include 'header.php';
 
         if (radioComPendencia.checked) {
             wrapper.classList.remove('d-none');
+            input.setAttribute('required', 'required');
+            gsap.fromTo(wrapper, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.3 });
         } else {
             wrapper.classList.add('d-none');
+            input.removeAttribute('required');
             input.value = '';
         }
     }
@@ -2696,11 +2832,11 @@ include 'header.php';
     });
 
     document.querySelectorAll('.open-finish-modal').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function () {
             const id = this.dataset.id;
             const cliente = this.dataset.cliente;
             const tema = this.dataset.tema;
-            
+
             document.getElementById('modal_id_treinamento').value = id;
             document.getElementById('modal_cliente_info').innerText = cliente + " | " + tema;
             document.querySelectorAll('.pendencia-opcao').forEach(radio => {
@@ -2709,14 +2845,14 @@ include 'header.php';
             const referenciaInput = document.getElementById('referencia_chamado');
             if (referenciaInput) referenciaInput.value = '';
             atualizarCampoReferenciaPendencia();
-            
+
             new bootstrap.Modal(document.getElementById('modalEncerrar')).show();
         });
     });
 
     // 6. Link Manual Google (Ex-Relatorio)
     document.querySelectorAll('.open-google-link-modal').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function () {
             document.getElementById('google_modal_id_treinamento').value = this.dataset.id;
             document.getElementById('google_modal_cliente_info').innerText = this.dataset.cliente;
             document.getElementById('google_event_link_field').value = this.dataset.googleLink || '';
@@ -2741,7 +2877,7 @@ include 'header.php';
 
     // 7. WhatsApp Copy
     document.querySelectorAll('.copy-whatsapp-message').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function () {
             const msg = this.dataset.message;
             copiarTextoAreaTransferencia(msg, 'Mensagem WhatsApp copiada!');
         });
@@ -2761,7 +2897,7 @@ include 'header.php';
                 document.getElementById('google_modal_id_treinamento').value = autoId;
                 document.getElementById('google_modal_cliente_info').innerText = syncBtn ? syncBtn.dataset.cliente : 'Treinamento';
                 const eventLinkField = document.getElementById('google_event_link_field');
-                if(eventLinkField) eventLinkField.value = '';
+                if (eventLinkField) eventLinkField.value = '';
                 new bootstrap.Modal(document.getElementById('modalGoogleLink')).show();
             }
         }, 500);
@@ -2779,7 +2915,7 @@ include 'header.php';
 
     const modalTreinamento = document.getElementById('modalTreinamento');
     if (modalTreinamento) {
-        modalTreinamento.addEventListener('shown.bs.modal', function() {
+        modalTreinamento.addEventListener('shown.bs.modal', function () {
             carregarDisponibilidadeGoogle();
         });
     }
@@ -2788,8 +2924,49 @@ include 'header.php';
 
     carregarDisponibilidadeGoogle();
 
+    // Validação Formulario de Agendamento
+    const formAgenda = document.getElementById('formAgendaTreinamento');
+    if (formAgenda) {
+        formAgenda.addEventListener('submit', function (e) {
+            const dataInput = document.getElementById('data_treinamento');
+            const dataVal = dataInput ? dataInput.value : '';
+            const contatoSelect = document.getElementById('id_contato');
+
+            if (contatoSelect && !contatoSelect.disabled && contatoSelect.value === '') {
+                e.preventDefault();
+                alert('Atenção: Selecione um contato válido para agendar o treinamento.');
+                contatoSelect.focus();
+                return false;
+            }
+
+            if (dataVal) {
+                const dateObj = new Date(dataVal);
+                const day = dateObj.getDay(); // 0 is Sunday, 6 is Saturday
+                const hours = dateObj.getHours();
+
+                if (day === 0 || day === 6) {
+                    const confirmar = confirm('Você está agendando para um final de semana. Tem certeza?');
+                    if (!confirmar) {
+                        e.preventDefault();
+                        dataInput.focus();
+                        return false;
+                    }
+                }
+
+                if (hours < 7 || hours >= 19) {
+                    const confirmarHora = confirm('Você está agendando fora do horário comercial habitual. Tem certeza?');
+                    if (!confirmarHora) {
+                        e.preventDefault();
+                        dataInput.focus();
+                        return false;
+                    }
+                }
+            }
+        });
+    }
+
     // Reset modal quando fechado
-    document.getElementById('modalTreinamento').addEventListener('hidden.bs.modal', function() {
+    document.getElementById('modalTreinamento').addEventListener('hidden.bs.modal', function () {
         document.getElementById('modalTitle').innerHTML = '<i class="bi bi-calendar-plus me-2"></i>Agendar Treinamento';
         document.getElementById('id_treinamento').value = '';
         this.querySelector('form').reset();
@@ -2820,7 +2997,7 @@ include 'header.php';
     let currentClientNameForObs = null;
 
     document.querySelectorAll('.btn-history-client').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function () {
             currentClientIdForObs = this.dataset.id;
             currentClientNameForObs = this.dataset.nome;
             abrirModalHistorico(currentClientIdForObs, currentClientNameForObs);
@@ -2831,7 +3008,7 @@ include 'header.php';
         document.getElementById('hist_cliente_nome').innerText = nome;
         const container = document.getElementById('hist_obs_container');
         container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Carregando históricos...</p></div>';
-        
+
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalHistoricoCliente')).show();
 
         fetch(`treinamentos.php?get_observations=1&id_cliente=${id}`)
