@@ -317,7 +317,7 @@ include 'header.php';
 }
 
 /* Tooltip KPIs (Igual funil_implantacao.php) */
-.kpi-card { cursor: help; }
+.kpi-card { cursor: help; position: relative; }
 .kpi-tooltip {
     display: none;
     position: absolute;
@@ -672,7 +672,7 @@ include 'header.php';
                 </div>
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <div class="kpi-label mb-2">Taxa de Resolução <i class="bi bi-info-circle ms-1 opacity-50" style="font-size: 0.6rem;"></i></div>
+                        <div class="kpi-label mb-2">Taxa de Resolução <i class="bi bi-question-circle ms-1 opacity-50" style="font-size: 0.6rem;"></i></div>
                         <div class="kpi-value" style="color: var(--purple);"><?= $kpi_taxa_resolucao ?>%</div>
                     </div>
                     <div class="kpi-icon" style="background: rgba(139,92,246,0.1); color: #8b5cf6;">
