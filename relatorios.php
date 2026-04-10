@@ -316,6 +316,68 @@ include 'header.php';
     color: var(--text-muted);
 }
 
+/* Tooltip KPIs (Igual funil_implantacao.php) */
+.kpi-card { cursor: help; }
+.kpi-tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 210px;
+    padding: 0.85rem 1rem;
+    border-radius: 14px;
+    z-index: 999;
+    text-align: left;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+    pointer-events: none;
+    background: #0d1333;
+    border: 1px solid rgba(139,92,246,0.35);
+}
+.kpi-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 7px solid transparent;
+    border-top-color: #0d1333;
+}
+.kpi-card:hover .kpi-tooltip {
+    display: block;
+}
+.kpi-tooltip-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 0.4rem;
+}
+.kpi-tooltip-formula {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 0.5rem;
+    line-height: 1.4;
+}
+.kpi-tooltip-divider {
+    height: 1px;
+    background: rgba(255,255,255,0.1);
+    margin-bottom: 0.5rem;
+}
+.kpi-tooltip-result {
+    font-size: 1.4rem;
+    font-weight: 900;
+    color: #ffffff;
+    margin-bottom: 0.2rem;
+}
+.kpi-tooltip-desc {
+    font-size: 0.72rem;
+    color: rgba(255,255,255,0.6);
+    line-height: 1.4;
+}
+
 /* Chart Cards */
 .chart-card {
     background: var(--bg-card);
@@ -601,9 +663,16 @@ include 'header.php';
         </div>
         <div class="col-6 col-lg-3 gsap-reveal">
             <div class="kpi-card kpi-rate">
+                <div class="kpi-tooltip">
+                    <div class="kpi-tooltip-title"><i class="bi bi-calculator me-1"></i>Cálculo</div>
+                    <div class="kpi-tooltip-formula">Realizados &divide; Total no Período</div>
+                    <div class="kpi-tooltip-divider"></div>
+                    <div class="kpi-tooltip-result" style="color: #a78bfa;"><?= $kpi_taxa_resolucao ?>%</div>
+                    <div class="kpi-tooltip-desc"><?= $kpi_total ?> treinamentos &rarr; <?= $kpi_realizados ?> concluídos</div>
+                </div>
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <div class="kpi-label mb-2">Taxa de Resolução</div>
+                        <div class="kpi-label mb-2">Taxa de Resolução <i class="bi bi-info-circle ms-1 opacity-50" style="font-size: 0.6rem;"></i></div>
                         <div class="kpi-value" style="color: var(--purple);"><?= $kpi_taxa_resolucao ?>%</div>
                     </div>
                     <div class="kpi-icon" style="background: rgba(139,92,246,0.1); color: #8b5cf6;">
