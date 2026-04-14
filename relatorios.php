@@ -530,17 +530,31 @@ include 'header.php';
         max-height: none !important;
         overflow: visible !important;
         height: auto !important;
+        display: block !important;
     }
 
     /* Garante que a tabela completa apareça sem quebra de coluna */
-    .report-table-container { break-inside: auto; }
-    .report-table { width: 100% !important; }
+    .report-table-container { 
+        box-shadow: none !important; 
+        border: 1px solid #ddd !important; 
+        overflow: visible !important; 
+        height: auto !important;
+        break-inside: auto;
+    }
+    
+    .report-table { width: 100% !important; border-collapse: collapse !important; }
     .report-table tr { break-inside: avoid; page-break-inside: avoid; }
+    .report-table td, .report-table th { overflow: visible !important; white-space: normal !important; }
 
-    /* Rodapé da tabela — ocultar botões de exportação */
-    .report-table-header .d-flex { display: none !important; }
+    /* Remove truncamento de texto na impressão */
+    .text-truncate {
+        max-width: none !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+    }
 
-    .gsap-reveal { opacity: 1 !important; transform: none !important; }
+    .gsap-reveal { opacity: 1 !important; transform: none !important; visibility: visible !important; }
 }
 </style>
 
@@ -775,7 +789,7 @@ include 'header.php';
                 <tbody>
                     <?php if (empty($treinamentos)): ?>
                         <tr>
-                            <td colspan="8" class="text-center py-5">
+                            <td colspan="9" class="text-center py-5">
                                 <i class="bi bi-inbox display-4 text-muted d-block mb-3 opacity-25"></i>
                                 <h6 class="text-muted">Nenhum treinamento encontrado para o período selecionado.</h6>
                                 <p class="text-muted small">Ajuste os filtros de data ou limpe os filtros para ver todos os registros.</p>

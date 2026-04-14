@@ -120,6 +120,7 @@ $sql_top_clientes = "SELECT c.fantasia, COUNT(t.id_treinamento) as total
                      FROM clientes c
                      JOIN treinamentos t ON c.id_cliente = t.id_cliente
                      WHERE t.status IN ('REALIZADO', 'RESOLVIDO')
+                     AND c.status = 'EM ANDAMENTO'
                      GROUP BY c.id_cliente, c.fantasia
                      ORDER BY total DESC
                      LIMIT 5";

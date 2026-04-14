@@ -1,0 +1,2456 @@
+
+Warning: PHP Startup: Unable to load dynamic library 'pdo_firebird' (tried: c:/wamp64/bin/php/php7.4.33/ext/pdo_firebird (Não foi possível encontrar o módulo especificado.), c:/wamp64/bin/php/php7.4.33/ext/php_pdo_firebird.dll (%1 não é um aplicativo Win32 válido.)) in Unknown on line 0
+
+Warning: PHP Startup: Unable to load dynamic library 'php_pdo_firebird.dll' (tried: c:/wamp64/bin/php/php7.4.33/ext/php_pdo_firebird.dll (%1 não é um aplicativo Win32 válido.), c:/wamp64/bin/php/php7.4.33/ext/php_php_pdo_firebird.dll.dll (Não foi possível encontrar o módulo especificado.)) in Unknown on line 0
+
+Warning: PHP Startup: Unable to load dynamic library 'php_interbase.dll' (tried: c:/wamp64/bin/php/php7.4.33/ext/php_interbase.dll (Não foi possível encontrar o módulo especificado.), c:/wamp64/bin/php/php7.4.33/ext/php_php_interbase.dll.dll (Não foi possível encontrar o módulo especificado.)) in Unknown on line 0
+
+Notice: Undefined index: REQUEST_METHOD in C:\wamp64\www\implanta\treinamentos.php on line 739
+
+Call Stack:
+    0.0072     730720   1. {main}() C:\wamp64\www\implanta\treinamentos.php:0
+
+<!DOCTYPE html>
+<html lang="pt-br">
+
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Implantação | Dashboard Gestão</title>
+    
+    <!-- // web fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="css/dark-mode.css">
+    
+    <!-- Script FOUC Prevention para Modo Escuro -->
+    <script>
+        (function() {
+            var storedTheme = localStorage.getItem('theme');
+            var systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (storedTheme === 'dark' || (!storedTheme && systemPrefersDark)) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+    
+    <style>
+        /* // design tokens */
+        :root {
+            --primary: #4361ee;       
+            --primary-hover: #3a56d4;
+            --primary-light: rgba(67, 97, 238, 0.1);
+            
+            --secondary: #2b2d42;     
+            
+            --success: #10b981;
+            --success-light: rgba(16, 185, 129, 0.1);
+            
+            --warning: #f59e0b;
+            --warning-light: rgba(245, 158, 11, 0.1);
+            
+            --danger: #ef4444;
+            --danger-light: rgba(239, 68, 68, 0.1);
+            
+            --info: #0ea5e9;
+            --info-light: rgba(14, 165, 233, 0.1);
+            
+            --purple: #8b5cf6;
+            --purple-light: rgba(139, 92, 246, 0.1);
+
+            --bg-body: #f1f4f9;       
+            --bg-card: #ffffff;
+            --border-color: #e2e8f0;
+            
+            --sidebar-bg: #0b1437;    
+            --sidebar-text: #a3aedd;  
+            --sidebar-text-hover: #ffffff;
+            --sidebar-active-bg: rgba(67, 97, 238, 0.15);
+            --sidebar-active-border: #4361ee;
+            
+            --text-main: #2b3674;     
+            --text-muted: #8899a6;    
+            --text-dark: #1b2559;
+
+            --font-heading: 'Poppins', sans-serif;
+            --font-body: 'Inter', sans-serif;
+
+            --sidebar-width: 270px;
+            
+            --shadow-sm: 0px 4px 6px rgba(0, 0, 0, 0.04);
+            --shadow-card: 0px 10px 30px rgba(112, 144, 176, 0.12);
+            --shadow-hover: 0px 15px 35px rgba(112, 144, 176, 0.18);
+            
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 24px;
+        }
+
+        /* // Dark Mode Contrast Enhancement (Clean Modern) */
+        [data-theme="dark"] {
+            --bg-body: #0d0e12;
+            --bg-card: #16171d;
+            --border-color: #2b2e35;
+            --text-main: #f1f5f9;
+            --text-muted: #cbd5e1;
+            --text-dark: #ffffff;
+            
+            --sidebar-bg: #090a0f;
+            --sidebar-text: #94a3b8;
+            --sidebar-active-bg: rgba(67, 97, 238, 0.2);
+            
+            --primary-light: rgba(67, 97, 238, 0.2);
+            --success-light: rgba(16, 185, 129, 0.2);
+            --warning-light: rgba(245, 158, 11, 0.2);
+            --danger-light: rgba(239, 68, 68, 0.2);
+            --info-light: rgba(6, 182, 212, 0.2);
+        }
+
+        /* // global resets */
+        body {
+            font-family: var(--font-body);
+            background-color: var(--bg-body);
+            color: var(--text-dark);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            letter-spacing: -0.01em;
+        }
+
+        h1, h2, h3, h4, h5, h6, .navbar-brand {
+            font-family: var(--font-heading);
+            color: var(--text-dark);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        /* // sidebar */
+        #sidebar {
+            width: var(--sidebar-width);
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background: var(--sidebar-bg);
+            color: var(--sidebar-text);
+            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 1000;
+            overflow-y: auto;
+            border-right: 1px solid rgba(255,255,255,0.05);
+        }
+
+        #sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+        #sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+        }
+
+        .sidebar-header {
+            padding: 2.2rem 1.8rem 1.2rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .sidebar-header h4 {
+            font-weight: 800;
+            font-size: 1.4rem;
+            margin: 0;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .sidebar-header h4 i {
+            color: var(--primary);
+            filter: drop-shadow(0 0 8px rgba(67, 97, 238, 0.6));
+            margin-right: 10px;
+        }
+
+        .menu-separator {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.06);
+            margin: 1.2rem 1.8rem;
+        }
+
+        .menu-group-title {
+            padding: 0.5rem 1.8rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: rgba(255, 255, 255, 0.4);
+            font-weight: 700;
+            font-family: var(--font-heading);
+            margin-top: 0.5rem;
+        }
+
+        #sidebar ul.components {
+            padding: 0 0 6rem 0; /* extra padding to prevent footer overlap */
+        }
+
+        #sidebar ul li a {
+            padding: 0.85rem 1.5rem;
+            margin: 0.3rem 1.2rem;
+            display: flex;
+            align-items: center;
+            color: var(--sidebar-text);
+            text-decoration: none;
+            border-radius: var(--radius-md);
+            transition: all 0.3s ease;
+            font-weight: 500;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #sidebar ul li a i {
+            margin-right: 14px;
+            font-size: 1.25rem;
+            width: 24px;
+            text-align: center;
+            transition: all 0.3s ease;
+            color: var(--sidebar-text);
+        }
+
+        #sidebar ul li a:hover {
+            color: var(--sidebar-text-hover);
+            background: rgba(255, 255, 255, 0.04);
+            transform: translateX(4px);
+        }
+        
+        #sidebar ul li a:hover i {
+            color: var(--primary);
+            transform: scale(1.1);
+        }
+
+        #sidebar ul li.active>a {
+            color: #ffffff;
+            background: var(--sidebar-active-bg);
+            font-weight: 600;
+            box-shadow: inset 4px 0 0 var(--sidebar-active-border);
+        }
+        
+        #sidebar ul li.active>a i {
+            color: #ffffff;
+            filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.4));
+        }
+
+        .badge-notify {
+            font-family: var(--font-body);
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-left: auto;
+        }
+
+        /* // Sidebar Highlights for Conversions */
+        .highlight-item>a {
+            background: linear-gradient(90deg, rgba(16,185,129,0.05) 0%, transparent 100%);
+        }
+        .highlight-item.active>a {
+            box-shadow: inset 3px 0 0 var(--success);
+            background: rgba(16, 185, 129, 0.15);
+        }
+        .highlight-item.active>a i, .highlight-item>a:hover i {
+            color: var(--success) !important;
+            filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.5)) !important;
+        }
+
+        .highlight-item-2>a {
+            background: linear-gradient(90deg, rgba(67,97,238,0.05) 0%, transparent 100%);
+        }
+
+        /* // main content */
+        #content {
+            width: calc(100% - var(--sidebar-width));
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
+            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            padding: 2.5rem 3rem;
+        }
+
+        @media (max-width: 992px) {
+            #sidebar {
+                margin-left: calc(-1 * var(--sidebar-width));
+            }
+            #content {
+                width: 100%;
+                margin-left: 0;
+                padding: 1.5rem;
+            }
+        }
+        
+        /* // generic UI components */
+        .card {
+            border: none;
+            border-radius: var(--radius-lg);
+            background: var(--bg-card);
+            box-shadow: var(--shadow-card);
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            box-shadow: var(--shadow-hover);
+        }
+
+        .btn {
+            font-weight: 600;
+            font-family: var(--font-body);
+            border-radius: var(--radius-sm);
+            padding: 0.6rem 1.2rem;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary);
+            border-color: var(--primary);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(67, 97, 238, 0.2);
+        }
+        
+        .btn-primary:hover, .btn-primary:focus {
+            background-color: var(--primary-hover);
+            border-color: var(--primary-hover);
+            box-shadow: 0 6px 15px rgba(67, 97, 238, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn-outline-primary {
+            border: 2px solid var(--primary);
+            color: var(--primary);
+            background: transparent;
+        }
+        
+        .btn-outline-primary:hover {
+            background: var(--primary-light);
+            color: var(--primary);
+            border-color: var(--primary);
+            transform: translateY(-2px);
+        }
+
+        .form-control, .form-select {
+            border-radius: var(--radius-md);
+            border: 1px solid #e2e8f0;
+            padding: 0.6rem 1rem;
+            font-size: 0.95rem;
+            color: var(--text-dark);
+            background-color: #f8fafc;
+            transition: all 0.2s;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            background-color: #fff;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px var(--primary-light);
+        }
+
+        .text-purple { color: var(--purple) !important; }
+        .btn-purple {
+            background-color: var(--purple); border-color: var(--purple); color: white;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+        }
+        .btn-purple:hover {
+            background-color: #7c3aed; border-color: #7c3aed; color: white;
+            box-shadow: 0 6px 15px rgba(139, 92, 246, 0.3); transform: translateY(-2px);
+        }
+
+        /* Classes auxiliares para Dashboard premium */
+        .dashboard-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow-card);
+        }
+
+        .text-main { color: var(--text-main) !important; }
+        .bg-main { background-color: var(--primary) !important; }
+    </style>
+</head>
+
+<body>
+    <div class="wrapper">
+        <!-- // sidebar hero -->
+        <nav id="sidebar">
+            <div class="sidebar-header" style="justify-content: space-between;">
+                <h4><i class="bi bi-hexagon-fill"></i> </h4>
+                <button id="theme-toggle" class="btn btn-sm text-white" style="background: rgba(255,255,255,0.1); border:none; padding: 0.4rem 0.6rem; border-radius: 8px;" aria-label="Toggle Dark Mode" title="Alternar Tema Escuro">
+                    <i id="theme-toggle-icon" class="bi bi-moon-stars" style="margin: 0; filter: drop-shadow(0 0 5px rgba(255,255,255,0.5));"></i>
+                </button>
+            </div>
+
+            <ul class="list-unstyled components">
+                
+                <!-- // section: gestão -->
+                <li class="menu-group-title">Gestão</li>
+
+                <li class="">
+                    <a href="index.php">
+                        <i class="bi bi-pie-chart-fill"></i> <span>Dashboard</span>
+                    </a>
+                </li>
+
+                <li class="">
+                    <a href="relatorios.php">
+                        <i class="bi bi-file-earmark-bar-graph"></i> <span>Relatórios</span>
+                    </a>
+                </li>
+
+                <li class="">
+                    <a href="estatisticas_gerenciais.php">
+                        <i class="bi bi-graph-up-arrow text-success"></i> <span>B.I Gerencial</span>
+                    </a>
+                </li>
+
+                <div class="menu-separator"></div>
+
+                <!-- // section: operação -->
+                <li class="menu-group-title">Operação</li>
+
+                <li class="active">
+                    <a href="treinamentos.php">
+                        <i class="bi bi-calendar-check text-primary"></i> <span>Treinamentos</span>
+                                                    <span class="badge-notify text-white ms-auto" title="Pendentes">6</span>
+                                            </a>
+                </li>
+
+                <li class="">
+                    <a href="tarefas.php">
+                        <i class="bi bi-list-task"></i> <span>Tarefas</span>
+                                                    <span class="badge-notify text-white ms-auto" title="Tarefas Pendentes">2</span>
+                                            </a>
+                </li>
+
+                <li class="">
+                    <a href="pendencias_treinamentos.php">
+                        <i class="bi bi-exclamation-diamond"></i> <span>Pendências</span>
+                                            </a>
+                </li>
+
+                <div class="menu-separator"></div>
+
+                <!-- // section: relacionamento -->
+                <li class="menu-group-title">Relacionamento</li>
+
+                <li class="highlight-item-2 ">
+                    <a href="clientes.php">
+                        <i class="bi bi-buildings"></i> <span>Clientes</span>
+                        <span class="badge-notify text-white ms-auto">34</span>
+                    </a>
+                </li>
+
+                <li class="">
+                    <a href="contatos.php">
+                        <i class="bi bi-people"></i> <span>Contatos</span>
+                        <span class="badge-notify text-white ms-auto">75</span>
+                    </a>
+                </li>
+                
+                <li class="">
+                    <a href="radar_emergencia.php" style="color: #ef4444;">
+                        <i class="bi bi-radar" style="color: #ef4444;"></i> <span style="font-weight: 700;">Radar de Emergência</span>
+                                                    <span class="badge-notify text-white ms-auto" style="background: #ef4444; padding: 2px 6px; border-radius: 6px;">27</span>
+                                            </a>
+                </li>
+
+                <div class="menu-separator"></div>
+
+                <!-- // section: apoio -->
+                <li class="menu-group-title">Apoio</li>
+
+                <li class="">
+                    <a href="orientacoes.php">
+                        <i class="bi bi-info-circle"></i> <span>Orientações</span>
+                    </a>
+                </li>
+
+            </ul>
+            
+            <!-- // rodapé usuario -->
+            <div style="position: fixed; bottom: 0; width: var(--sidebar-width); padding: 1rem 1.5rem; border-top: 1px solid rgba(255,255,255,0.05); background: var(--sidebar-bg); z-index: 10;">
+
+                                <a href="google_auth_reset.php" title="Google Agenda conectado" style="
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 0.45rem 0.75rem;
+                    border-radius: 8px;
+                    background: rgba(16,185,129,0.1);
+                    border: 1px solid rgba(16,185,129,0.25);
+                    text-decoration: none;
+                    margin-bottom: 0.75rem;
+                    transition: all 0.2s ease;
+                " onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                    <span style="
+                        width: 8px; height: 8px; border-radius: 50%;
+                        background: #10b981;
+                        flex-shrink: 0;
+                                            "></span>
+                    <span style="font-size: 0.72rem; color: #10b981; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        <i class="bi bi-google me-1"></i>Google Agenda conectado                    </span>
+                </a>
+
+                <div class="d-flex align-items-center">
+                    <div style="width: 36px; height: 36px; border-radius: 12px; background: linear-gradient(135deg, var(--primary), var(--purple)); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white;">
+                        <i class="bi bi-person"></i>
+                    </div>
+                    <div class="ms-3">
+                        <h6 class="mb-0 text-white" style="font-size: 0.85rem; font-weight: 600;">Monitoramento</h6>
+                        <small style="font-size: 0.7rem; color: var(--sidebar-text);">Admin Implantação</small>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                @keyframes pulse-red {
+                    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+                    50%       { box-shadow: 0 0 0 5px rgba(239,68,68,0); }
+                }
+            </style>
+        </nav>
+
+        <!-- // area principal -->
+        <main id="content">
+
+<style>
+/* // Design System Clean & Modern (Perplexity Style) */
+:root {
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-border: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] {
+    --bg-body: #0d0e12;
+    --bg-card: #14151a;
+    --border-color: #2b2e35;
+    --text-main: #e2e8f0;
+    --text-muted: #94a3b8;
+    --primary-light: rgba(67, 97, 238, 0.15);
+    --warning-light: rgba(255, 193, 7, 0.1);
+    --danger-light: rgba(220, 53, 69, 0.1);
+    --info-light: rgba(13, 202, 240, 0.1);
+}
+
+/* License Badges Styles */
+.badge-license {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    border-radius: 50px;
+    border: 1px solid transparent;
+}
+.badge-license-1 { 
+    background: #fff7ed; 
+    color: #c2410c; 
+    border-color: #fdba74; 
+    font-weight: 900; 
+    box-shadow: 0 0 10px rgba(249, 115, 22, 0.1);
+    transform: scale(1.02); /* Leve destaque de escala */
+}
+[data-theme="dark"] .badge-license-1 { 
+    background: rgba(249, 115, 22, 0.25); 
+    color: #ffd8a8; 
+    border-color: rgba(249, 115, 22, 0.5); 
+    box-shadow: 0 0 15px rgba(249, 115, 22, 0.15);
+}
+.badge-license-2 { background: rgba(111, 66, 193, 0.1); color: #6f42c1; border-color: rgba(111, 66, 193, 0.2); }
+[data-theme="dark"] .badge-license-2 { background: rgba(111, 66, 193, 0.2); color: #a389f4; border-color: rgba(111, 66, 193, 0.35); }
+.badge-license-3 { background: rgba(16, 185, 129, 0.1); color: #10b981; border-color: rgba(16, 185, 129, 0.2); }
+[data-theme="dark"] .badge-license-3 { background: rgba(16, 185, 129, 0.2); color: #34d399; border-color: rgba(16, 185, 129, 0.35); }
+
+/* Client Status Badges */
+.client-badge-soft {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 0.35rem 0.75rem;
+    border-radius: 50px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* Page Header - Simplificado */
+.modern-header {
+    padding: 1rem 0 2rem 0;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 2rem;
+}
+
+.title-accent {
+    color: var(--primary);
+    background: linear-gradient(120deg, var(--primary), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Dashboard Cards - Refinados */
+.stats-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    transition: all 0.25s ease;
+    height: 100%;
+}
+
+.stats-card:hover {
+    border-color: var(--primary);
+    transform: translateY(-3px);
+}
+
+.stats-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+}
+
+/* Table Style */
+.table-premium {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 3rem;
+}
+
+.table-premium thead th {
+    background: var(--bg-body);
+    font-size: 0.75rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted) !important;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color) !important;
+}
+
+.table-premium tbody td {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color) !important;
+    font-size: 0.9rem;
+    color: var(--text-main);
+}
+
+/* Animations */
+.gsap-reveal {
+    opacity: 0;
+    transform: translateY(15px);
+}
+
+.fw-800 { font-weight: 800; }
+
+/* Overrides para visibilidade de botões */
+.btn-outline-primary { border-color: var(--primary); color: var(--primary); }
+.btn-outline-primary:hover { background: var(--primary); color: #fff; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.11/locales/pt-br.global.min.js'></script>
+
+<div class="container-fluid px-0">
+    <!-- Modern Header -->
+    <div class="modern-header d-flex justify-content-between align-items-end gsap-reveal">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-2" style="font-size: 0.8rem;">
+                    <li class="breadcrumb-item"><a href="index.php" class="text-decoration-none text-muted">Dashboard</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Treinamentos</li>
+                </ol>
+            </nav>
+            <h2 class="fw-800 mb-0">Agenda de <span class="title-accent">Treinamentos</span></h2>
+            <p class="text-muted small mb-0">Gestão de capacitação técnica dos clientes.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <!-- Botões de alternância de visualização -->
+            <div class="bg-body p-1 rounded-3 d-flex border me-2 shadow-sm">
+                <a href="treinamentos.php?view=list&filtro_cliente=" 
+                   class="btn btn-sm btn-primary px-3 transition-all" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="bottom"
+                   title="Visualizar em formato de Lista">
+                    <i class="bi bi-list"></i>
+                </a>
+                <a href="treinamentos.php?view=calendar&filtro_cliente=" 
+                   class="btn btn-sm btn-outline-secondary border-0 text-muted px-3 transition-all ms-1" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="bottom"
+                   title="Visualizar em formato de Calendário">
+                    <i class="bi bi-calendar3"></i>
+                </a>
+            </div>
+            
+            <span id="wrapper_btn_copiar" class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Carregando disponibilidade do Google...">
+                <button type="button" class="btn btn-outline-success px-4 fw-bold shadow-sm d-flex align-items-center transition-all" id="btn_copiar_disponibilidade" disabled>
+                    <i class="bi bi-whatsapp me-2"></i>Copiar Horas
+                </button>
+            </span>
+            <button class="btn btn-primary px-4 shadow-sm fw-bold ms-2" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
+                <i class="bi bi-calendar-plus me-2"></i>Novo Agendamento
+            </button>
+        </div>
+    </div>
+
+    <!-- Alertas de Inatividade -->
+    <!-- Listagem Principal -->
+
+    <!-- Main Content Area -->
+        <div class="table-premium gsap-reveal">
+        <div class="p-4 border-bottom d-flex justify-content-between align-items-center bg-white flex-wrap gap-3">
+            <h5 class="fw-bold mb-0">
+                                    Listagem de Treinamentos
+                            </h5>
+            <div class="d-flex gap-3 align-items-center flex-wrap">
+                                    <a href="treinamentos.php?mostrar_todos=1&ordenacao=data_treinamento&direcao=asc"
+                       class="btn btn-outline-primary px-4 rounded-pill fw-bold shadow-sm">
+                        <i class="bi bi-eye ms-1 me-2"></i> Exibir Resolvidos
+                    </a>
+                                <div class="dropdown border-start ps-3 ms-2">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Ordenar</button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                        <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=data_treinamento&direcao=asc"><i class="bi bi-calendar3 me-2"></i>Data</a></li>
+                        <li><a class="dropdown-item py-2" href="treinamentos.php?ordenacao=cliente_nome&direcao=asc"><i class="bi bi-building me-2"></i>Cliente</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-4">
+                            <a href="treinamentos.php?ordenacao=data_treinamento&direcao=desc&filtro_cliente="
+                                class="text-decoration-none d-flex align-items-center">
+                                <span>Data Agendada</span>
+                                                                    <i class="bi bi-caret-up-fill ms-1 small text-primary"></i>
+                                                            </a>
+                        </th>
+                        <th>Cliente</th>
+                        <th>STATUS</th>
+                        <th>Servidor</th>
+                        <th>Contato</th>
+                        <th>Tema</th>
+                        <th>Vendedor</th>
+                        <th class="text-center">Recursos Utilizados</th>
+                        <th class="text-end pe-4">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                                                                                                    <tr class="">
+                                <td class="ps-4 fw-bold">
+                                    <div class="text-dark">
+                                        06/04/2026 15:00                                                                            </div>
+                                </td>
+                                <td class="fw-bold">
+                                                                        <div class="d-flex align-items-center gap-2">
+                                        <span style="color: var(--text-main);">SANTO LOOK</span>
+                                                                                    <span class="badge-license badge-license-2" title="2 licença(s)">
+                                                2 <i class="bi bi-pc-display"></i>
+                                            </span>
+                                                                            </div>
+                                </td>
+                                <td>
+                                                                        <span class="client-badge-soft bg-success bg-opacity-10 text-success" style="font-size: 0.72rem; padding: 0.25rem 0.65rem; border-radius: 50px; font-weight: 800; text-transform: uppercase;">
+                                        <i class="bi bi-flag me-1"></i> Finalização                                    </span>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">SP111</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">Suelen Bol - (51) 99274-5871</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">ATENDIMENTOS</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class=" text-uppercase">MARCELO</div>
+                                </td>
+                                <td class="text-center">
+                                                                            <span class="badge bg-light text-dark border d-block mb-1" style="font-size: 0.70rem;">PDV</span>
+                                                                    </td>
+                                <td class="text-end pe-4">
+                                    <div class="d-flex justify-content-end gap-1 flex-wrap">
+                                        <!-- 1. HISTÓRICO (CRM) -->
+                                        <button class="btn btn-sm btn-outline-primary btn-history-client"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Ver Histórico/CRM"
+                                            data-id="75"
+                                            data-nome="SANTO LOOK">
+                                            <i class="bi bi-journal-text"></i>
+                                        </button>
+
+                                        <!-- 2. LUPA (OBSERVAÇÕES DO AGENDAMENTO) -->
+                                        
+                                                                                 <button class="btn btn-sm btn-outline-success copy-whatsapp-message"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Copiar WhatsApp"
+                                            data-message="Olá, Suelen Bol! 👋
+
+✅ Seu treinamento GestãoPRO está confirmado!
+
+🔢 ID do treinamento: #314
+📅 *Data:* 06/04 Segunda-Feira
+🕒 Horário do treinamento: das 15:00h às 16:00h, horário de Brasília.
+🎯 Tema: ATENDIMENTOS
+
+💻 Acesse pelo Google Meet:
+https://meet.google.com/wgz-jdfu-cwb
+
+📆 Adicione à sua agenda:
+https://calendar.app.google/pyEcPjMzDboxrENR9
+
+📌 *Lembrete importante:* no momento do treinamento, tenha o *TeamViewer* ou *AnyDesk* instalado e pronto para uso.
+
+Qualquer dúvida, é só me chamar. Até lá! 🚀">
+                                            <i class="bi bi-whatsapp"></i>
+                                        </button>
+
+                                        <!-- 3. GOOGLE AGENDA (LINK OU SYNC) -->
+                                                                                    <button type="button"
+                                                    class="btn btn-sm btn-outline-primary open-google-link-modal"
+                                                    data-id="314"
+                                                    data-cliente="SANTO LOOK"
+                                                    data-google-link="https://calendar.app.google/pyEcPjMzDboxrENR9"
+                                                    title="Link Google Agenda"
+                                                    data-bs-toggle="tooltip">
+                                                <i class="bi bi-calendar-check"></i>
+                                            </button>
+                                        
+                                        <!-- 4. EDITAR -->
+                                        <button class="btn btn-sm btn-outline-secondary edit-btn"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Editar"
+                                            data-id="314"
+                                            data-cliente="75"
+                                            data-contato="63"
+                                            data-tema="ATENDIMENTOS"
+                                            data-status="PENDENTE"
+                                            data-google-link="https://calendar.app.google/pyEcPjMzDboxrENR9"
+                                            data-data="2026-04-06T15:00">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+
+                                        <!-- 5. FINALIZAR -->
+                                                                                    <button class="btn btn-sm btn-outline-success open-finish-modal"
+                                                data-id="314"
+                                                data-cliente="SANTO LOOK"
+                                                data-tema="ATENDIMENTOS"
+                                                title="Finalizar"
+                                                data-bs-toggle="tooltip">
+                                                <i class="bi bi-check-lg"></i>
+                                            </button>
+                                        
+                                        <!-- 6. EXCLUIR -->
+                                        <a href="?delete=314&pagina=1&filtro_cliente="
+                                            class="btn btn-sm btn-outline-danger"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Excluir"
+                                            onclick="return confirm('Excluir este treinamento?')">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                                                                                <tr class="">
+                                <td class="ps-4 fw-bold">
+                                    <div class="text-dark">
+                                        06/04/2026 16:00                                                                            </div>
+                                </td>
+                                <td class="fw-bold">
+                                                                        <div class="d-flex align-items-center gap-2">
+                                        <span style="color: var(--text-main);">ALPINPRO</span>
+                                                                                    <span class="badge-license badge-license-2" title="2 licença(s)">
+                                                2 <i class="bi bi-pc-display"></i>
+                                            </span>
+                                                                            </div>
+                                </td>
+                                <td>
+                                                                        <span class="client-badge-soft bg-success bg-opacity-10 text-success" style="font-size: 0.72rem; padding: 0.25rem 0.65rem; border-radius: 50px; font-weight: 800; text-transform: uppercase;">
+                                        <i class="bi bi-flag me-1"></i> Finalização                                    </span>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">SP111</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">ADELITA - (35) 9994-7534</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">DUVIDAS</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class=" text-uppercase">DIEGO</div>
+                                </td>
+                                <td class="text-center">
+                                                                            <span class="badge bg-light text-dark border d-block mb-1" style="font-size: 0.70rem;">ORÇAMENTO</span>
+                                                                    </td>
+                                <td class="text-end pe-4">
+                                    <div class="d-flex justify-content-end gap-1 flex-wrap">
+                                        <!-- 1. HISTÓRICO (CRM) -->
+                                        <button class="btn btn-sm btn-outline-primary btn-history-client"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Ver Histórico/CRM"
+                                            data-id="71"
+                                            data-nome="ALPINPRO">
+                                            <i class="bi bi-journal-text"></i>
+                                        </button>
+
+                                        <!-- 2. LUPA (OBSERVAÇÕES DO AGENDAMENTO) -->
+                                        
+                                                                                 <button class="btn btn-sm btn-outline-success copy-whatsapp-message"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Copiar WhatsApp"
+                                            data-message="Olá, ADELITA! 👋
+
+✅ Seu treinamento GestãoPRO está confirmado!
+
+🔢 ID do treinamento: #312
+📅 *Data:* 06/04 Segunda-Feira
+🕒 Horário do treinamento: das 16:00h às 17:00h, horário de Brasília.
+🎯 Tema: DUVIDAS
+
+💻 Acesse pelo Google Meet:
+https://meet.google.com/oor-yepu-eao
+
+📆 Adicione à sua agenda:
+https://calendar.app.google/FewTZTZniwraHS8m6
+
+📌 *Lembrete importante:* no momento do treinamento, tenha o *TeamViewer* ou *AnyDesk* instalado e pronto para uso.
+
+Qualquer dúvida, é só me chamar. Até lá! 🚀">
+                                            <i class="bi bi-whatsapp"></i>
+                                        </button>
+
+                                        <!-- 3. GOOGLE AGENDA (LINK OU SYNC) -->
+                                                                                    <button type="button"
+                                                    class="btn btn-sm btn-outline-primary open-google-link-modal"
+                                                    data-id="312"
+                                                    data-cliente="ALPINPRO"
+                                                    data-google-link="https://calendar.app.google/FewTZTZniwraHS8m6"
+                                                    title="Link Google Agenda"
+                                                    data-bs-toggle="tooltip">
+                                                <i class="bi bi-calendar-check"></i>
+                                            </button>
+                                        
+                                        <!-- 4. EDITAR -->
+                                        <button class="btn btn-sm btn-outline-secondary edit-btn"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Editar"
+                                            data-id="312"
+                                            data-cliente="71"
+                                            data-contato="59"
+                                            data-tema="DUVIDAS"
+                                            data-status="PENDENTE"
+                                            data-google-link="https://calendar.app.google/FewTZTZniwraHS8m6"
+                                            data-data="2026-04-06T16:00">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+
+                                        <!-- 5. FINALIZAR -->
+                                                                                    <button class="btn btn-sm btn-outline-success open-finish-modal"
+                                                data-id="312"
+                                                data-cliente="ALPINPRO"
+                                                data-tema="DUVIDAS"
+                                                title="Finalizar"
+                                                data-bs-toggle="tooltip">
+                                                <i class="bi bi-check-lg"></i>
+                                            </button>
+                                        
+                                        <!-- 6. EXCLUIR -->
+                                        <a href="?delete=312&pagina=1&filtro_cliente="
+                                            class="btn btn-sm btn-outline-danger"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Excluir"
+                                            onclick="return confirm('Excluir este treinamento?')">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                                                                                <tr class="bg-primary bg-opacity-10">
+                                <td class="ps-4 fw-bold">
+                                    <div class="text-dark">
+                                        07/04/2026 08:30                                                                                    <span class="badge bg-primary text-white ms-1" style="font-size: 0.6rem;">HOJE</span>
+                                                                            </div>
+                                </td>
+                                <td class="fw-bold">
+                                                                        <div class="d-flex align-items-center gap-2">
+                                        <span style="color: var(--text-main);">MISTER POOL</span>
+                                                                                    <span class="badge-license badge-license-1" title="1 licença(s)">
+                                                1 <i class="bi bi-pc-display"></i>
+                                            </span>
+                                                                            </div>
+                                </td>
+                                <td>
+                                                                        <span class="client-badge-soft bg-success bg-opacity-10 text-success" style="font-size: 0.72rem; padding: 0.25rem 0.65rem; border-radius: 50px; font-weight: 800; text-transform: uppercase;">
+                                        <i class="bi bi-flag me-1"></i> Finalização                                    </span>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">SP112</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">Vinicius - (11) 93707-4948</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">FATURAMENTO/NF</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class=" text-uppercase">WILLIAN RATE</div>
+                                </td>
+                                <td class="text-center">
+                                                                            <span class="badge bg-light text-dark border d-block mb-1" style="font-size: 0.70rem;">PDV</span>
+                                                                    </td>
+                                <td class="text-end pe-4">
+                                    <div class="d-flex justify-content-end gap-1 flex-wrap">
+                                        <!-- 1. HISTÓRICO (CRM) -->
+                                        <button class="btn btn-sm btn-outline-primary btn-history-client"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Ver Histórico/CRM"
+                                            data-id="78"
+                                            data-nome="MISTER POOL">
+                                            <i class="bi bi-journal-text"></i>
+                                        </button>
+
+                                        <!-- 2. LUPA (OBSERVAÇÕES DO AGENDAMENTO) -->
+                                        
+                                                                                 <button class="btn btn-sm btn-outline-success copy-whatsapp-message"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Copiar WhatsApp"
+                                            data-message="Olá, Vinicius! 👋
+
+✅ Seu treinamento GestãoPRO está confirmado!
+
+🔢 ID do treinamento: #313
+📅 *Data:* 07/04 Terça-Feira
+🕒 Horário do treinamento: das 08:30h às 09:30h, horário de Brasília.
+🎯 Tema: FATURAMENTO/NF
+
+💻 Acesse pelo Google Meet:
+https://meet.google.com/qnn-tsdm-bgv
+
+📆 Adicione à sua agenda:
+https://calendar.app.google/qTVXi41B2EXFjGrk7
+
+📌 *Lembrete importante:* no momento do treinamento, tenha o *TeamViewer* ou *AnyDesk* instalado e pronto para uso.
+
+Qualquer dúvida, é só me chamar. Até lá! 🚀">
+                                            <i class="bi bi-whatsapp"></i>
+                                        </button>
+
+                                        <!-- 3. GOOGLE AGENDA (LINK OU SYNC) -->
+                                                                                    <button type="button"
+                                                    class="btn btn-sm btn-outline-primary open-google-link-modal"
+                                                    data-id="313"
+                                                    data-cliente="MISTER POOL"
+                                                    data-google-link="https://calendar.app.google/qTVXi41B2EXFjGrk7"
+                                                    title="Link Google Agenda"
+                                                    data-bs-toggle="tooltip">
+                                                <i class="bi bi-calendar-check"></i>
+                                            </button>
+                                        
+                                        <!-- 4. EDITAR -->
+                                        <button class="btn btn-sm btn-outline-secondary edit-btn"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Editar"
+                                            data-id="313"
+                                            data-cliente="78"
+                                            data-contato="68"
+                                            data-tema="FATURAMENTO/NF"
+                                            data-status="PENDENTE"
+                                            data-google-link="https://calendar.app.google/qTVXi41B2EXFjGrk7"
+                                            data-data="2026-04-07T08:30">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+
+                                        <!-- 5. FINALIZAR -->
+                                                                                    <button class="btn btn-sm btn-outline-success open-finish-modal"
+                                                data-id="313"
+                                                data-cliente="MISTER POOL"
+                                                data-tema="FATURAMENTO/NF"
+                                                title="Finalizar"
+                                                data-bs-toggle="tooltip">
+                                                <i class="bi bi-check-lg"></i>
+                                            </button>
+                                        
+                                        <!-- 6. EXCLUIR -->
+                                        <a href="?delete=313&pagina=1&filtro_cliente="
+                                            class="btn btn-sm btn-outline-danger"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Excluir"
+                                            onclick="return confirm('Excluir este treinamento?')">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                                                                                <tr class="bg-primary bg-opacity-10">
+                                <td class="ps-4 fw-bold">
+                                    <div class="text-dark">
+                                        07/04/2026 11:30                                                                                    <span class="badge bg-primary text-white ms-1" style="font-size: 0.6rem;">HOJE</span>
+                                                                            </div>
+                                </td>
+                                <td class="fw-bold">
+                                                                        <div class="d-flex align-items-center gap-2">
+                                        <span style="color: var(--text-main);">VH BEBIDAS</span>
+                                                                                    <span class="badge-license badge-license-1" title="1 licença(s)">
+                                                1 <i class="bi bi-pc-display"></i>
+                                            </span>
+                                                                            </div>
+                                </td>
+                                <td>
+                                                                        <span class="client-badge-soft bg-info bg-opacity-10 text-info" style="font-size: 0.72rem; padding: 0.25rem 0.65rem; border-radius: 50px; font-weight: 800; text-transform: uppercase;">
+                                        <i class="bi bi-rocket-takeoff me-1"></i> Integração                                    </span>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">SP112</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">Vinicius - (11) 97231-9940</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">INSTALAÇÃO SISTEMA</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class=" text-uppercase">Vinicius</div>
+                                </td>
+                                <td class="text-center">
+                                                                            <span class="badge bg-light text-dark border d-block mb-1" style="font-size: 0.70rem;">PDV</span>
+                                                                    </td>
+                                <td class="text-end pe-4">
+                                    <div class="d-flex justify-content-end gap-1 flex-wrap">
+                                        <!-- 1. HISTÓRICO (CRM) -->
+                                        <button class="btn btn-sm btn-outline-primary btn-history-client"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Ver Histórico/CRM"
+                                            data-id="94"
+                                            data-nome="VH BEBIDAS">
+                                            <i class="bi bi-journal-text"></i>
+                                        </button>
+
+                                        <!-- 2. LUPA (OBSERVAÇÕES DO AGENDAMENTO) -->
+                                        
+                                                                                 <button class="btn btn-sm btn-outline-success copy-whatsapp-message"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Copiar WhatsApp"
+                                            data-message="Olá, Vinicius! 👋
+
+✅ Seu treinamento GestãoPRO está confirmado!
+
+🔢 ID do treinamento: #316
+📅 *Data:* 07/04 Terça-Feira
+🕒 Horário do treinamento: das 11:30h às 12:30h, horário de Brasília.
+🎯 Tema: INSTALAÇÃO SISTEMA
+
+💻 Acesse pelo Google Meet:
+https://meet.google.com/nkn-unys-ytm
+
+📆 Adicione à sua agenda:
+https://calendar.app.google/BioDLXYNd6tyrUM3A
+
+📌 *Lembrete importante:* no momento do treinamento, tenha o *TeamViewer* ou *AnyDesk* instalado e pronto para uso.
+
+Qualquer dúvida, é só me chamar. Até lá! 🚀">
+                                            <i class="bi bi-whatsapp"></i>
+                                        </button>
+
+                                        <!-- 3. GOOGLE AGENDA (LINK OU SYNC) -->
+                                                                                    <button type="button"
+                                                    class="btn btn-sm btn-outline-primary open-google-link-modal"
+                                                    data-id="316"
+                                                    data-cliente="VH BEBIDAS"
+                                                    data-google-link="https://calendar.app.google/BioDLXYNd6tyrUM3A"
+                                                    title="Link Google Agenda"
+                                                    data-bs-toggle="tooltip">
+                                                <i class="bi bi-calendar-check"></i>
+                                            </button>
+                                        
+                                        <!-- 4. EDITAR -->
+                                        <button class="btn btn-sm btn-outline-secondary edit-btn"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Editar"
+                                            data-id="316"
+                                            data-cliente="94"
+                                            data-contato="93"
+                                            data-tema="INSTALAÇÃO SISTEMA"
+                                            data-status="PENDENTE"
+                                            data-google-link="https://calendar.app.google/BioDLXYNd6tyrUM3A"
+                                            data-data="2026-04-07T11:30">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+
+                                        <!-- 5. FINALIZAR -->
+                                                                                    <button class="btn btn-sm btn-outline-success open-finish-modal"
+                                                data-id="316"
+                                                data-cliente="VH BEBIDAS"
+                                                data-tema="INSTALAÇÃO SISTEMA"
+                                                title="Finalizar"
+                                                data-bs-toggle="tooltip">
+                                                <i class="bi bi-check-lg"></i>
+                                            </button>
+                                        
+                                        <!-- 6. EXCLUIR -->
+                                        <a href="?delete=316&pagina=1&filtro_cliente="
+                                            class="btn btn-sm btn-outline-danger"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Excluir"
+                                            onclick="return confirm('Excluir este treinamento?')">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                                                                                <tr class="bg-primary bg-opacity-10">
+                                <td class="ps-4 fw-bold">
+                                    <div class="text-dark">
+                                        07/04/2026 15:00                                                                                    <span class="badge bg-primary text-white ms-1" style="font-size: 0.6rem;">HOJE</span>
+                                                                            </div>
+                                </td>
+                                <td class="fw-bold">
+                                                                        <div class="d-flex align-items-center gap-2">
+                                        <span style="color: var(--text-main);">ALPINPRO</span>
+                                                                                    <span class="badge-license badge-license-2" title="2 licença(s)">
+                                                2 <i class="bi bi-pc-display"></i>
+                                            </span>
+                                                                            </div>
+                                </td>
+                                <td>
+                                                                        <span class="client-badge-soft bg-success bg-opacity-10 text-success" style="font-size: 0.72rem; padding: 0.25rem 0.65rem; border-radius: 50px; font-weight: 800; text-transform: uppercase;">
+                                        <i class="bi bi-flag me-1"></i> Finalização                                    </span>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">SP111</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">ADELITA - (35) 9994-7534</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">DUVIDAS</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class=" text-uppercase">DIEGO</div>
+                                </td>
+                                <td class="text-center">
+                                                                            <span class="badge bg-light text-dark border d-block mb-1" style="font-size: 0.70rem;">ORÇAMENTO</span>
+                                                                    </td>
+                                <td class="text-end pe-4">
+                                    <div class="d-flex justify-content-end gap-1 flex-wrap">
+                                        <!-- 1. HISTÓRICO (CRM) -->
+                                        <button class="btn btn-sm btn-outline-primary btn-history-client"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Ver Histórico/CRM"
+                                            data-id="71"
+                                            data-nome="ALPINPRO">
+                                            <i class="bi bi-journal-text"></i>
+                                        </button>
+
+                                        <!-- 2. LUPA (OBSERVAÇÕES DO AGENDAMENTO) -->
+                                        
+                                                                                 <button class="btn btn-sm btn-outline-success copy-whatsapp-message"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Copiar WhatsApp"
+                                            data-message="Olá, ADELITA! 👋
+
+✅ Seu treinamento GestãoPRO está confirmado!
+
+🔢 ID do treinamento: #318
+📅 *Data:* 07/04 Terça-Feira
+🕒 Horário do treinamento: das 15:00h às 16:00h, horário de Brasília.
+🎯 Tema: DUVIDAS
+
+💻 Acesse pelo Google Meet:
+https://meet.google.com/oan-bgfj-fkq
+
+📆 Adicione à sua agenda:
+https://calendar.app.google/aHSfNjdnfgUMeqLA7
+
+📌 *Lembrete importante:* no momento do treinamento, tenha o *TeamViewer* ou *AnyDesk* instalado e pronto para uso.
+
+Qualquer dúvida, é só me chamar. Até lá! 🚀">
+                                            <i class="bi bi-whatsapp"></i>
+                                        </button>
+
+                                        <!-- 3. GOOGLE AGENDA (LINK OU SYNC) -->
+                                                                                    <button type="button"
+                                                    class="btn btn-sm btn-outline-primary open-google-link-modal"
+                                                    data-id="318"
+                                                    data-cliente="ALPINPRO"
+                                                    data-google-link="https://calendar.app.google/aHSfNjdnfgUMeqLA7"
+                                                    title="Link Google Agenda"
+                                                    data-bs-toggle="tooltip">
+                                                <i class="bi bi-calendar-check"></i>
+                                            </button>
+                                        
+                                        <!-- 4. EDITAR -->
+                                        <button class="btn btn-sm btn-outline-secondary edit-btn"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Editar"
+                                            data-id="318"
+                                            data-cliente="71"
+                                            data-contato="59"
+                                            data-tema="DUVIDAS"
+                                            data-status="PENDENTE"
+                                            data-google-link="https://calendar.app.google/aHSfNjdnfgUMeqLA7"
+                                            data-data="2026-04-07T15:00">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+
+                                        <!-- 5. FINALIZAR -->
+                                                                                    <button class="btn btn-sm btn-outline-success open-finish-modal"
+                                                data-id="318"
+                                                data-cliente="ALPINPRO"
+                                                data-tema="DUVIDAS"
+                                                title="Finalizar"
+                                                data-bs-toggle="tooltip">
+                                                <i class="bi bi-check-lg"></i>
+                                            </button>
+                                        
+                                        <!-- 6. EXCLUIR -->
+                                        <a href="?delete=318&pagina=1&filtro_cliente="
+                                            class="btn btn-sm btn-outline-danger"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Excluir"
+                                            onclick="return confirm('Excluir este treinamento?')">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                                                                                <tr class="bg-primary bg-opacity-10">
+                                <td class="ps-4 fw-bold">
+                                    <div class="text-dark">
+                                        07/04/2026 16:00                                                                                    <span class="badge bg-primary text-white ms-1" style="font-size: 0.6rem;">HOJE</span>
+                                                                            </div>
+                                </td>
+                                <td class="fw-bold">
+                                                                        <div class="d-flex align-items-center gap-2">
+                                        <span style="color: var(--text-main);">CENTRAL DAS AGUAS</span>
+                                                                                    <span class="badge-license badge-license-1" title="1 licença(s)">
+                                                1 <i class="bi bi-pc-display"></i>
+                                            </span>
+                                                                            </div>
+                                </td>
+                                <td>
+                                                                        <span class="client-badge-soft bg-danger bg-opacity-10 text-danger" style="font-size: 0.72rem; padding: 0.25rem 0.65rem; border-radius: 50px; font-weight: 800; text-transform: uppercase;">
+                                        <i class="bi bi-exclamation-triangle me-1"></i> Atenção                                    </span>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">SP111</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">WELLINGTON - (83) 9631-7878</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class="">FATURAMENTO/NF</div>
+                                </td>
+                                <td class="fw-bold">
+                                    <div class=" text-uppercase">MARCELO</div>
+                                </td>
+                                <td class="text-center">
+                                                                            <span class="badge bg-light text-dark border d-block mb-1" style="font-size: 0.70rem;">PDV</span>
+                                                                    </td>
+                                <td class="text-end pe-4">
+                                    <div class="d-flex justify-content-end gap-1 flex-wrap">
+                                        <!-- 1. HISTÓRICO (CRM) -->
+                                        <button class="btn btn-sm btn-outline-primary btn-history-client"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Ver Histórico/CRM"
+                                            data-id="39"
+                                            data-nome="CENTRAL DAS AGUAS">
+                                            <i class="bi bi-journal-text"></i>
+                                        </button>
+
+                                        <!-- 2. LUPA (OBSERVAÇÕES DO AGENDAMENTO) -->
+                                        
+                                                                                 <button class="btn btn-sm btn-outline-success copy-whatsapp-message"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Copiar WhatsApp"
+                                            data-message="Olá, WELLINGTON! 👋
+
+✅ Seu treinamento GestãoPRO está confirmado!
+
+🔢 ID do treinamento: #317
+📅 *Data:* 07/04 Terça-Feira
+🕒 Horário do treinamento: das 16:00h às 17:00h, horário de Brasília.
+🎯 Tema: FATURAMENTO/NF
+
+💻 Acesse pelo Google Meet:
+https://meet.google.com/tab-fbco-tnw
+
+📆 Adicione à sua agenda:
+https://calendar.app.google/nuub4zzUUxo9U26d7
+
+📌 *Lembrete importante:* no momento do treinamento, tenha o *TeamViewer* ou *AnyDesk* instalado e pronto para uso.
+
+Qualquer dúvida, é só me chamar. Até lá! 🚀">
+                                            <i class="bi bi-whatsapp"></i>
+                                        </button>
+
+                                        <!-- 3. GOOGLE AGENDA (LINK OU SYNC) -->
+                                                                                    <button type="button"
+                                                    class="btn btn-sm btn-outline-primary open-google-link-modal"
+                                                    data-id="317"
+                                                    data-cliente="CENTRAL DAS AGUAS"
+                                                    data-google-link="https://calendar.app.google/nuub4zzUUxo9U26d7"
+                                                    title="Link Google Agenda"
+                                                    data-bs-toggle="tooltip">
+                                                <i class="bi bi-calendar-check"></i>
+                                            </button>
+                                        
+                                        <!-- 4. EDITAR -->
+                                        <button class="btn btn-sm btn-outline-secondary edit-btn"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Editar"
+                                            data-id="317"
+                                            data-cliente="39"
+                                            data-contato="45"
+                                            data-tema="FATURAMENTO/NF"
+                                            data-status="PENDENTE"
+                                            data-google-link="https://calendar.app.google/nuub4zzUUxo9U26d7"
+                                            data-data="2026-04-07T16:00">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+
+                                        <!-- 5. FINALIZAR -->
+                                                                                    <button class="btn btn-sm btn-outline-success open-finish-modal"
+                                                data-id="317"
+                                                data-cliente="CENTRAL DAS AGUAS"
+                                                data-tema="FATURAMENTO/NF"
+                                                title="Finalizar"
+                                                data-bs-toggle="tooltip">
+                                                <i class="bi bi-check-lg"></i>
+                                            </button>
+                                        
+                                        <!-- 6. EXCLUIR -->
+                                        <a href="?delete=317&pagina=1&filtro_cliente="
+                                            class="btn btn-sm btn-outline-danger"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-title="Excluir"
+                                            onclick="return confirm('Excluir este treinamento?')">
+                                            <i class="bi bi-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                                                            </tbody>
+            </table>
+        </div>
+
+        <!-- Paginação -->
+            </div>
+     <!-- /Fim VIEW LIST -->
+
+    
+</div>
+
+<!-- TOAST PARA CONFIRMAÇÃO DE CÓPIA -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="copyToast" class="toast toast-success border-0" role="alert">
+        <div class="toast-header bg-success text-white border-0">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            <strong class="me-auto">Sucesso!</strong>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body bg-white text-dark">
+            <span id="toastMessage">Link copiado para a área de transferência!</span>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PARA VER OBSERVAÇÕES -->
+<div class="modal fade" id="modalViewObs" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <div class="modal-header border-0 px-4 pt-4">
+                <h5 class="fw-bold text-dark"><i class="bi bi-chat-left-text me-2 text-info"></i>Observações do Treinamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4 pb-4">
+                <div class="mb-3">
+                    <div class="small text-muted mb-2 text-uppercase fw-bold">
+                        <i class="bi bi-building me-1"></i>Cliente:
+                        <span id="view_obs_cliente" class="text-primary"></span>
+                    </div>
+                </div>
+                <div class="p-3 bg-light rounded-3 border">
+                    <h6 class="fw-bold text-muted mb-2">Observações da Finalização:</h6>
+                    <div id="view_obs_text" class="mb-0 text-dark" style="white-space: pre-wrap; line-height: 1.6;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Agendar/Editar Treinamento -->
+<div class="modal fade" id="modalTreinamento" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <div class="modal-header border-0 px-4 pt-4">
+                <h5 class="fw-bold" id="modalTitle">Agendar Treinamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4">
+                <input type="hidden" name="id_treinamento" id="id_treinamento">
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Cliente</label>
+                    <select name="id_cliente" id="id_cliente" class="form-select" required onchange="filterContatos(this.value)">
+                        <option value="">Selecione o cliente...</option>
+                        
+                            <option value="76">ALEX CLAUDINO</option>
+                        
+                            <option value="71">ALPINPRO</option>
+                        
+                            <option value="72">ARANDU EDUCACIONAL</option>
+                        
+                            <option value="82">BOLTEC</option>
+                        
+                            <option value="92">CAMARGO MATERIAIS PARA CONSTRUCAO</option>
+                        
+                            <option value="64">CAROLINI ESTOFADOS</option>
+                        
+                            <option value="39">CENTRAL DAS AGUAS</option>
+                        
+                            <option value="91">DANFERTECH INDUSTRIAL</option>
+                        
+                            <option value="70">DANIEL HOLANDA CORDEIRO</option>
+                        
+                            <option value="85">DARLE CONFECCOES</option>
+                        
+                            <option value="80">DISTRIBUIDORA DO CABECA</option>
+                        
+                            <option value="81">DIVINA MODA FITNESS</option>
+                        
+                            <option value="73">DM IMPORT DIESEL</option>
+                        
+                            <option value="90">DVERA CONFECCOES</option>
+                        
+                            <option value="87">EMPORIUM PERFUMARIA</option>
+                        
+                            <option value="93">FRIGOCENA ALIMENTOS</option>
+                        
+                            <option value="35">GP AUTO PECAS ACESSORIOS</option>
+                        
+                            <option value="34">HOLEN TRADING INTERNATIONAL LTDA</option>
+                        
+                            <option value="79">INTEGRAL SERVICE</option>
+                        
+                            <option value="27">J A ALUMINIO</option>
+                        
+                            <option value="88">KALLIXTOS STORE LTDA</option>
+                        
+                            <option value="78">MISTER POOL</option>
+                        
+                            <option value="66">MR MIHOMENS</option>
+                        
+                            <option value="37">NAJA INFOSERVICE</option>
+                        
+                            <option value="89">RDX PARTICIPACOES LTDA</option>
+                        
+                            <option value="84">RM PLACAS SINALIZACAO VIARIA</option>
+                        
+                            <option value="75">SANTO LOOK</option>
+                        
+                            <option value="68">SIMIONATO ASSISTÊNCIA TÉCNICA</option>
+                        
+                            <option value="67">STAR TRUCK</option>
+                        
+                            <option value="77">SUPER BUENO</option>
+                        
+                            <option value="8">TECBIS SOLUCOES EM TI</option>
+                        
+                            <option value="94">VH BEBIDAS</option>
+                        
+                            <option value="69">VINICIUS LTDA</option>
+                        
+                            <option value="25">ZS INDUSTRIA</option>
+                                            </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Contato</label>
+                    <select name="id_contato" id="id_contato" class="form-select" required disabled>
+                        <option value="">Aguardando cliente...</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Tema</label>
+                    <select name="tema" id="tema" class="form-select" required>
+                        <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
+                        <option value="CADASTROS/ESTOQUE">CADASTROS/ESTOQUE</option>
+                        <option value="VENDAS">VENDAS</option>
+                        <option value="COMPRAS">COMPRAS</option>
+                        <option value="FATURAMENTO/NF">FATURAMENTO/NF</option>
+                        <option value="FINANCEIRO/CAIXA">FINANCEIRO/CAIXA</option>                        
+                        <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>                
+                        <option value="RELATÓRIOS">RELATÓRIOS</option>
+                        <option value="ATENDIMENTOS">ATENDIMENTOS</option>
+                        <option value="DUVIDAS">DUVIDAS</option>                        
+                    </select>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-muted">Data/Hora</label>
+                        <input type="datetime-local" name="data_treinamento" id="data_treinamento" class="form-control">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-muted">Status</label>
+                        <select name="status" id="status" class="form-select">
+                            <option value="PENDENTE">PENDENTE</option>
+                            <option value="Resolvido">Resolvido</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <label class="form-label small fw-bold text-muted mb-0">Horários disponíveis (hoje, amanhã e depois)</label>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btn_buscar_disponibilidade">
+                                <i class="bi bi-calendar-week me-1"></i>Atualizar
+                            </button>
+                        </div>
+                    </div>
+                    <div id="disponibilidade_resultado" class="border rounded-3 p-2 bg-light small text-muted">
+                        Clique em "Atualizar" para listar os horarios livres.
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer border-0 p-4">
+                <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Fechar</button>
+                <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">Salvar Alterações</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Finalizar Treinamento -->
+<div class="modal fade" id="modalEncerrar" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <div class="modal-header border-0 px-4 pt-4">
+                <h5 class="fw-bold text-dark"><i class="bi bi-journal-check me-2 text-success"></i>Finalizar Treinamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4 text-start">
+                <input type="hidden" name="id_treinamento" id="modal_id_treinamento">
+                <input type="hidden" name="confirmar_encerramento" value="1">
+                
+                <div class="mb-3 p-3 bg-light rounded-3 border">
+                    <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">Informações:</div>
+                    <div class="fw-bold text-primary" id="modal_cliente_info"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase">O que ficou acordado com o cliente?</label>
+                    <textarea name="observacoes" class="form-control" rows="4" placeholder="Descreva os detalhes da sessão..." required></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Pendencias relacionadas a este encerramento</label>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input pendencia-opcao" type="radio" name="tem_pendencia" id="tem_pendencia_nao" value="nao" required>
+                        <label class="form-check-label text-dark" for="tem_pendencia_nao">Sem pendencia</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input pendencia-opcao" type="radio" name="tem_pendencia" id="tem_pendencia_sim" value="sim" required>
+                        <label class="form-check-label text-dark" for="tem_pendencia_sim">Com pendencia</label>
+                    </div>
+                </div>
+                <div class="mb-2 d-none" id="referencia_chamado_wrapper">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Referencia do chamado externo (opcional)</label>
+                    <input type="text" class="form-control" name="referencia_chamado" id="referencia_chamado" maxlength="255" placeholder="Ex: SUP-12345, DEV-90210">
+                </div>
+                <div class="form-text small opacity-75">A marcacao com/sem pendencia e obrigatoria para concluir o treinamento.</div>
+            </div>
+            <div class="modal-footer border-0 p-4">
+                <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-success px-4 fw-bold shadow-sm">Encerrar e Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Gerenciar Link Manual -->
+<div class="modal fade" id="modalGoogleLink" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <div class="modal-header border-0 px-4 pt-4">
+                <h5 class="fw-bold text-dark"><i class="bi bi-link-45deg me-2 text-primary"></i>Link Google Agenda</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body px-4 text-start">
+                <input type="hidden" name="id_treinamento" id="google_modal_id_treinamento">
+                <input type="hidden" name="salvar_link_google" value="1">
+
+                <div class="mb-3 p-3 bg-light rounded-3 border">
+                    <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">Treinamento:</div>
+                    <div class="fw-bold text-primary" id="google_modal_cliente_info"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Convite Google Agenda</label>
+                    <input type="url"
+                           name="google_event_link"
+                           id="google_event_link_field"
+                           class="form-control mb-2"
+                           placeholder="https://calendar.app.google/...">
+                    
+                    <div class="d-flex gap-2 flex-wrap mb-3">
+                        <button type="button" class="btn btn-outline-primary btn-sm px-3" onclick="window.open(document.getElementById('google_event_link_field').value || 'https://calendar.google.com', '_blank')">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Testar Link
+                        </button>
+                        <button type="button" class="btn btn-outline-success btn-sm px-3" onclick="colarLinkManual()">
+                            <i class="bi bi-clipboard-check me-1"></i>Colar
+                        </button>
+                    </div>
+                </div>
+                <div class="form-text small opacity-75">
+                    Cole o link de convite do Google Agenda caso a sincronização automática não seja possível.
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-4">
+                <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary px-4 fw-bold shadow-sm">Salvar Link</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL PARA VISUALIZAR HISTÓRICO DO CLIENTE (AJAX) -->
+<div class="modal fade" id="modalHistoricoCliente" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <div class="modal-header border-0 p-4 pb-0">
+                <h5 class="fw-800 mb-0">
+                    <i class="bi bi-journal-text me-2 text-primary"></i> Históricos: <span id="hist_cliente_nome" class="text-primary"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="hist_obs_container">
+                    <div class="text-center py-5">
+                        <div class="spinner-border" role="status" style="color: #7209b7;"></div>
+                        <p class="mt-2 text-muted">Carregando históricos...</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-4">
+                <button type="button" class="btn btn-premium w-100" onclick="abrirModalNovaObs()" style="background: linear-gradient(135deg, var(--primary) 0%, #1e293b 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">
+                    <i class="bi bi-plus-circle me-2"></i> Adicionar Novo Registro Agora
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL PARA ADICIONAR NOVA OBSERVAÇÃO (HISTÓRICO) -->
+<div class="modal fade" id="modalNovaObsCliente" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <input type="hidden" name="action" value="save_client_observation">
+            <input type="hidden" name="id_cliente" id="nova_obs_id_cliente">
+            <div class="modal-header border-0 p-4 pb-0">
+                <h5 class="fw-800 mb-0">Novo Registro de <span class="text-primary">Histórico</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Título do Evento</label>
+                    <input type="text" name="titulo" class="form-control" placeholder="Ex: Contato via WhatsApp" required>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-muted">Tipo</label>
+                        <select name="tipo" class="form-select">
+                            <option value="INFORMAÇÃO">Informação</option>
+                            <option value="CONTATO">Contato Extra</option>
+                            <option value="AJUSTE">Ajuste Técnico</option>
+                            <option value="PROBLEMA">Problema / Bug</option>
+                            <option value="MELHORIA">Sugestão / Melhoria</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold text-muted">Autor</label>
+                        <input type="text" name="autor" class="form-control" value="Suporte" placeholder="Seu nome">
+                    </div>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label small fw-bold text-muted">Conteúdo Detalhado</label>
+                    <textarea name="conteudo" class="form-control" rows="5" placeholder="Descreva o que foi feito ou conversado..." required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-4 pt-0">
+                <button type="submit" class="btn btn-premium w-100 shadow-sm" style="background: linear-gradient(135deg, var(--primary) 0%, #1e293b 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">Salvar no Histórico Permanente</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<script>
+    // Inicializar tooltips
+    document.addEventListener('DOMContentLoaded', function() {
+        const openGoogleAgendaLink = "";
+        const openGoogleAgendaTreinamentoId = 0;
+        if (openGoogleAgendaLink) {
+            const win = window.open(openGoogleAgendaLink, '_blank', 'noopener');
+            if (!win) {
+                alert('O navegador bloqueou a abertura em nova guia. Libere pop-ups para este site e tente novamente.');
+            }
+            if (openGoogleAgendaTreinamentoId > 0) {
+                const redirectUrl = 'treinamentos.php?msg=Link+do+Google+Agenda+copiado.+Cole+no+campo+manual+abaixo.&tipo=info&open_google_modal_id=' + openGoogleAgendaTreinamentoId;
+                setTimeout(function() {
+                    window.location.href = redirectUrl;
+                }, 450);
+            }
+        }
+
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
+
+        // Auto-focus no campo de busca
+        const searchField = document.querySelector('input[name="filtro_cliente"]');
+        if (searchField && !searchField.value) {
+            searchField.focus();
+        }
+
+        // Configurar data/hora atual no modal para novo agendamento
+        const dataTreinamentoInput = document.getElementById('data_treinamento');
+        if (dataTreinamentoInput && !dataTreinamentoInput.value) {
+            const now = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            dataTreinamentoInput.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        }
+    });
+
+    // AJAX Contatos
+    function filterContatos(id_cliente, selected_contato = null) {
+        const contatoSelect = document.getElementById('id_contato');
+        if (!id_cliente) {
+            contatoSelect.innerHTML = '<option value="">Aguardando cliente...</option>';
+            contatoSelect.disabled = true;
+            return;
+        }
+        fetch('get_contatos_cliente.php?id_cliente=' + id_cliente)
+            .then(r => r.json())
+            .then(data => {
+                contatoSelect.innerHTML = '<option value="">Selecione o contato...</option>';
+                data.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id_contato;
+                    opt.textContent = c.nome;
+                    if (selected_contato == c.id_contato) opt.selected = true;
+                    contatoSelect.appendChild(opt);
+                });
+                contatoSelect.disabled = false;
+            });
+    }
+
+    // Função para copiar link do Google Agenda (na tabela)
+    let diasDisponibilidadeAtual = [];
+    let disponibilidadeFoiCarregada = false;
+
+    let mensagemErroGlobal = null;
+
+    function atualizarBotaoCopiarDisponibilidade() {
+        const botao = document.getElementById('btn_copiar_disponibilidade');
+        const wrapper = document.getElementById('wrapper_btn_copiar');
+        if (!botao) return;
+        
+        let newTitle = '';
+        if (mensagemErroGlobal) {
+            botao.disabled = true;
+            botao.classList.add('opacity-50');
+            botao.innerHTML = '<i class="bi bi-exclamation-octagon me-2"></i>Erro Google';
+            newTitle = "Erro Google: " + mensagemErroGlobal;
+        } else {
+            botao.disabled = !disponibilidadeFoiCarregada;
+            botao.innerHTML = '<i class="bi bi-whatsapp me-2"></i>Copiar Horas';
+            if (botao.disabled) {
+                botao.classList.add('opacity-50');
+                newTitle = "Carregando disponibilidade do Google...";
+            } else {
+                botao.classList.remove('opacity-50');
+                newTitle = "Copiar horários disponíveis do Google Agenda";
+            }
+        }
+        
+        // Remove título nativo do botão (para não conflitar) e atualiza o wrapper para o tooltip
+        botao.removeAttribute('title');
+        if (wrapper) {
+            wrapper.setAttribute('title', newTitle);
+            wrapper.setAttribute('data-bs-original-title', newTitle);
+            
+            // Força a atualização do Tooltip no Bootstrap se já possuir uma instância
+            const tooltipInst = bootstrap.Tooltip.getInstance(wrapper);
+            if (tooltipInst) {
+                tooltipInst.setContent({ '.tooltip-inner': newTitle });
+            }
+        }
+    }
+
+    function copiarTextoAreaTransferencia(texto, mensagemSucesso) {
+        navigator.clipboard.writeText(texto).then(() => {
+            document.getElementById('toastMessage').textContent = mensagemSucesso;
+            const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+            toast.show();
+        }).catch(() => {
+            const textArea = document.createElement('textarea');
+            textArea.value = texto;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                document.getElementById('toastMessage').textContent = mensagemSucesso;
+                const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+                toast.show();
+            } catch (err) {
+                alert('Nao foi possivel copiar. Tente novamente.');
+            }
+            document.body.removeChild(textArea);
+        });
+    }
+
+    function montarMensagemDisponibilidadeCliente(diasDisponiveis) {
+        const clienteSelect = document.getElementById('id_cliente');
+        const clienteNome = clienteSelect && clienteSelect.selectedIndex > 0 ?
+            clienteSelect.options[clienteSelect.selectedIndex].text : '';
+
+        const linhas = [];
+        const diasComSlot = diasDisponiveis.filter(dia => Array.isArray(dia.horarios) && dia.horarios.length > 0);
+
+        linhas.push('Olá' + (clienteNome ? ' ' + clienteNome : '') + '! Tudo bem? 👍');
+        linhas.push('');
+        
+        if (diasComSlot.length === 0) {
+            linhas.push('Para agendarmos nosso treinamento, no momento não tenho horários livres para os próximos dias, mas podemos combinar um horário específico se preferir. 😕');
+        } else {
+            linhas.push('Para agendarmos nosso treinamento, veja os horários que tenho disponíveis:');
+            linhas.push('');
+            diasDisponiveis.forEach((dia) => {
+                const dataLabel = dia.data_label || dia.data || 'Dia';
+                const horarios = Array.isArray(dia.horarios) ? dia.horarios : [];
+                if (horarios.length > 0) {
+                    const horas = horarios.map((slot) => slot.hora).filter(Boolean);
+                    linhas.push('*' + dataLabel + '*: ' + horas.join(', '));
+                } else {
+                    linhas.push('*' + dataLabel + '*: Sem horários disponíveis');
+                }
+            });
+        }
+
+        linhas.push('');
+        linhas.push('Qual desses fica melhor para você? Me avisa aqui que eu já reservo! 🚀');
+        return linhas.join('\n');
+    }
+
+    function copiarTabelaDisponibilidadeCliente() {
+        if (!disponibilidadeFoiCarregada) {
+            alert('Atualize a disponibilidade antes de copiar a tabela.');
+            return;
+        }
+
+        const mensagem = montarMensagemDisponibilidadeCliente(diasDisponibilidadeAtual);
+        copiarTextoAreaTransferencia(mensagem, 'Tabela de horarios copiada para enviar ao cliente.');
+    }
+
+    function renderDisponibilidade(container, diasDisponiveis) {
+        container.innerHTML = '';
+
+        if (!Array.isArray(diasDisponiveis) || diasDisponiveis.length === 0) {
+            container.innerHTML = '<div class="text-muted">Nenhuma disponibilidade encontrada no periodo.</div>';
+            return;
+        }
+
+        let totalHorarios = 0;
+        let proximoHorario = null;
+        diasDisponiveis.forEach((dia) => {
+            const bloco = document.createElement('div');
+            bloco.className = 'mb-2';
+
+            const titulo = document.createElement('div');
+            titulo.className = 'fw-bold text-dark mb-1';
+            titulo.textContent = dia.data_label || dia.data || 'Dia';
+            bloco.appendChild(titulo);
+
+            const wrap = document.createElement('div');
+            wrap.className = 'd-flex flex-wrap gap-1';
+            const horarios = Array.isArray(dia.horarios) ? dia.horarios : [];
+
+            if (horarios.length === 0) {
+                const vazio = document.createElement('span');
+                vazio.className = 'text-muted';
+                vazio.textContent = 'Sem horários disponíveis.';
+                wrap.appendChild(vazio);
+            } else {
+                totalHorarios += horarios.length;
+                horarios.forEach((slot) => {
+                    if (!proximoHorario && slot.datetime_local) {
+                        proximoHorario = {
+                            datetime_local: slot.datetime_local,
+                            data_label: dia.data_label || dia.data || '',
+                            hora: slot.hora || '--:--'
+                        };
+                    }
+
+                    const botao = document.createElement('button');
+                    botao.type = 'button';
+                    const isProximo = proximoHorario && proximoHorario.datetime_local === slot.datetime_local;
+                    botao.className = isProximo ? 'btn btn-sm btn-success' : 'btn btn-sm btn-outline-success';
+                    botao.textContent = slot.hora || '--:--';
+                    botao.dataset.datetime = slot.datetime_local || '';
+                    botao.addEventListener('click', function() {
+                        const dataTreinamentoInput = document.getElementById('data_treinamento');
+                        if (dataTreinamentoInput && this.dataset.datetime) {
+                            dataTreinamentoInput.value = this.dataset.datetime;
+                            dataTreinamentoInput.dispatchEvent(new Event('change'));
+                        }
+                    });
+                    wrap.appendChild(botao);
+                });
+            }
+
+            bloco.appendChild(wrap);
+            container.appendChild(bloco);
+        });
+
+        if (proximoHorario) {
+            const destaque = document.createElement('div');
+            destaque.className = 'alert alert-success py-2 px-3 mb-2';
+            destaque.innerHTML = '<strong>Proximo horario livre:</strong> ' + proximoHorario.data_label + ' ' + proximoHorario.hora;
+            container.insertBefore(destaque, container.firstChild);
+        }
+
+        if (totalHorarios === 0) {
+            container.insertAdjacentHTML('beforeend', '<div class="text-danger mt-1">Não há horários livres para hoje, amanhã e depois.</div>');
+        }
+    }
+
+    function carregarDisponibilidadeGoogle() {
+        const container = document.getElementById('disponibilidade_resultado');
+        const botaoBusca = document.getElementById('btn_buscar_disponibilidade');
+        const botaoCopiar = document.getElementById('btn_copiar_disponibilidade');
+        
+        if (!container) return;
+
+        // Feedback visual de carregamento
+        if (botaoBusca) botaoBusca.disabled = true;
+        if (botaoCopiar) {
+            botaoCopiar.disabled = true;
+            botaoCopiar.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Carregando...';
+        }
+        
+        container.innerHTML = '<div class="text-muted"><div class="spinner-border spinner-border-sm me-2"></span>Consultando Google Agenda...</div>';
+
+        fetch('google_calendar_disponibilidade.php?dias=2&duracao_min=60', {
+                cache: 'no-store'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!data || !data.success) {
+                    mensagemErroGlobal = data && data.message ? data.message : 'Falha ao carregar disponibilidade.';
+                    if (container) container.innerHTML = '<div class="text-danger"><i class="bi bi-exclamation-circle me-1"></i>' + mensagemErroGlobal + '</div>';
+                    disponibilidadeFoiCarregada = false;
+                    return;
+                }
+                mensagemErroGlobal = null;
+                diasDisponibilidadeAtual = data.dias_disponiveis || [];
+                disponibilidadeFoiCarregada = true;
+                if (container) renderDisponibilidade(container, diasDisponibilidadeAtual);
+            })
+            .catch((err) => {
+                console.error('Erro Google:', err);
+                mensagemErroGlobal = "Erro de conexão";
+                if (container) container.innerHTML = '<div class="text-danger">Erro na comunicação com o servidor.</div>';
+                disponibilidadeFoiCarregada = false;
+            })
+            .finally(() => {
+                if (botaoBusca) botaoBusca.disabled = false;
+                if (botaoCopiar) {
+                    botaoCopiar.innerHTML = '<i class="bi bi-whatsapp me-2"></i>Copiar Horas';
+                }
+                atualizarBotaoCopiarDisponibilidade();
+            });
+    }
+
+    function copiarLinkAgenda(link, clienteNome = '') {
+        let message = 'Link copiado para a area de transferencia!';
+        if (clienteNome) {
+            message = `Link do treinamento (${clienteNome}) copiado!`;
+        }
+        copiarTextoAreaTransferencia(link, message);
+        return;
+
+        navigator.clipboard.writeText(link).then(() => {
+            // Atualizar mensagem do toast
+            let message = 'Link copiado para a área de transferência!';
+            if (clienteNome) {
+                message = `Link do treinamento (${clienteNome}) copiado!`;
+            }
+            document.getElementById('toastMessage').textContent = message;
+
+            // Mostrar toast
+            const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+            toast.show();
+        }).catch(err => {
+            console.error('Erro ao copiar: ', err);
+            // Fallback para navegadores mais antigos
+            const textArea = document.createElement('textarea');
+            textArea.value = link;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                document.getElementById('toastMessage').textContent = 'Link copiado!';
+                const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+                toast.show();
+            } catch (err) {
+                alert('Não foi possível copiar o link. Por favor, copie manualmente.');
+            }
+            document.body.removeChild(textArea);
+        });
+    }
+
+    // Função para copiar link do modal
+    function copiarLinkModal() {
+        const linkInput = document.getElementById('google_event_link');
+        if (linkInput && linkInput.value) {
+            copiarLinkAgenda(linkInput.value);
+        } else {
+            alert('Não há link para copiar. Cole primeiro o link do Google Agenda.');
+        }
+    }
+
+
+    // 1. Modal Observação
+    document.querySelectorAll('.view-obs-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('view_obs_cliente').innerText = this.dataset.cliente;
+            document.getElementById('view_obs_text').innerText = this.dataset.obs;
+            new bootstrap.Modal(document.getElementById('modalViewObs')).show();
+        });
+    });
+
+    // 2. Sincronização Google
+    document.querySelectorAll('.sync-google-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.id;
+            const icon = this.querySelector('i');
+            const originalClass = icon.className;
+            icon.className = 'spinner-border spinner-border-sm';
+
+            fetch('google_calendar_sync.php?id_treinamento=' + id)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.already_synced) {
+                            alert('Este treinamento já está sincronizado com o Google Agenda.');
+                        } else {
+                            alert('Sincronizado com sucesso! Evento criado no Google Agenda.');
+                        }
+                        location.reload();
+                    } else if (data.auth_url) {
+                        window.location.href = data.auth_url;
+                    } else {
+                        alert('Erro: ' + data.message);
+                        icon.className = originalClass;
+                    }
+                })
+                .catch(error => {
+                    alert('Erro na comunicação com o servidor.');
+                    icon.className = originalClass;
+                });
+        });
+    });
+
+    // 3. Remover do Google Agenda (Função adicional se necessário)
+    document.querySelectorAll('.delete-google-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (confirm('Deseja remover este evento do Google Agenda?')) {
+                const id = this.dataset.id;
+                const eventId = this.dataset.eventId;
+                const icon = this.querySelector('i');
+                const originalClass = icon.className;
+                icon.className = 'spinner-border spinner-border-sm';
+
+                // Você precisará criar um arquivo google_calendar_delete.php para esta função
+                fetch('google_calendar_delete.php?id_treinamento=' + id + '&event_id=' + eventId)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert('Evento removido do Google Agenda com sucesso!');
+                            location.reload();
+                        } else {
+                            alert('Erro: ' + data.message);
+                            icon.className = originalClass;
+                        }
+                    })
+                    .catch(error => {
+                        alert('Erro na comunicação com o servidor.');
+                        icon.className = originalClass;
+                    });
+            }
+        });
+    });
+
+    // 4. Editar Agendamento - ATUALIZADO COM GOOGLE LINK
+    document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('modalTitle').innerHTML = '<i class="bi bi-pencil-square me-2"></i>Editar Treinamento';
+            document.getElementById('id_treinamento').value = this.dataset.id;
+            document.getElementById('id_cliente').value = this.dataset.cliente;
+            document.getElementById('tema').value = this.dataset.tema;
+            document.getElementById('status').value = this.dataset.status;
+            document.getElementById('data_treinamento').value = this.dataset.data;
+
+            filterContatos(this.dataset.cliente, this.dataset.contato);
+            carregarDisponibilidadeGoogle();
+            new bootstrap.Modal(document.getElementById('modalTreinamento')).show();
+        });
+    });
+
+    // 5. Finalizar Treinamento (Ex-Relatorio)
+    function atualizarCampoReferenciaPendencia() {
+        const radioComPendencia = document.getElementById('tem_pendencia_sim');
+        const wrapper = document.getElementById('referencia_chamado_wrapper');
+        const input = document.getElementById('referencia_chamado');
+        if (!radioComPendencia || !wrapper || !input) return;
+
+        if (radioComPendencia.checked) {
+            wrapper.classList.remove('d-none');
+        } else {
+            wrapper.classList.add('d-none');
+            input.value = '';
+        }
+    }
+
+    document.querySelectorAll('.pendencia-opcao').forEach(radio => {
+        radio.addEventListener('change', atualizarCampoReferenciaPendencia);
+    });
+
+    document.querySelectorAll('.open-finish-modal').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const id = this.dataset.id;
+            const cliente = this.dataset.cliente;
+            const tema = this.dataset.tema;
+            
+            document.getElementById('modal_id_treinamento').value = id;
+            document.getElementById('modal_cliente_info').innerText = cliente + " | " + tema;
+            document.querySelectorAll('.pendencia-opcao').forEach(radio => {
+                radio.checked = false;
+            });
+            const referenciaInput = document.getElementById('referencia_chamado');
+            if (referenciaInput) referenciaInput.value = '';
+            atualizarCampoReferenciaPendencia();
+            
+            new bootstrap.Modal(document.getElementById('modalEncerrar')).show();
+        });
+    });
+
+    // 6. Link Manual Google (Ex-Relatorio)
+    document.querySelectorAll('.open-google-link-modal').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.getElementById('google_modal_id_treinamento').value = this.dataset.id;
+            document.getElementById('google_modal_cliente_info').innerText = this.dataset.cliente;
+            document.getElementById('google_event_link_field').value = this.dataset.googleLink || '';
+            new bootstrap.Modal(document.getElementById('modalGoogleLink')).show();
+        });
+    });
+
+    async function colarLinkManual() {
+        const input = document.getElementById('google_event_link_field');
+        if (!input) return;
+        try {
+            const texto = (await navigator.clipboard.readText()).trim();
+            if (texto.startsWith('http')) {
+                input.value = texto;
+            } else {
+                alert('Área de transferência não contém um link válido.');
+            }
+        } catch (e) {
+            alert('Não foi possível ler a área de transferência.');
+        }
+    }
+
+    // 7. WhatsApp Copy
+    document.querySelectorAll('.copy-whatsapp-message').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const msg = this.dataset.message;
+            copiarTextoAreaTransferencia(msg, 'Mensagem WhatsApp copiada!');
+        });
+    });
+
+    // 8. Auto-abrir modal Google se parametro na URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const autoId = urlParams.get('open_google_modal_id');
+    if (autoId) {
+        // Aguarda um pouco para os modais estarem prontos
+        setTimeout(() => {
+            const btn = document.querySelector(`.open-google-link-modal[data-id="${autoId}"]`);
+            if (btn) {
+                btn.click();
+            } else {
+                const syncBtn = document.querySelector(`.sync-google-btn[data-id="${autoId}"]`);
+                document.getElementById('google_modal_id_treinamento').value = autoId;
+                document.getElementById('google_modal_cliente_info').innerText = syncBtn ? syncBtn.dataset.cliente : 'Treinamento';
+                const eventLinkField = document.getElementById('google_event_link_field');
+                if(eventLinkField) eventLinkField.value = '';
+                new bootstrap.Modal(document.getElementById('modalGoogleLink')).show();
+            }
+        }, 500);
+    }
+
+    const btnBuscarDisponibilidade = document.getElementById('btn_buscar_disponibilidade');
+    if (btnBuscarDisponibilidade) {
+        btnBuscarDisponibilidade.addEventListener('click', carregarDisponibilidadeGoogle);
+    }
+    const btnCopiarDisponibilidade = document.getElementById('btn_copiar_disponibilidade');
+    if (btnCopiarDisponibilidade) {
+        btnCopiarDisponibilidade.addEventListener('click', copiarTabelaDisponibilidadeCliente);
+    }
+    atualizarBotaoCopiarDisponibilidade();
+
+    const modalTreinamento = document.getElementById('modalTreinamento');
+    if (modalTreinamento) {
+        modalTreinamento.addEventListener('shown.bs.modal', function() {
+            carregarDisponibilidadeGoogle();
+        });
+    }
+
+    // Kanban removido - centralizado no dashboard principal
+
+    carregarDisponibilidadeGoogle();
+
+    // Reset modal quando fechado
+    document.getElementById('modalTreinamento').addEventListener('hidden.bs.modal', function() {
+        document.getElementById('modalTitle').innerHTML = '<i class="bi bi-calendar-plus me-2"></i>Agendar Treinamento';
+        document.getElementById('id_treinamento').value = '';
+        this.querySelector('form').reset();
+
+        // Resetar contatos
+        const contatoSelect = document.getElementById('id_contato');
+        contatoSelect.innerHTML = '<option value="">Aguardando cliente...</option>';
+        contatoSelect.disabled = true;
+
+        // Resetar data/hora para agora
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        document.getElementById('data_treinamento').value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+        // Nota: Não resetamos disponibilidadeFoiCarregada aqui para manter o botão "Copiar Horas" da listagem ativo
+    });
+
+    // GSAP Entrance
+    if (typeof gsap !== 'undefined') {
+        gsap.to(".gsap-reveal", { duration: 0.6, opacity: 1, y: 0, stagger: 0.1, ease: "power2.out" });
+    } else {
+        // Fallback caso GSAP falhe
+        document.querySelectorAll('.gsap-reveal').forEach(el => el.style.opacity = '1');
+    }
+
+    // Lógica para Histórico do Cliente (Camada extra de CRM)
+    let currentClientIdForObs = null;
+    let currentClientNameForObs = null;
+
+    document.querySelectorAll('.btn-history-client').forEach(btn => {
+        btn.addEventListener('click', function() {
+            currentClientIdForObs = this.dataset.id;
+            currentClientNameForObs = this.dataset.nome;
+            abrirModalHistorico(currentClientIdForObs, currentClientNameForObs);
+        });
+    });
+
+    function abrirModalHistorico(id, nome) {
+        document.getElementById('hist_cliente_nome').innerText = nome;
+        const container = document.getElementById('hist_obs_container');
+        container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Carregando históricos...</p></div>';
+        
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalHistoricoCliente')).show();
+
+        fetch(`treinamentos.php?get_observations=1&id_cliente=${id}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.length === 0) {
+                    container.innerHTML = '<div class="text-center py-5 opacity-50"><i class="bi bi-journal-x display-4 text-muted"></i><p class="mt-2">Nenhum registro encontrado para este cliente.</p></div>';
+                } else {
+                    container.innerHTML = '';
+                    data.forEach(obs => {
+                        const t_color = (obs.tipo == 'PROBLEMA') ? '#ef4444' : ((obs.tipo == 'AJUSTE') ? '#f59e0b' : ((obs.tipo == 'MELHORIA') ? '#10b981' : 'var(--primary)'));
+                        const card = `
+                            <div class="p-4 mb-3 rounded-4 border" style="background: var(--bg-body); transition: all 0.2s ease;">
+                                <div class="d-flex justify-content-between mb-3 align-items-center">
+                                    <span class="badge" style="background: ${t_color}15; color: ${t_color}; font-size: 0.65rem; padding: 0.4rem 0.8rem; border-radius: 8px;">${obs.tipo}</span>
+                                    <span class="text-muted small" style="font-size: 0.7rem;">${new Date(obs.data_observacao).toLocaleString('pt-BR')}</span>
+                                </div>
+                                <div class="fw-800 mb-2 title-main" style="font-size: 0.95rem;">${obs.titulo}</div>
+                                <div class="text-muted small mb-3" style="line-height: 1.6;">${obs.conteudo.replace(/\n/g, '<br>')}</div>
+                                <div class="d-flex justify-content-end align-items-center pt-2 border-top">
+                                    <div class="text-muted" style="font-size: 0.65rem;"><i class="bi bi-person me-1"></i>${obs.registrado_por || 'Sistema'}</div>
+                                </div>
+                            </div>
+                        `;
+                        container.insertAdjacentHTML('beforeend', card);
+                    });
+                }
+            })
+            .catch(err => {
+                container.innerHTML = '<div class="alert alert-danger">Erro ao carregar dados.</div>';
+            });
+    }
+
+    function abrirModalNovaObs() {
+        if (!currentClientIdForObs) return;
+        document.getElementById('nova_obs_id_cliente').value = currentClientIdForObs;
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalNovaObsCliente')).show();
+    }
+</script>
+
+        </div> <!-- Fecha container-fluid -->
+    </div> <!-- Fecha main-content -->
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Scripts personalizados -->
+    <script>
+        // Inicializar tooltips e popovers
+        document.addEventListener('DOMContentLoaded', function() {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+            
+            var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+            var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+                return new bootstrap.Popover(popoverTriggerEl);
+            });
+        });
+    </script>
+    
+        
+    <!-- Script Modo Escuro -->
+    <script src="js/dark-mode.js"></script>
+</body>
+</html>

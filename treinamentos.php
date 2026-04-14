@@ -2299,15 +2299,7 @@ include 'header.php';
                     <input type="url" name="google_event_link" id="google_event_link_field" class="form-control mb-2"
                         placeholder="https://calendar.app.google/...">
 
-                    <div class="d-flex gap-2 flex-wrap mb-3">
-                        <button type="button" class="btn btn-outline-primary btn-sm px-3"
-                            onclick="window.open(document.getElementById('google_event_link_field').value || 'https://calendar.google.com', '_blank')">
-                            <i class="bi bi-box-arrow-up-right me-1"></i>Testar Link
-                        </button>
-                        <button type="button" class="btn btn-outline-success btn-sm px-3" onclick="colarLinkManual()">
-                            <i class="bi bi-clipboard-check me-1"></i>Colar
-                        </button>
-                    </div>
+
                 </div>
                 <div class="form-text small opacity-75">
                     Cole o link de convite do Google Agenda caso a sincronização automática não seja possível.
@@ -2540,7 +2532,7 @@ include 'header.php';
         }
 
         linhas.push('');
-        linhas.push('Qual desses fica melhor para você? Me avisa aqui que eu já reservo! 🚀');
+        linhas.push('Qual desses fica melhor para você? *Me informe também o tema/assunto que gostaria de tratar, que eu agendo aqui! 🚀*');
         return linhas.join('\n');
     }
 
@@ -2860,20 +2852,7 @@ include 'header.php';
         });
     });
 
-    async function colarLinkManual() {
-        const input = document.getElementById('google_event_link_field');
-        if (!input) return;
-        try {
-            const texto = (await navigator.clipboard.readText()).trim();
-            if (texto.startsWith('http')) {
-                input.value = texto;
-            } else {
-                alert('Área de transferência não contém um link válido.');
-            }
-        } catch (e) {
-            alert('Não foi possível ler a área de transferência.');
-        }
-    }
+
 
     // 7. WhatsApp Copy
     document.querySelectorAll('.copy-whatsapp-message').forEach(btn => {
