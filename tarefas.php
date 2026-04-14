@@ -171,7 +171,30 @@ include 'header.php';
 ?>
 
 <style>
-/* Estilos para as tarefas */
+    /* Modern Header */
+    .modern-header {
+        padding: 1rem 0 2rem 0;
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: 2rem;
+    }
+
+    .title-accent {
+        color: var(--primary);
+        background: linear-gradient(120deg, var(--primary), var(--purple));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .fw-800 {
+        font-weight: 800;
+    }
+
+    .gsap-reveal {
+        opacity: 0;
+        transform: translateY(15px);
+    }
+
+    /* Estilos para as tarefas */
 .page-title {
     font-size: 1.6rem;
     letter-spacing: 0.2px;
@@ -383,24 +406,29 @@ include 'header.php';
     border-radius: 2px;
 }
 
-/* Descrição com tooltip */
-.descricao-truncada {
-    max-width: 250px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    cursor: help;
-}
+    .descricao-truncada {
+        max-width: 250px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: help;
+    }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h3 class="page-title fw-bold mb-0"><i class="bi bi-list-task me-2 text-primary"></i>Tarefas</h3>
-        <p class="text-muted small mb-0">Gerencie pendências e atividades das implantações.</p>
+<div class="container-fluid px-0">
+    <!-- Modern Header -->
+    <div class="modern-header d-flex justify-content-between align-items-end gsap-reveal">
+        <div>
+            <h2 class="fw-800 mb-0">Gestão de <span class="title-accent">Tarefas</span></h2>
+            <p class="text-muted small mb-0">Gerencie pendências e atividades das implantações.</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-primary px-4 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalTarefa">
+                <i class="bi bi-plus-lg me-2"></i>Nova Tarefa
+            </button>
+        </div>
     </div>
-    <button class="btn btn-primary shadow-sm d-flex align-items-center filter-btn" data-bs-toggle="modal" data-bs-target="#modalTarefa">
-        <i class="bi bi-plus-lg me-2"></i>Nova Tarefa
-    </button>
 </div>
 
 <?php if (isset($_GET['msg'])): 
@@ -427,7 +455,7 @@ include 'header.php';
 <?php endif; ?>
 
 <!-- Cards de Estatísticas -->
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-4 gsap-reveal">
     <div class="col-md-3">
         <div class="card border-0 shadow-sm stat-card border-start border-primary border-4">
             <div class="card-body">
@@ -494,7 +522,7 @@ include 'header.php';
 </div>
 
 <!-- Barra de Filtro -->
-<div class="card shadow-sm border-0 mb-3">
+<div class="card shadow-sm border-0 mb-3 gsap-reveal">
     <div class="card-body py-3">
         <form method="GET" class="row g-3 align-items-center">
             <input type="hidden" name="ordenacao" value="<?= htmlspecialchars($ordenacao) ?>">
@@ -581,7 +609,7 @@ include 'header.php';
 </div>
 
 <!-- Cabeçalho da tabela com contador -->
-<div class="card shadow-sm border-0 mb-3">
+<div class="card shadow-sm border-0 mb-3 gsap-reveal">
     <div class="card-header bg-white border-bottom py-3">
         <div class="row align-items-center">
             <div class="col-md-6">
@@ -1040,6 +1068,15 @@ const searchField = document.querySelector('input[name="filtro_cliente"]');
 if (searchField) {
     searchField.focus();
 }
+
+// GSAP Reveal Animations
+gsap.to(".gsap-reveal", {
+    duration: 0.8,
+    y: 0,
+    opacity: 1,
+    stagger: 0.1,
+    ease: "power2.out"
+});
 </script>
 
 <?php include 'footer.php'; ?>

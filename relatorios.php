@@ -268,7 +268,7 @@ include 'header.php';
     padding: 1.5rem;
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     position: relative;
-    overflow: hidden;
+    cursor: help;
 }
 
 .kpi-card::before {
@@ -317,7 +317,6 @@ include 'header.php';
 }
 
 /* Tooltip KPIs (Igual funil_implantacao.php) */
-.kpi-card { cursor: help; position: relative; }
 .kpi-tooltip {
     display: none;
     position: absolute;
