@@ -519,6 +519,9 @@ body {
                                                     }
                                                 }
                                             }
+                                            if (empty($nome_contato) && !empty($item['original']['nome_contato'])) {
+                                                $nome_contato = $item['original']['nome_contato'];
+                                            }
                                             if($nome_contato): 
                                         ?>
                                             <div class="small text-muted"><i class="bi bi-person me-1"></i> <span class="fw-bold">Interlocutor:</span> <?= htmlspecialchars($nome_contato) ?></div>
@@ -591,15 +594,15 @@ body {
                     <label class="form-label small fw-bold text-muted">Módulo/Tema</label>
                     <select name="tema" id="tema" class="form-select" required>
                         <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
-                        <option value="CADASTROS">CADASTROS</option>
-                        <option value="ORÇAMENTO DE VENDA">ORÇAMENTO DE VENDA</option>
-                        <option value="ENTRADA DE COMPRA">ENTRADA DE COMPRAS</option>
-                        <option value="FINANCEIRO">FINANCEIRO</option>
+                        <option value="CADASTROS/ESTOQUE">CADASTROS/ESTOQUE</option>
+                        <option value="VENDAS">VENDAS</option>
+                        <option value="COMPRAS">COMPRAS</option>
+                        <option value="FATURAMENTO/NF">FATURAMENTO/NF</option>
+                        <option value="FINANCEIRO/CAIXA">FINANCEIRO/CAIXA</option>
                         <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
-                        <option value="PDV">PDV</option>
-                        <option value="NOTA FISCAL">NOTA FISCAL</option>
                         <option value="RELATÓRIOS">RELATÓRIOS</option>
-                        <option value="OUTROS">OUTROS</option>
+                        <option value="ATENDIMENTOS">ATENDIMENTOS</option>
+                        <option value="DUVIDAS">DUVIDAS</option>
                     </select>
                 </div>
                 <div class="row g-3 mb-3">

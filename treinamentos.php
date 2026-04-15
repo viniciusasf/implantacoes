@@ -625,7 +625,7 @@ $total_hoje = (int) $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE DATE(da
 // Filtros de busca por cliente removidos da UI - mantendo apenas ordenação e paginação
 $filtro_cliente = ''; // Desativado para simplificação via treinamentos.php
 $mostrar_todos = isset($_GET['mostrar_todos']) ? true : false;
-$where_conditions = ["(c.data_fim IS NULL OR c.data_fim = '0000-00-00')"]; // Apenas clientes ativos
+$where_conditions = []; // Alterado: agora mostramos treinamentos independentemente do cliente estar ativo ou encerrado
 $params = [];
 
 // Por padrão, mostramos apenas pendentes
@@ -1493,7 +1493,11 @@ include 'header.php';
                                 $e_hoje = date('Y-m-d', $data_t) === date('Y-m-d');
                                 $bg_class = $e_hoje ? 'bg-primary bg-opacity-10' : '';
 
-                                $contato_exibicao = $t['contato_nome'] ?: '---';
+                                $contato_banco = (!empty($t['contato_nome']) && $t['contato_nome'] !== '---') ? $t['contato_nome'] : null;
+                                $contato_livre = (!empty($t['nome_contato'])) ? $t['nome_contato'] : null;
+                                
+                                $contato_exibicao = $contato_banco ?: ($contato_livre ?: '---');
+
                                 if (!empty($t['contato_telefone'])) {
                                     $contato_exibicao .= " - " . $t['contato_telefone'];
                                 }
@@ -1616,7 +1620,7 @@ include 'header.php';
                                             <?php endif; ?>
 
                                             <?php
-                                            $nome_contato_wp = trim((string) ($t['contato_nome'] ?? $t['cliente_nome']));
+                                            $nome_contato_wp = trim((string) ($t['contato_nome'] ?? ($t['nome_contato'] ?? $t['cliente_nome'])));
                                             $dt_treino = new DateTime($t['data_treinamento'], new DateTimeZone('America/Sao_Paulo'));
                                             $dias_semana_wp = ['1' => 'Segunda-Feira', '2' => 'Terça-Feira', '3' => 'Quarta-Feira', '4' => 'Quinta-Feira', '5' => 'Sexta-Feira', '6' => 'Sábado', '7' => 'Domingo'];
                                             $data_f = $dt_treino->format('d/m') . ' ' . ($dias_semana_wp[$dt_treino->format('N')] ?? '');

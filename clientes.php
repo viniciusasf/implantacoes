@@ -175,7 +175,8 @@ $sql = "SELECT c.*,
 $params = [];
 
 // Por padrão, não mostrar clientes com implantação encerrada
-if ($mostrar_encerrados != '1') {
+// Exceto quando há uma busca ativa (nesse caso, mostrar todos, inclusive encerrados)
+if ($mostrar_encerrados != '1' && empty($busca)) {
     $sql .= " AND (c.data_fim IS NULL OR c.data_fim = '0000-00-00')";
 }
 
@@ -190,6 +191,18 @@ $sql .= " GROUP BY c.id_cliente ORDER BY c.fantasia ASC";
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $todos_clientes = $stmt->fetchAll();
+
+// Buscar contatos de todos os clientes listados (uma query só, sem AJAX)
+$ids_clientes = array_column($todos_clientes, 'id_cliente');
+$contatos_por_cliente = [];
+if (!empty($ids_clientes)) {
+    $placeholders_c = implode(',', array_fill(0, count($ids_clientes), '?'));
+    $stmtCt = $pdo->prepare("SELECT id_contato, id_cliente, nome FROM contatos WHERE id_cliente IN ($placeholders_c) ORDER BY nome ASC");
+    $stmtCt->execute($ids_clientes);
+    foreach ($stmtCt->fetchAll() as $ct) {
+        $contatos_por_cliente[$ct['id_cliente']][] = ['id' => $ct['id_contato'], 'nome' => $ct['nome']];
+    }
+}
 
 // 6. Lógica de Contagem para os CARDS - SOMENTE CLIENTES ATIVOS
 $integracao = 0;
@@ -235,7 +248,10 @@ foreach ($todos_clientes as $cl) {
     }
 
     // Adiciona à lista filtrada se passar pelo filtro de estágio
-    if ($estagio == '' ) {
+    // Quando há busca ativa, exibe todos os resultados (inclusive encerrados)
+    if (!empty($busca)) {
+        $clientes_filtrados[] = $cl;
+    } elseif ($estagio == '') {
         if ($status_cl != 'encerrado') {
             $clientes_filtrados[] = $cl;
         }
@@ -439,6 +455,9 @@ body, html {
 .btn-action.delete { color: #ef4444; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); }
 .btn-action.delete:hover { background: #ef4444; color: white; }
 
+.btn-action.agendar { color: #7c3aed; background: rgba(124, 58, 237, 0.15); border-color: rgba(124, 58, 237, 0.3); }
+.btn-action.agendar:hover { background: #7c3aed; color: white; }
+
 /* Grid & Table Animations */
 .gsap-reveal {
     opacity: 0;
@@ -641,9 +660,17 @@ body, html {
                                     title="Editar" onclick="openEditModal(this)">
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos" title="Treinamentos">
+                            <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos" title="Ver Treinamentos">
                                 <i class="bi bi-calendar-check"></i>
                             </a>
+                            <button class="btn btn-sm btn-action agendar novo-treino-trigger"
+                                    data-id="<?= $c['id_cliente'] ?>"
+                                    data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
+                                    data-contatos="<?= htmlspecialchars(json_encode($contatos_por_cliente[$c['id_cliente']] ?? []), ENT_QUOTES) ?>"
+                                    title="Agendar Novo Treinamento"
+                                    onclick="openNovoTreinamentoModal(this)">
+                                <i class="bi bi-calendar-plus"></i>
+                            </button>
                             <?php if (!$cliente_encerrado): ?>
                                 <a href="?concluir=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>" class="btn btn-sm btn-action concluir" title="Concluir" onclick="return confirm('Concluir implantação?')">
                                     <i class="bi bi-check-lg"></i>
@@ -736,9 +763,17 @@ body, html {
                                                     onclick="openEditModal(this)">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
-                                            <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos">
+                                            <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos" title="Ver Treinamentos">
                                                 <i class="bi bi-calendar-check"></i>
                                             </a>
+                                            <button class="btn btn-sm btn-action agendar novo-treino-trigger"
+                                                    data-id="<?= $c['id_cliente'] ?>"
+                                                    data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
+                                                    data-contatos="<?= htmlspecialchars(json_encode($contatos_por_cliente[$c['id_cliente']] ?? []), ENT_QUOTES) ?>"
+                                                    title="Agendar Novo Treinamento"
+                                                    onclick="openNovoTreinamentoModal(this)">
+                                                <i class="bi bi-calendar-plus"></i>
+                                            </button>
                                             <a href="?delete=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>" class="btn btn-sm btn-action delete" onclick="return confirm('Excluir cliente?')">
                                                 <i class="bi bi-trash"></i>
                                             </a>
@@ -893,6 +928,73 @@ body, html {
     </div>
 </div>
 
+<!-- Modal Rápido: Novo Treinamento -->
+<div class="modal fade" id="modalNovoTreinamento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="salvar_treinamento.php" class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden;">
+            <input type="hidden" name="id_cliente" id="nt_id_cliente">
+            <input type="hidden" name="redirect_to" value="clientes.php">
+            <div class="modal-header p-4 border-0" style="background: linear-gradient(135deg, #7c3aed, #4361ee);">
+                <div>
+                    <h5 class="modal-title fw-bold text-white d-flex align-items-center gap-2">
+                        <i class="bi bi-calendar-plus fs-4"></i> Agendar Treinamento
+                    </h5>
+                    <p class="mb-0 text-white opacity-75 small" id="nt_cliente_label">Cliente</p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Cliente</label>
+                    <div class="input-group">
+                        <span class="input-group-text" style="background:rgba(124,58,237,0.1); border-color:rgba(124,58,237,0.3);"><i class="bi bi-building text-purple" style="color:#7c3aed"></i></span>
+                        <input type="text" class="form-control fw-bold" id="nt_cliente_display" readonly
+                               style="background:rgba(124,58,237,0.05); border-color:rgba(124,58,237,0.3); cursor:default;">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Contato / Interlocutor</label>
+                    <input type="text" name="nome_contato" id="nt_nome_contato" class="form-control" placeholder="Digite o nome do contato..." required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Módulo / Tema</label>
+                    <select name="tema" id="nt_tema" class="form-select" required>
+                        <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
+                        <option value="CADASTROS/ESTOQUE">CADASTROS/ESTOQUE</option>
+                        <option value="VENDAS">VENDAS</option>
+                        <option value="COMPRAS">COMPRAS</option>
+                        <option value="FATURAMENTO/NF">FATURAMENTO/NF</option>
+                        <option value="FINANCEIRO/CAIXA">FINANCEIRO/CAIXA</option>
+                        <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
+                        <option value="RELATÓRIOS">RELATÓRIOS</option>
+                        <option value="ATENDIMENTOS">ATENDIMENTOS</option>
+                        <option value="DUVIDAS">DUVIDAS</option>
+                    </select>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-7">
+                        <label class="form-label small fw-bold text-muted">Data e Horário</label>
+                        <input type="datetime-local" name="data_treinamento" id="nt_data_treinamento" class="form-control" required>
+                    </div>
+                    <div class="col-5">
+                        <label class="form-label small fw-bold text-muted">Status</label>
+                        <select name="status" id="nt_status" class="form-select">
+                            <option value="PENDENTE">PENDENTE</option>
+                            <option value="AGENDADO">AGENDADO</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-4">
+                <button type="button" class="btn btn-link text-muted fw-bold text-decoration-none me-auto" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary px-5 fw-bold" style="border-radius: 12px; height: 46px;">
+                    <i class="bi bi-check-lg me-2"></i> Agendar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Inicializar tooltips
@@ -983,6 +1085,23 @@ body, html {
             return;
         }
         window.open(link.startsWith('http') ? link : 'https://' + link, '_blank');
+    }
+
+    // --- Modal Novo Treinamento Rápido ---
+    function openNovoTreinamentoModal(btn) {
+        const idCliente = btn.dataset.id;
+        const nomeCliente = btn.dataset.fantasia;
+        const contatos = JSON.parse(btn.dataset.contatos || '[]');
+
+        document.getElementById('nt_id_cliente').value = idCliente;
+        document.getElementById('nt_cliente_label').textContent = nomeCliente;
+        document.getElementById('nt_cliente_display').value = nomeCliente;
+        document.getElementById('nt_nome_contato').value = '';
+        document.getElementById('nt_tema').selectedIndex = 0;
+        document.getElementById('nt_status').value = 'PENDENTE';
+        document.getElementById('nt_data_treinamento').value = '';
+
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalNovoTreinamento')).show();
     }
 </script>
 

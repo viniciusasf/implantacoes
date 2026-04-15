@@ -37,6 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $status = $_POST['status'] ?? 'PENDENTE';
     $google_event_link = $_POST['google_event_link'] ?? '';
     $observacoes = $_POST['observacoes'] ?? '';
+    // Campo livre para digitação de contato
+    $nome_contato_livre = trim($_POST['nome_contato'] ?? '');
 
     // Validar dados obrigatórios
     if (empty($id_cliente) || empty($tema) || empty($data_treinamento)) {
@@ -44,10 +46,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit;
     }
 
+    $redirect_to = $_POST['redirect_to'] ?? '';
+    // Valida o redirect para aceitar apenas páginas do sistema
+    $paginas_permitidas = ['clientes.php', 'treinamentos_cliente.php', 'treinamentos.php'];
+    $redirect_base = basename($redirect_to);
+    if (!in_array($redirect_base, $paginas_permitidas)) {
+        $redirect_base = 'treinamentos_cliente.php';
+    }
+
     if (!empty($id_treinamento)) {
         // Atualizar treinamento existente
         $stmt = $pdo->prepare("UPDATE treinamentos SET 
             id_contato = ?, 
+            nome_contato = ?, 
             tema = ?, 
             data_treinamento = ?, 
             status = ?, 
@@ -55,23 +66,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             observacoes = ?
             WHERE id_treinamento = ?");
         $stmt->execute([
-            $id_contato, $tema, $data_treinamento, $status, 
+            $id_contato, $nome_contato_livre, $tema, $data_treinamento, $status, 
             $google_event_link, $observacoes, $id_treinamento
         ]);
         $msg = "Treinamento atualizado com sucesso";
     } else {
         // Inserir novo treinamento
         $stmt = $pdo->prepare("INSERT INTO treinamentos 
-            (id_cliente, id_contato, tema, data_treinamento, status, google_event_link, observacoes) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)");
+            (id_cliente, id_contato, nome_contato, tema, data_treinamento, status, google_event_link, observacoes) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
-            $id_cliente, $id_contato, $tema, $data_treinamento, $status, 
+            $id_cliente, $id_contato, $nome_contato_livre, $tema, $data_treinamento, $status, 
             $google_event_link, $observacoes
         ]);
         $msg = "Treinamento agendado com sucesso";
     }
 
-    header("Location: treinamentos_cliente.php?id_cliente=" . $id_cliente . "&msg=" . urlencode($msg));
+    if ($redirect_base === 'clientes.php') {
+        header("Location: clientes.php?msg=" . urlencode($msg));
+    } else {
+        header("Location: treinamentos_cliente.php?id_cliente=" . $id_cliente . "&msg=" . urlencode($msg));
+    }
     exit;
 }
 
