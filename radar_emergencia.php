@@ -15,6 +15,10 @@ $query_clientes_inativos = "
         c.fantasia, 
         c.vendedor, 
         c.data_inicio,
+        COALESCE(
+            NULLIF(TRIM(c.telefone_ddd), ''),
+            (SELECT telefone_ddd FROM contatos ct WHERE ct.id_cliente = c.id_cliente AND ct.telefone_ddd IS NOT NULL AND TRIM(ct.telefone_ddd) != '' LIMIT 1)
+        ) AS telefone_ddd,
         MAX(t.data_treinamento) as ulimo_treinamento_data,
         (
             SELECT MAX(data_observacao) 
@@ -33,7 +37,7 @@ $query_clientes_inativos = "
     AND c.id_cliente NOT IN (
         SELECT DISTINCT id_cliente FROM treinamentos WHERE status = 'PENDENTE'
     )
-    GROUP BY c.id_cliente, c.fantasia, c.vendedor, c.data_inicio
+    GROUP BY c.id_cliente, c.fantasia, c.vendedor, c.data_inicio, c.telefone_ddd
     HAVING 
         (ulimo_treinamento_data < DATE_SUB(CURDATE(), INTERVAL :dias_inatividade DAY)) OR 
         (ulimo_treinamento_data IS NULL AND c.data_inicio < DATE_SUB(CURDATE(), INTERVAL :dias_inatividade2 DAY))
@@ -417,6 +421,8 @@ body {
                                             <i class="bi bi-person-badge me-1"></i> Resp: <span class="fw-bold"><?= htmlspecialchars($c['vendedor'] ?: 'Não definido') ?></span>
                                             <span class="mx-2">•</span>
                                             <i class="bi bi-calendar2-x me-1"></i> Último Treino: <?= $c['ulimo_treinamento_data'] ? date('d/m/Y', strtotime($c['ulimo_treinamento_data'])) : 'Nunca realizou' ?>
+                                            <span class="mx-2">•</span>
+                                            <i class="bi bi-telephone me-1"></i> Tel: <span class="fw-bold"><?= htmlspecialchars($c['telefone_ddd'] ?: 'Não informado') ?></span>
                                         </div>
 
                                         <?php if ($c['ultima_mensagem']): ?>
@@ -480,6 +486,8 @@ body {
                                         
                                         <div class="text-muted small mb-2">
                                             Total de dias sem Treinamento: <span class="fw-bold"><?= $c['dias_sem_treinamento'] ?> dias</span>
+                                            <span class="mx-2">•</span>
+                                            <i class="bi bi-telephone me-1"></i> Tel: <span class="fw-bold"><?= htmlspecialchars($c['telefone_ddd'] ?: 'Não informado') ?></span>
                                         </div>
 
                                         <?php if ($c['ultima_mensagem']): ?>
