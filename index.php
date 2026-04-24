@@ -259,6 +259,44 @@ body {
 /* GSAP */
 .gsap-reveal { opacity: 0; transform: translateY(30px); }
 
+/* // Print - Ocultar sidebar e botões ao imprimir */
+@media print {
+    #sidebar {
+        display: none !important;
+    }
+    #content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding: 1rem !important;
+    }
+    .premium-header .d-flex {
+        display: none !important;
+    }
+    .dashboard-wrapper {
+        padding: 0 !important;
+    }
+    .card-glass, .card-glass-chart {
+        transform: none !important;
+        box-shadow: none !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        overflow: visible !important;
+    }
+    .row {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+    #chart-timeline, #chart-goal {
+        overflow: visible !important;
+        height: auto !important;
+    }
+    #chart-timeline img, #chart-goal img {
+        max-width: 100% !important;
+        height: auto !important;
+        display: block !important;
+    }
+}
+
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
@@ -555,7 +593,8 @@ body {
         },
         tooltip: { theme: 'dark' }
     };
-    new ApexCharts(document.querySelector("#chart-timeline"), timelineOptions).render();
+    const chartTimeline = new ApexCharts(document.querySelector("#chart-timeline"), timelineOptions);
+    chartTimeline.render();
 
     // 2. Monthly Goal Chart
     const goalOptions = {
@@ -583,7 +622,33 @@ body {
         colors: [<?= $percent_meta >= 90 ? "'#10b981'" : ($percent_meta >= 70 ? "'#f59e0b'" : "'#ef4444'") ?>],
         stroke: { lineCap: 'round' }
     };
-    new ApexCharts(document.querySelector("#chart-goal"), goalOptions).render();
+    const chartGoal = new ApexCharts(document.querySelector("#chart-goal"), goalOptions);
+    chartGoal.render();
+
+    // --- PRINT: converte gráficos em imagem para evitar cortes no PDF ---
+    const printCharts = [
+        { instance: chartTimeline, el: document.querySelector('#chart-timeline') },
+        { instance: chartGoal,     el: document.querySelector('#chart-goal') }
+    ];
+    const originalContents = {};
+
+    window.onbeforeprint = async function () {
+        for (const pc of printCharts) {
+            if (!pc.el || !pc.instance) continue;
+            try {
+                const { imgURI } = await pc.instance.dataURI();
+                originalContents[pc.el.id] = pc.el.innerHTML;
+                pc.el.innerHTML = `<img src="${imgURI}" style="width:100%;height:auto;display:block;" />`;
+            } catch (e) { /* segue sem conversão */ }
+        }
+    };
+
+    window.onafterprint = function () {
+        for (const pc of printCharts) {
+            if (!pc.el || !originalContents[pc.el.id]) continue;
+            pc.el.innerHTML = originalContents[pc.el.id];
+        }
+    };
 
     // --- UTILS ---
     function exportToExcel() {

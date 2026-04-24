@@ -1163,9 +1163,8 @@ $hoje_data = date('Y-m-d');
 $total_resultados = count($treinamentos);
 
 $clientes_list = $pdo->query("
-    SELECT id_cliente, fantasia 
+    SELECT id_cliente, fantasia, data_fim 
     FROM clientes 
-    WHERE (data_fim IS NULL OR data_fim = '0000-00-00' OR data_fim > NOW())
     ORDER BY fantasia ASC
 ")->fetchAll();
 
@@ -1495,7 +1494,7 @@ include 'header.php';
 
                                 $contato_banco = (!empty($t['contato_nome']) && $t['contato_nome'] !== '---') ? $t['contato_nome'] : null;
                                 $contato_livre = (!empty($t['nome_contato'])) ? $t['nome_contato'] : null;
-                                
+
                                 $contato_exibicao = $contato_banco ?: ($contato_livre ?: '---');
 
                                 if (!empty($t['contato_telefone'])) {
@@ -1508,9 +1507,11 @@ include 'header.php';
                                             <?= $data_t ? date('d/m/Y', $data_t) : '---' ?>
                                         </div>
                                         <div class="d-flex align-items-center gap-1 mt-1">
-                                            <span class="text-dark small fw-bold" style="font-size: 0.75rem;"><?= $data_t ? date('H:i', $data_t) : '' ?></span>
+                                            <span class="text-dark small fw-bold"
+                                                style="font-size: 0.75rem;"><?= $data_t ? date('H:i', $data_t) : '' ?></span>
                                             <?php if ($e_hoje): ?>
-                                                <span class="badge bg-primary text-white" style="font-size: 0.55rem; padding: 1.5px 3.5px; line-height: 1;">HOJE</span>
+                                                <span class="badge bg-primary text-white"
+                                                    style="font-size: 0.55rem; padding: 1.5px 3.5px; line-height: 1;">HOJE</span>
                                             <?php endif; ?>
                                         </div>
                                     </td>
@@ -1592,7 +1593,7 @@ include 'header.php';
                                                 ?>
                                                 <span class="badge bg-light text-dark border p-1" style="font-size: 0.65rem;"
                                                     title="<?= htmlspecialchars($rec) ?>"><?= mb_strimwidth(htmlspecialchars($rec), 0, 10, "...") ?></span>
-                                            <?php
+                                                <?php
                                             endforeach;
                                         else:
                                             ?>
@@ -2136,15 +2137,23 @@ include 'header.php';
                 <input type="hidden" name="id_treinamento" id="id_treinamento">
 
                 <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted">Cliente</label>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label small fw-bold text-muted mb-0">Cliente</label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="mostrar_encerrados_modal" style="cursor: pointer;">
+                            <label class="form-check-label small text-muted" for="mostrar_encerrados_modal" style="cursor: pointer; font-size: 0.7rem;">Mostrar Encerrados</label>
+                        </div>
+                    </div>
                     <select name="id_cliente" id="id_cliente" class="form-select" required
                         onchange="filterContatos(this.value)">
                         <option value="">Selecione o cliente...</option>
                         <?php
-                        // CONSULTA MODIFICADA: Apenas clientes ativos
-                        foreach ($clientes_list as $c): ?>
-
-                            <option value="<?= $c['id_cliente'] ?>"><?= htmlspecialchars($c['fantasia']) ?></option>
+                        foreach ($clientes_list as $c): 
+                            $is_ativo = (empty($c['data_fim']) || $c['data_fim'] === '0000-00-00' || strtotime($c['data_fim']) > time());
+                        ?>
+                            <option value="<?= $c['id_cliente'] ?>" data-ativo="<?= $is_ativo ? '1' : '0' ?>" <?= !$is_ativo ? 'style="display:none;"' : '' ?>>
+                                <?= htmlspecialchars($c['fantasia']) ?>
+                            </option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -2901,6 +2910,25 @@ include 'header.php';
         modalTreinamento.addEventListener('shown.bs.modal', function () {
             carregarDisponibilidadeGoogle();
         });
+
+        // Lógica para mostrar/esconder clientes encerrados
+        const flegEncerrados = document.getElementById('mostrar_encerrados_modal');
+        if (flegEncerrados) {
+            flegEncerrados.addEventListener('change', function() {
+                const showAll = this.checked;
+                const selectCliente = document.getElementById('id_cliente');
+                const options = selectCliente.querySelectorAll('option[data-ativo]');
+                
+                options.forEach(opt => {
+                    const isAtivo = opt.getAttribute('data-ativo') === '1';
+                    if (isAtivo) {
+                        opt.style.display = '';
+                    } else {
+                        opt.style.display = showAll ? '' : 'none';
+                    }
+                });
+            });
+        }
     }
 
     // Kanban removido - centralizado no dashboard principal
@@ -2953,6 +2981,14 @@ include 'header.php';
         document.getElementById('modalTitle').innerHTML = '<i class="bi bi-calendar-plus me-2"></i>Agendar Treinamento';
         document.getElementById('id_treinamento').value = '';
         this.querySelector('form').reset();
+
+        // Resetar fleg de encerrados
+        const flegEncerrados = document.getElementById('mostrar_encerrados_modal');
+        if (flegEncerrados) {
+            flegEncerrados.checked = false;
+            // Disparar evento change para esconder os encerrados
+            flegEncerrados.dispatchEvent(new Event('change'));
+        }
 
         // Resetar contatos
         const contatoSelect = document.getElementById('id_contato');

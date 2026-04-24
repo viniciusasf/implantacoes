@@ -495,25 +495,6 @@ try {
                     </a>
                 </li>
 
-                <div class="menu-separator"></div>
-
-                <!-- // section: relacionamento -->
-                <li class="menu-group-title">Relacionamento</li>
-
-                <li class="highlight-item-2 <?= $current_page == 'clientes.php' ? 'active' : '' ?>">
-                    <a href="clientes.php">
-                        <i class="bi bi-buildings"></i> <span>Clientes</span>
-                        <span class="badge-notify text-white ms-auto"><?= $total_clientes ?></span>
-                    </a>
-                </li>
-
-                <li class="<?= $current_page == 'contatos.php' ? 'active' : '' ?>">
-                    <a href="contatos.php">
-                        <i class="bi bi-people"></i> <span>Contatos</span>
-                        <span class="badge-notify text-white ms-auto"><?= $total_contatos ?></span>
-                    </a>
-                </li>
-                
                 <li class="<?= $current_page == 'radar_emergencia.php' ? 'active' : '' ?>">
                     <a href="radar_emergencia.php" style="color: #ef4444;">
                         <i class="bi bi-radar" style="color: #ef4444;"></i> <span style="font-weight: 700;">Radar de Emergência</span>
@@ -544,6 +525,25 @@ try {
                         ?>
                             <span class="badge-notify text-white ms-auto" style="background: #ef4444; padding: 2px 6px; border-radius: 6px;"><?= $total_radar ?></span>
                         <?php endif; ?>
+                    </a>
+                </li>
+
+                <div class="menu-separator"></div>
+
+                <!-- // section: relacionamento -->
+                <li class="menu-group-title">Relacionamento</li>
+
+                <li class="highlight-item-2 <?= $current_page == 'clientes.php' ? 'active' : '' ?>">
+                    <a href="clientes.php">
+                        <i class="bi bi-buildings"></i> <span>Clientes</span>
+                        <span class="badge-notify text-white ms-auto"><?= $total_clientes ?></span>
+                    </a>
+                </li>
+
+                <li class="<?= $current_page == 'contatos.php' ? 'active' : '' ?>">
+                    <a href="contatos.php">
+                        <i class="bi bi-people"></i> <span>Contatos</span>
+                        <span class="badge-notify text-white ms-auto"><?= $total_contatos ?></span>
                     </a>
                 </li>
 
