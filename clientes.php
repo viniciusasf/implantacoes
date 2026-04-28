@@ -207,8 +207,9 @@ if (!empty($ids_clientes)) {
 // 6. Lógica de Contagem para os CARDS - SOMENTE CLIENTES ATIVOS
 $integracao = 0;
 $operacional = 0;
+$atencao = 0;
 $finalizacao = 0;
-$critico = 0;
+$encerrar = 0;
 $encerrados = 0;
 $clientes_filtrados = [];
 
@@ -230,18 +231,21 @@ foreach ($todos_clientes as $cl) {
     $status_cl = "concluido";
     if (!$cliente_encerrado) {
         $d = (new DateTime($cl['data_inicio']))->diff(new DateTime())->days;
-        if ($d <= 15) {
+        if ($d <= 20) {
             $integracao++;
             $status_cl = "integracao";
-        } elseif ($d <= 30) {
+        } elseif ($d <= 60) {
             $operacional++;
             $status_cl = "operacional";
-        } elseif ($d <= 60) {
+        } elseif ($d <= 70) {
+            $atencao++;
+            $status_cl = "atencao";
+        } elseif ($d <= 90) {
             $finalizacao++;
             $status_cl = "finalizacao";
         } else {
-            $critico++;
-            $status_cl = "critico";
+            $encerrar++;
+            $status_cl = "encerrar";
         }
     } else {
         $status_cl = "encerrado";
@@ -504,36 +508,43 @@ body, html {
         <?php if ($mostrar_encerrados == '1'): ?>
         <div class="status-pill-card <?= $estagio == '' ? 'active' : '' ?>" onclick="window.location.href='clientes.php?estagio=&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>'">
             <span>Ativos</span>
-            <h2 class="text-main"><?= $integracao + $operacional + $finalizacao + $critico ?></h2>
+            <h2 class="text-main"><?= $integracao + $operacional + $atencao + $finalizacao + $encerrar ?></h2>
             <div class="progress mt-2" style="height: 4px; background: rgba(255, 255, 255, 0.05);">
                 <div class="progress-bar bg-primary" style="width: 100%"></div>
             </div>
         </div>
         <?php endif; ?>
         <div class="status-pill-card <?= $estagio == 'integracao' ? 'active' : '' ?>" onclick="window.location.href='clientes.php?estagio=integracao&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>'">
-            <span>Integração | 0 a 15 dias</span>
-            <h2 class="text-primary"><?= $integracao ?></h2>
-            <div class="progress mt-2" style="height: 4px; background: rgba(67, 97, 238, 0.1);">
-                <div class="progress-bar bg-primary" style="width: 100%"></div>
-            </div>
-        </div>
-        <div class="status-pill-card <?= $estagio == 'operacional' ? 'active' : '' ?>" onclick="window.location.href='clientes.php?estagio=operacional&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>'">
-            <span>Operacional | 16 a 30 dias</span>
-            <h2 class="text-info"><?= $operacional ?></h2>
+            <span>Integração | 0 a 20 dias</span>
+            <h2 class="text-info"><?= $integracao ?></h2>
             <div class="progress mt-2" style="height: 4px; background: rgba(6, 182, 212, 0.1);">
                 <div class="progress-bar bg-info" style="width: 100%"></div>
             </div>
         </div>
+        <div class="status-pill-card <?= $estagio == 'operacional' ? 'active' : '' ?>" onclick="window.location.href='clientes.php?estagio=operacional&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>'">
+            <span>Operacional | 21 a 60 dias</span>
+            <h2 class="text-primary"><?= $operacional ?></h2>
+            <div class="progress mt-2" style="height: 4px; background: rgba(67, 97, 238, 0.1);">
+                <div class="progress-bar bg-primary" style="width: 100%"></div>
+            </div>
+        </div>
+        <div class="status-pill-card <?= $estagio == 'atencao' ? 'active' : '' ?>" onclick="window.location.href='clientes.php?estagio=atencao&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>'">
+            <span>Atenção | 61 a 70 dias</span>
+            <h2 class="text-warning"><?= $atencao ?></h2>
+            <div class="progress mt-2" style="height: 4px; background: rgba(245, 158, 11, 0.1);">
+                <div class="progress-bar bg-warning" style="width: 100%"></div>
+            </div>
+        </div>
         <div class="status-pill-card <?= $estagio == 'finalizacao' ? 'active' : '' ?>" onclick="window.location.href='clientes.php?estagio=finalizacao&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>'">
-            <span>Finalização | 31 a 60 dias</span>
+            <span>Finalização | 71 a 90 dias</span>
             <h2 class="text-success"><?= $finalizacao ?></h2>
             <div class="progress mt-2" style="height: 4px; background: rgba(16, 185, 129, 0.1);">
                 <div class="progress-bar bg-success" style="width: 100%"></div>
             </div>
         </div>
-        <div class="status-pill-card <?= $estagio == 'critico' ? 'active' : '' ?>" onclick="window.location.href='clientes.php?estagio=critico&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>'">
-            <span>Atenção | 61 a 90 dias</span>
-            <h2 class="text-danger"><?= $critico ?></h2>
+        <div class="status-pill-card <?= $estagio == 'encerrar' ? 'active' : '' ?>" onclick="window.location.href='clientes.php?estagio=encerrar&view=<?= $view_mode ?>&mostrar_encerrados=<?= $mostrar_encerrados ?>'">
+            <span>Encerrar | 91+ dias</span>
+            <h2 class="text-danger"><?= $encerrar ?></h2>
             <div class="progress mt-2" style="height: 4px; background: rgba(239, 68, 68, 0.1);">
                 <div class="progress-bar bg-danger" style="width: 100%"></div>
             </div>
@@ -590,16 +601,18 @@ body, html {
                 $status_config = [
                     'integracao' => ['label' => 'Integração', 'class' => 'bg-info bg-opacity-10 text-info', 'icon' => 'bi-rocket-takeoff'],
                     'operacional' => ['label' => 'Operacional', 'class' => 'bg-primary bg-opacity-10 text-primary', 'icon' => 'bi-gear'],
+                    'atencao' => ['label' => 'Atenção', 'class' => 'bg-warning bg-opacity-10 text-warning', 'icon' => 'bi-exclamation-triangle'],
                     'finalizacao' => ['label' => 'Finalização', 'class' => 'bg-success bg-opacity-10 text-success', 'icon' => 'bi-flag'],
-                    'critico' => ['label' => 'Atenção', 'class' => 'bg-danger bg-opacity-10 text-danger', 'icon' => 'bi-exclamation-triangle'],
+                    'encerrar' => ['label' => 'Encerrar', 'class' => 'bg-danger bg-opacity-10 text-danger', 'icon' => 'bi-x-circle'],
                     'encerrado' => ['label' => 'Encerrado', 'class' => 'bg-secondary bg-opacity-10 text-secondary', 'icon' => 'bi-archive']
                 ];
 
                 $current_status = 'integracao';
                 if ($cliente_encerrado) $current_status = 'encerrado';
-                elseif ($d > 60) $current_status = 'critico';
-                elseif ($d > 30) $current_status = 'finalizacao';
-                elseif ($d > 15) $current_status = 'operacional';
+                elseif ($d > 90) $current_status = 'encerrar';
+                elseif ($d > 70) $current_status = 'finalizacao';
+                elseif ($d > 60) $current_status = 'atencao';
+                elseif ($d > 20) $current_status = 'operacional';
 
                 $cfg = $status_config[$current_status];
             ?>
@@ -628,9 +641,13 @@ body, html {
                         </div>
                         <div class="progress mb-3" style="height: 6px; border-radius: 10px; background: var(--bg-body);">
                             <?php 
-                                $pct = min(100, ($d / 60) * 100);
-                                $bar_class = $d > 60 ? 'bg-danger' : ($d > 30 ? 'bg-success' : ($d > 15 ? 'bg-primary' : 'bg-info'));
-                                if ($cliente_encerrado) { $pct = 100; $bar_class = 'bg-success'; }
+                                $pct = min(100, ($d / 90) * 100);
+                                $bar_class = 'bg-info';
+                                if ($cliente_encerrado) { $pct = 100; $bar_class = 'bg-secondary'; }
+                                elseif ($d > 90) $bar_class = 'bg-danger';
+                                elseif ($d > 70) $bar_class = 'bg-success';
+                                elseif ($d > 60) $bar_class = 'bg-warning';
+                                elseif ($d > 20) $bar_class = 'bg-primary';
                             ?>
                             <div class="progress-bar <?= $bar_class ?>" style="width: <?= $pct ?>%"></div>
                         </div>
@@ -717,16 +734,18 @@ body, html {
                                     $status_config = [
                                         'integracao' => ['label' => 'Integração', 'class' => 'bg-info bg-opacity-10 text-info', 'icon' => 'bi-rocket-takeoff'],
                                         'operacional' => ['label' => 'Operacional', 'class' => 'bg-primary bg-opacity-10 text-primary', 'icon' => 'bi-gear'],
+                                        'atencao' => ['label' => 'Atenção', 'class' => 'bg-warning bg-opacity-10 text-warning', 'icon' => 'bi-exclamation-triangle'],
                                         'finalizacao' => ['label' => 'Finalização', 'class' => 'bg-success bg-opacity-10 text-success', 'icon' => 'bi-flag'],
-                                        'critico' => ['label' => 'Atenção', 'class' => 'bg-danger bg-opacity-10 text-danger', 'icon' => 'bi-exclamation-triangle'],
+                                        'encerrar' => ['label' => 'Encerrar', 'class' => 'bg-danger bg-opacity-10 text-danger', 'icon' => 'bi-x-circle'],
                                         'encerrado' => ['label' => 'Encerrado', 'class' => 'bg-secondary bg-opacity-10 text-secondary', 'icon' => 'bi-archive']
                                     ];
 
                                     $current_status = 'integracao';
                                     if ($cliente_encerrado) $current_status = 'encerrado';
-                                    elseif ($d > 60) $current_status = 'critico';
-                                    elseif ($d > 30) $current_status = 'finalizacao';
-                                    elseif ($d > 15) $current_status = 'operacional';
+                                    elseif ($d > 90) $current_status = 'encerrar';
+                                    elseif ($d > 70) $current_status = 'finalizacao';
+                                    elseif ($d > 60) $current_status = 'atencao';
+                                    elseif ($d > 20) $current_status = 'operacional';
                                     $cfg = $status_config[$current_status] ?? ['label' => 'Desconhecido', 'class' => 'bg-secondary', 'icon' => 'bi-question'];
                                 ?>
                                 <tr>
