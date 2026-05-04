@@ -459,7 +459,13 @@ try {
 
                 <li class="<?= $current_page == 'relatorios.php' ? 'active' : '' ?>">
                     <a href="relatorios.php">
-                        <i class="bi bi-file-earmark-bar-graph"></i> <span>Relatórios</span>
+                        <i class="bi bi-file-earmark-bar-graph"></i> <span>Relat. Treinamentos</span>
+                    </a>
+                </li>
+
+                <li class="<?= $current_page == 'relatorio_mensal_implantacao.php' ? 'active' : '' ?>">
+                    <a href="relatorio_mensal_implantacao.php">
+                        <i class="bi bi-calendar-range"></i> <span>Relat. Encerramentos</span>
                     </a>
                 </li>
 

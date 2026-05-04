@@ -735,7 +735,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $id = (int) ($_POST['id_treinamento'] ?? 0);
         $obs = trim((string) ($_POST['observacoes'] ?? ''));
         $temPendencia = trim((string) ($_POST['tem_pendencia'] ?? ''));
-        $referenciaChamado = trim((string) ($_POST['referencia_chamado'] ?? ''));
         $tipoPendencia = null;
         if ($temPendencia === 'sim') {
             $tipoPendencia = 'COM_PENDENCIA';
@@ -771,13 +770,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if ($tipoPendencia === 'COM_PENDENCIA' && $tabelaPendenciasDisponivel) {
                 $stmtPendencia = $pdo->prepare(
                     "INSERT INTO pendencias_treinamentos
-                        (id_treinamento, id_cliente, status_pendencia, observacao_finalizacao, referencia_chamado, observacao_conclusao, data_criacao, data_atualizacao, data_conclusao)
-                     VALUES (?, ?, 'ABERTA', ?, ?, NULL, ?, NULL, NULL)
+                        (id_treinamento, id_cliente, status_pendencia, observacao_finalizacao, observacao_conclusao, data_criacao, data_atualizacao, data_conclusao)
+                     VALUES (?, ?, 'ABERTA', ?, NULL, ?, NULL, NULL)
                      ON DUPLICATE KEY UPDATE
                         id_cliente = VALUES(id_cliente),
                         status_pendencia = 'ABERTA',
                         observacao_finalizacao = VALUES(observacao_finalizacao),
-                        referencia_chamado = VALUES(referencia_chamado),
                         observacao_conclusao = NULL,
                         data_atualizacao = VALUES(data_criacao),
                         data_conclusao = NULL"
@@ -786,7 +784,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $id,
                     $idCliente > 0 ? $idCliente : null,
                     $obs,
-                    $referenciaChamado !== '' ? $referenciaChamado : null,
                     $data_hoje
                 ]);
             } elseif ($tipoPendencia === 'SEM_PENDENCIA' && $tabelaPendenciasDisponivel) {
@@ -1109,7 +1106,7 @@ $offset = ($pagina - 1) * $por_pagina;
 
 // Query principal com contagem para paginação
 $sql_base = "
-    SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim, c.recursos
+    SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim, c.recursos, c.anexo, c.chamados
     FROM treinamentos t
     LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
     LEFT JOIN contatos co ON t.id_contato = co.id_contato
@@ -1455,6 +1452,8 @@ include 'header.php';
                                 </a>
                             </th>
                             <th>Cliente</th>
+                            <th class="col-mini text-center">Cadastro</th>
+                            <th class="col-mini text-center">Link Chamados</th>
                             <th class="col-mini">Status</th>
                             <th class="col-mini">Serv.</th>
                             <th>Contato</th>
@@ -1536,6 +1535,36 @@ include 'header.php';
                                                 </span>
                                             <?php endif; ?>
                                         </div>
+                                    </td>
+                                    <td class="text-center col-mini">
+                                        <?php if (!empty($t['anexo'])): ?>
+                                            <a href="<?= htmlspecialchars($t['anexo']) ?>" target="_blank" class="btn btn-sm btn-outline-primary fw-bold" title="Abrir Cadastro" style="font-size: 0.75rem; white-space: nowrap;">
+                                                <i class="bi bi-rocket-takeoff-fill me-1"></i> GestaoPRO
+                                            </a>
+                                        <?php else: ?>
+                                            <span class="text-muted small">---</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="text-center col-mini">
+                                        <?php
+                                        $link_chamados_tr = '';
+                                        if (!empty($t['chamados'])) {
+                                            $link_chamados_tr = $t['chamados'];
+                                        } elseif (!empty($t['anexo'])) {
+                                            $base_tr = (strpos($t['anexo'], 'http') === 0) ? $t['anexo'] : 'https://' . $t['anexo'];
+                                            $link_chamados_tr = rtrim($base_tr, '?') . '?tab=chamados-abertos';
+                                        }
+                                        ?>
+                                        <?php if (!empty($link_chamados_tr)): ?>
+                                            <a href="<?= htmlspecialchars($link_chamados_tr) ?>" target="_blank"
+                                               class="btn btn-sm btn-outline-success fw-bold"
+                                               title="Abrir Link Chamados"
+                                               style="font-size: 0.75rem; white-space: nowrap;">
+                                                <i class="bi bi-headset me-1"></i> Chamados
+                                            </a>
+                                        <?php else: ?>
+                                            <span class="text-muted small">---</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
                                         <?php
@@ -1673,7 +1702,7 @@ include 'header.php';
                             <?php endforeach; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="9" class="text-center py-5">
+                                <td colspan="10" class="text-center py-5">
                                     <div class="mb-3">
                                         <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
                                     </div>
@@ -2271,13 +2300,6 @@ include 'header.php';
                         </div>
                     </div>
                 </div>
-                <div class="mb-2 d-none" id="referencia_chamado_wrapper" style="transition: all 0.3s ease;">
-                    <label class="form-label small fw-bold text-muted text-uppercase">Referência do chamado
-                        (Obrigatório)</label>
-                    <input type="text" class="form-control border-warning bg-warning bg-opacity-10"
-                        name="referencia_chamado" id="referencia_chamado" maxlength="255"
-                        placeholder="Ex: SUP-12345, DEV-90210">
-                </div>
                 <div class="form-text small opacity-75">A marcacao com/sem pendencia e obrigatoria para concluir o
                     treinamento.</div>
             </div>
@@ -2814,27 +2836,8 @@ include 'header.php';
         });
     });
 
-    // 5. Finalizar Treinamento (Ex-Relatorio)
-    function atualizarCampoReferenciaPendencia() {
-        const radioComPendencia = document.getElementById('tem_pendencia_sim');
-        const wrapper = document.getElementById('referencia_chamado_wrapper');
-        const input = document.getElementById('referencia_chamado');
-        if (!radioComPendencia || !wrapper || !input) return;
 
-        if (radioComPendencia.checked) {
-            wrapper.classList.remove('d-none');
-            input.setAttribute('required', 'required');
-            gsap.fromTo(wrapper, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.3 });
-        } else {
-            wrapper.classList.add('d-none');
-            input.removeAttribute('required');
-            input.value = '';
-        }
-    }
 
-    document.querySelectorAll('.pendencia-opcao').forEach(radio => {
-        radio.addEventListener('change', atualizarCampoReferenciaPendencia);
-    });
 
     document.querySelectorAll('.open-finish-modal').forEach(btn => {
         btn.addEventListener('click', function () {
@@ -2847,9 +2850,6 @@ include 'header.php';
             document.querySelectorAll('.pendencia-opcao').forEach(radio => {
                 radio.checked = false;
             });
-            const referenciaInput = document.getElementById('referencia_chamado');
-            if (referenciaInput) referenciaInput.value = '';
-            atualizarCampoReferenciaPendencia();
 
             new bootstrap.Modal(document.getElementById('modalEncerrar')).show();
         });

@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['concluir_pendencia'])
 
 $busca = isset($_GET['busca']) ? trim($_GET['busca']) : '';
 
-$sqlPendencias = "SELECT p.*, t.tema, t.data_treinamento_encerrado, c.fantasia AS cliente_nome
+$sqlPendencias = "SELECT p.*, t.tema, t.data_treinamento_encerrado, c.fantasia AS cliente_nome, c.anexo, c.chamados AS cliente_chamados
                   FROM pendencias_treinamentos p
                   INNER JOIN treinamentos t ON t.id_treinamento = p.id_treinamento
                   LEFT JOIN clientes c ON c.id_cliente = p.id_cliente
@@ -69,9 +69,9 @@ $sqlPendencias = "SELECT p.*, t.tema, t.data_treinamento_encerrado, c.fantasia A
 $params = [];
 
 if ($busca !== '') {
-    $sqlPendencias .= " AND (c.fantasia LIKE ? OR t.tema LIKE ? OR p.referencia_chamado LIKE ? OR p.id_treinamento = ?)";
+    $sqlPendencias .= " AND (c.fantasia LIKE ? OR t.tema LIKE ? OR p.id_treinamento = ?)";
     $likeBusca = "%$busca%";
-    $params = [$likeBusca, $likeBusca, $likeBusca, (int)$busca];
+    $params = [$likeBusca, $likeBusca, (int)$busca];
 }
 
 $sqlPendencias .= " ORDER BY t.data_treinamento_encerrado DESC, p.data_criacao DESC";
@@ -187,6 +187,48 @@ body, html {
     opacity: 0;
     transform: translateY(20px);
 }
+
+/* Botão GestãoPRO */
+.btn-action-gestao {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.3s;
+    text-decoration: none;
+    color: #ff9800; 
+    background: rgba(255, 152, 0, 0.1); 
+    border: 1px solid rgba(255, 152, 0, 0.2);
+}
+.btn-action-gestao:hover { 
+    background: #ff9800; 
+    color: white; 
+    transform: translateY(-2px); 
+    box-shadow: 0 4px 10px rgba(255, 152, 0, 0.2);
+}
+
+/* Botão Chamados */
+.btn-action-chamados {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.3s;
+    text-decoration: none;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+.btn-action-chamados:hover {
+    background: #10b981;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+}
 </style>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -226,7 +268,7 @@ body, html {
             <i class="bi bi-search position-absolute text-muted" style="left: 1.2rem; top: 50%; transform: translateY(-50%);"></i>
             <form method="GET" action="pendencias_treinamentos.php" id="searchForm">
                 <input type="text" name="busca" class="form-control search-input-modern w-100" 
-                       placeholder="Buscar por cliente, tema ou referência..." value="<?= htmlspecialchars($busca) ?>">
+                       placeholder="Buscar por cliente ou tema..." value="<?= htmlspecialchars($busca) ?>">
             </form>
         </div>
     </div>
@@ -241,7 +283,7 @@ body, html {
                         <th>Data Encerramento</th>
                         <th>Status</th>
                         <th>Observação (Origem)</th>
-                        <th>Referência Externa</th>
+                        <th class="text-center">Chamados</th>
                         <th class="text-end pe-4">Ação</th>
                     </tr>
                 </thead>
@@ -276,24 +318,43 @@ body, html {
                                 <td style="max-width: 280px; font-size: 0.85rem;" class="opacity-75">
                                     <?= nl2br(htmlspecialchars((string)($p['observacao_finalizacao'] ?? '---'))) ?>
                                 </td>
-                                <td>
-                                    <?php if (!empty($p['referencia_chamado'])): ?>
-                                        <div class="bg-body border d-inline-flex align-items-center px-2 py-1 rounded-3 small">
-                                            <i class="bi bi-ticket-detailed me-2 text-primary"></i> <?= htmlspecialchars((string)$p['referencia_chamado']) ?>
-                                        </div>
+                                <td class="text-center">
+                                    <?php
+                                        // Usa o campo chamados do cliente; se vazio, gera a partir do anexo
+                                        $link_chamados_p = '';
+                                        if (!empty($p['cliente_chamados'])) {
+                                            $link_chamados_p = $p['cliente_chamados'];
+                                        } elseif (!empty($p['anexo'])) {
+                                            $base_p = (strpos($p['anexo'], 'http') === 0) ? $p['anexo'] : 'https://' . $p['anexo'];
+                                            $link_chamados_p = rtrim($base_p, '?') . '?tab=chamados-abertos';
+                                        }
+                                    ?>
+                                    <?php if (!empty($link_chamados_p)): ?>
+                                        <a href="<?= htmlspecialchars($link_chamados_p) ?>" target="_blank"
+                                           class="btn-action-chamados" title="Abrir Chamados do Cliente">
+                                            <i class="bi bi-headset"></i>
+                                        </a>
                                     <?php else: ?>
                                         <span class="text-muted">---</span>
                                     <?php endif; ?>
                                 </td>
                                 <td class="text-end pe-4">
-                                    <button type="button"
-                                            class="btn btn-primary btn-sm px-3 fw-bold open-concluir-pendencia"
-                                            style="border-radius: 8px;"
-                                            data-id="<?= (int)$p['id_pendencia'] ?>"
-                                            data-treinamento="<?= (int)$p['id_treinamento'] ?>"
-                                            data-cliente="<?= htmlspecialchars((string)($p['cliente_nome'] ?? '---')) ?>">
-                                        <i class="bi bi-check2-all me-1"></i> Finalizar
-                                    </button>
+                                    <div class="d-flex justify-content-end align-items-center gap-2">
+                                        <?php if (!empty($p['anexo'])): ?>
+                                            <a href="<?= (strpos($p['anexo'], 'http') === 0) ? $p['anexo'] : 'https://' . $p['anexo'] ?>" 
+                                               target="_blank" class="btn-action-gestao" title="Link GestãoPRO">
+                                                <i class="bi bi-rocket-takeoff"></i>
+                                            </a>
+                                        <?php endif; ?>
+                                        <button type="button"
+                                                class="btn btn-primary btn-sm px-3 fw-bold open-concluir-pendencia"
+                                                style="border-radius: 8px;"
+                                                data-id="<?= (int)$p['id_pendencia'] ?>"
+                                                data-treinamento="<?= (int)$p['id_treinamento'] ?>"
+                                                data-cliente="<?= htmlspecialchars((string)($p['cliente_nome'] ?? '---')) ?>">
+                                            <i class="bi bi-check2-all me-1"></i> Finalizar
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

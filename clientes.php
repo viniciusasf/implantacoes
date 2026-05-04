@@ -111,6 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // NOVOS CAMPOS
     $num_licencas = $_POST['num_licencas'] ?? 0;
     $anexo = $_POST['anexo'] ?? '';
+    $chamados = $_POST['chamados'] ?? '';
     
     // CAMPO DE RECURSOS
     $recursos_arr = $_POST['recursos'] ?? [];
@@ -121,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("UPDATE clientes SET 
             fantasia=?, servidor=?, vendedor=?, telefone_ddd=?, 
             data_inicio=?, data_fim=?, observacao=?, 
-            emitir_nf=?, configurado=?, num_licencas=?, anexo=?, recursos=? 
+            emitir_nf=?, configurado=?, num_licencas=?, anexo=?, chamados=?, recursos=? 
             WHERE id_cliente=?");
         $stmt->execute([
             $fantasia,
@@ -135,6 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $configurado,
             $num_licencas,
             $anexo,
+            $chamados,
             $recursos,
             $_POST['id_cliente']
         ]);
@@ -143,8 +145,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("INSERT INTO clientes (
             fantasia, servidor, vendedor, telefone_ddd, 
             data_inicio, data_fim, observacao, 
-            emitir_nf, configurado, num_licencas, anexo, recursos
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            emitir_nf, configurado, num_licencas, anexo, chamados, recursos
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
             $fantasia,
             $servidor,
@@ -157,6 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $configurado,
             $num_licencas,
             $anexo,
+            $chamados,
             $recursos
         ]);
     }
@@ -462,6 +465,12 @@ body, html {
 .btn-action.agendar { color: #7c3aed; background: rgba(124, 58, 237, 0.15); border-color: rgba(124, 58, 237, 0.3); }
 .btn-action.agendar:hover { background: #7c3aed; color: white; }
 
+.btn-action.gestaopro { color: #ff9800; background: rgba(255, 152, 0, 0.15); border-color: rgba(255, 152, 0, 0.3); }
+.btn-action.gestaopro:hover { background: #ff9800; color: white; }
+
+.btn-action.chamados { color: #10b981; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); }
+.btn-action.chamados:hover { background: #10b981; color: white; }
+
 /* Grid & Table Animations */
 .gsap-reveal {
     opacity: 0;
@@ -673,6 +682,7 @@ body, html {
                                     data-cfg="<?= $c['configurado'] ?>" 
                                     data-licencas="<?= $c['num_licencas'] ?>" 
                                     data-anexo="<?= $c['anexo'] ?>" 
+                                    data-chamados="<?= htmlspecialchars($c['chamados'] ?? '') ?>" 
                                     data-recursos="<?= htmlspecialchars($c['recursos'] ?? '') ?>" 
                                     title="Editar" onclick="openEditModal(this)">
                                 <i class="bi bi-pencil"></i>
@@ -680,14 +690,35 @@ body, html {
                             <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos" title="Ver Treinamentos">
                                 <i class="bi bi-calendar-check"></i>
                             </a>
-                            <button class="btn btn-sm btn-action agendar novo-treino-trigger"
-                                    data-id="<?= $c['id_cliente'] ?>"
-                                    data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
-                                    data-contatos="<?= htmlspecialchars(json_encode($contatos_por_cliente[$c['id_cliente']] ?? []), ENT_QUOTES) ?>"
-                                    title="Agendar Novo Treinamento"
-                                    onclick="openNovoTreinamentoModal(this)">
-                                <i class="bi bi-calendar-plus"></i>
-                            </button>
+                                <button class="btn btn-sm btn-action agendar novo-treino-trigger"
+                                        data-id="<?= $c['id_cliente'] ?>"
+                                        data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
+                                        data-contatos="<?= htmlspecialchars(json_encode($contatos_por_cliente[$c['id_cliente']] ?? []), ENT_QUOTES) ?>"
+                                        title="Agendar Novo Treinamento"
+                                        onclick="openNovoTreinamentoModal(this)">
+                                    <i class="bi bi-calendar-plus"></i>
+                                </button>
+                                <?php if (!empty($c['anexo'])): ?>
+                                    <a href="<?= (strpos($c['anexo'], 'http') === 0) ? $c['anexo'] : 'https://' . $c['anexo'] ?>" 
+                                       target="_blank" class="btn btn-sm btn-action gestaopro" title="Link GestãoPRO">
+                                        <i class="bi bi-rocket-takeoff"></i>
+                                    </a>
+                                <?php endif; ?>
+                                <?php 
+                                    $link_chamados = '';
+                                    if (!empty($c['chamados'])) {
+                                        $link_chamados = $c['chamados'];
+                                    } elseif (!empty($c['anexo'])) {
+                                        $base = (strpos($c['anexo'], 'http') === 0) ? $c['anexo'] : 'https://' . $c['anexo'];
+                                        $link_chamados = rtrim($base, '?') . '?tab=chamados-abertos';
+                                    }
+                                ?>
+                                <?php if (!empty($link_chamados)): ?>
+                                    <a href="<?= htmlspecialchars($link_chamados) ?>" 
+                                       target="_blank" class="btn btn-sm btn-action chamados" title="Link Chamados">
+                                        <i class="bi bi-headset"></i>
+                                    </a>
+                                <?php endif; ?>
                             <?php if (!$cliente_encerrado): ?>
                                 <a href="?concluir=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>" class="btn btn-sm btn-action concluir" title="Concluir" onclick="return confirm('Concluir implantação?')">
                                     <i class="bi bi-check-lg"></i>
@@ -778,6 +809,7 @@ body, html {
                                                     data-cfg="<?= $c['configurado'] ?>" 
                                                     data-licencas="<?= $c['num_licencas'] ?>" 
                                                     data-anexo="<?= $c['anexo'] ?>" 
+                                                    data-chamados="<?= htmlspecialchars($c['chamados'] ?? '') ?>" 
                                                     data-recursos="<?= htmlspecialchars($c['recursos'] ?? '') ?>" 
                                                     onclick="openEditModal(this)">
                                                 <i class="bi bi-pencil"></i>
@@ -793,6 +825,27 @@ body, html {
                                                     onclick="openNovoTreinamentoModal(this)">
                                                 <i class="bi bi-calendar-plus"></i>
                                             </button>
+                                            <?php if (!empty($c['anexo'])): ?>
+                                                <a href="<?= (strpos($c['anexo'], 'http') === 0) ? $c['anexo'] : 'https://' . $c['anexo'] ?>" 
+                                                   target="_blank" class="btn btn-sm btn-action gestaopro" title="Link GestãoPRO">
+                                                    <i class="bi bi-rocket-takeoff"></i>
+                                                </a>
+                                            <?php endif; ?>
+                                            <?php 
+                                                $link_chamados_t = '';
+                                                if (!empty($c['chamados'])) {
+                                                    $link_chamados_t = $c['chamados'];
+                                                } elseif (!empty($c['anexo'])) {
+                                                    $base_t = (strpos($c['anexo'], 'http') === 0) ? $c['anexo'] : 'https://' . $c['anexo'];
+                                                    $link_chamados_t = rtrim($base_t, '?') . '?tab=chamados-abertos';
+                                                }
+                                            ?>
+                                            <?php if (!empty($link_chamados_t)): ?>
+                                                <a href="<?= htmlspecialchars($link_chamados_t) ?>" 
+                                                   target="_blank" class="btn btn-sm btn-action chamados" title="Link Chamados">
+                                                    <i class="bi bi-headset"></i>
+                                                </a>
+                                            <?php endif; ?>
                                             <a href="?delete=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>" class="btn btn-sm btn-action delete" onclick="return confirm('Excluir cliente?')">
                                                 <i class="bi bi-trash"></i>
                                             </a>
@@ -893,15 +946,29 @@ body, html {
                                     </select>
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label small fw-bold text-muted">Google Drive / Anexo</label>
+                                    <label class="form-label small fw-bold text-muted">Link GestãoPRO</label>
                                     <div class="input-group mb-1">
                                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-link-45deg text-primary"></i></span>
-                                        <input type="text" name="anexo" id="anexo" class="form-control border-start-0 ps-0" placeholder="Link do Drive">
+                                        <input type="text" name="anexo" id="anexo" class="form-control border-start-0 ps-0" placeholder="Ex: https://interno.gestaopro.srv.br/clientes/5190">
                                         <button class="btn btn-primary" type="button" onclick="abrirAnexo()">
                                             <i class="bi bi-box-arrow-up-right"></i>
                                         </button>
                                     </div>
-                                    <small class="text-muted" style="font-size: 0.7rem;">Link do contrato ou documentos</small>
+                                    <small class="text-muted" style="font-size: 0.7rem;">Link do contrato ou documentos no GestãoPRO</small>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label small fw-bold text-muted">Link Chamados</label>
+                                    <div class="input-group mb-1">
+                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-headset text-success"></i></span>
+                                        <input type="text" name="chamados" id="chamados" class="form-control border-start-0 ps-0" placeholder="Gerado automaticamente a partir do Link GestãoPRO">
+                                        <button class="btn btn-success" type="button" onclick="gerarLinkChamados()" title="Gerar link automaticamente">
+                                            <i class="bi bi-magic"></i>
+                                        </button>
+                                        <button class="btn btn-outline-secondary" type="button" onclick="abrirChamados()" title="Abrir link">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                        </button>
+                                    </div>
+                                    <small class="text-muted" style="font-size: 0.7rem;">Link direto para os chamados abertos do cliente no GestãoPRO</small>
                                 </div>
                             </div>
                         </div>
@@ -1074,6 +1141,7 @@ body, html {
         document.getElementById('configurado').value = d.cfg || 'Não';
         document.getElementById('num_licencas').value = d.licencas || 0;
         document.getElementById('anexo').value = d.anexo || '';
+        document.getElementById('chamados').value = d.chamados || '';
         
         // Limpar e preencher checkbox de recursos
         document.querySelectorAll('.recurso-checkbox').forEach(cb => cb.checked = false);
@@ -1101,6 +1169,27 @@ body, html {
         const link = document.getElementById('anexo').value.trim();
         if (!link) {
             Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Nenhum link cadastrado.' });
+            return;
+        }
+        window.open(link.startsWith('http') ? link : 'https://' + link, '_blank');
+    }
+
+    function gerarLinkChamados() {
+        const linkAnexo = document.getElementById('anexo').value.trim();
+        if (!linkAnexo) {
+            Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Preencha o campo Link GestãoPRO primeiro.' });
+            return;
+        }
+        const base = linkAnexo.startsWith('http') ? linkAnexo : 'https://' + linkAnexo;
+        const linkChamados = base.replace(/\?.*$/, '') + '?tab=chamados-abertos';
+        document.getElementById('chamados').value = linkChamados;
+        Swal.fire({ icon: 'success', title: 'Gerado!', text: 'Link Chamados preenchido automaticamente.', timer: 2000, showConfirmButton: false });
+    }
+
+    function abrirChamados() {
+        const link = document.getElementById('chamados').value.trim();
+        if (!link) {
+            Swal.fire({ icon: 'warning', title: 'Atenção', text: 'Nenhum link de chamados cadastrado.' });
             return;
         }
         window.open(link.startsWith('http') ? link : 'https://' + link, '_blank');

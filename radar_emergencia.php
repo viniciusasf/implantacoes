@@ -2,8 +2,8 @@
 require_once 'config.php';
 
 // Data boundaries
-$dias_limite_inatividade = 5;
-$dias_aguardando_retorno = 5;
+$dias_limite_inatividade = 7;
+$dias_aguardando_retorno = 7;
 
 // Consulta principal:
 // 1. Pega todos os clientes ativos (data_fim is null)

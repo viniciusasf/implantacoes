@@ -83,7 +83,7 @@ $sql_inativos_base = "
 $total_inativos = $pdo->query("SELECT COUNT(*) FROM (SELECT c.id_cliente " . $sql_inativos_base . ") as total")->fetchColumn();
 
 // Top 5 para exibição no card
-$clientes_criticos = $pdo->query("SELECT c.id_cliente, c.fantasia, MAX(t.data_treinamento) as ultima_data, c.vendedor " . $sql_inativos_base . " ORDER BY ultima_data ASC LIMIT 5")->fetchAll();
+$clientes_criticos = $pdo->query("SELECT c.id_cliente, c.fantasia, MAX(t.data_treinamento) as ultima_data, c.vendedor, c.anexo " . $sql_inativos_base . " ORDER BY ultima_data ASC LIMIT 5")->fetchAll();
 
 // Cálculo da Meta Mensal baseada na média histórica de atendimentos realizados
 $sql_media_historica = "SELECT AVG(total_mensal) as media 
@@ -116,12 +116,12 @@ if($meta_mensal > 0) {
 }
 
 // 6. Top 5 Clientes com mais treinamentos realizados
-$sql_top_clientes = "SELECT c.fantasia, COUNT(t.id_treinamento) as total
+$sql_top_clientes = "SELECT c.id_cliente, c.fantasia, c.anexo, COUNT(t.id_treinamento) as total
                      FROM clientes c
                      JOIN treinamentos t ON c.id_cliente = t.id_cliente
                      WHERE t.status IN ('REALIZADO', 'RESOLVIDO')
                      AND c.status = 'EM ANDAMENTO'
-                     GROUP BY c.id_cliente, c.fantasia
+                     GROUP BY c.id_cliente, c.fantasia, c.anexo
                      ORDER BY total DESC
                      LIMIT 5";
 $top_clientes = $pdo->query($sql_top_clientes)->fetchAll(PDO::FETCH_ASSOC);
@@ -255,6 +255,20 @@ body {
 /* Custom Scroll */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-thumb { background: #2b2e35; border-radius: 10px; }
+
+/* Botão GestãoPRO */
+.btn-action {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.3s;
+    text-decoration: none;
+}
+.btn-action.gestaopro { color: #ff9800; background: rgba(255, 152, 0, 0.15); border-color: rgba(255, 152, 0, 0.3); border: 1px solid rgba(255, 152, 0, 0.3); }
+.btn-action.gestaopro:hover { background: #ff9800; color: white; transform: translateY(-2px); }
 
 /* GSAP */
 .gsap-reveal { opacity: 0; transform: translateY(30px); }
@@ -392,8 +406,16 @@ body {
                                         </div>
                                     </div>
                                     <div class="text-end">
-                                        <div class="badge-critical"><?= $dias ?> dias inativo</div>
-                                        <a href="treinamentos_cliente.php?id_cliente=<?= $cli['id_cliente'] ?>" class="text-decoration-none small text-primary mt-1 d-block">Ver Ficha <i class="bi bi-arrow-right"></i></a>
+                                        <div class="badge-critical mb-2"><?= $dias ?> dias inativo</div>
+                                        <div class="d-flex justify-content-end gap-2 align-items-center">
+                                            <?php if (!empty($cli['anexo'])): ?>
+                                                <a href="<?= (strpos($cli['anexo'], 'http') === 0) ? $cli['anexo'] : 'https://' . $cli['anexo'] ?>" 
+                                                   target="_blank" class="btn-action gestaopro" title="GestãoPRO">
+                                                    <i class="bi bi-rocket-takeoff"></i>
+                                                </a>
+                                            <?php endif; ?>
+                                            <a href="treinamentos_cliente.php?id_cliente=<?= $cli['id_cliente'] ?>" class="text-decoration-none small text-primary">Ver Ficha <i class="bi bi-arrow-right"></i></a>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -427,11 +449,19 @@ body {
                             <?php foreach($top_clientes as $tc): ?>
                                 <tr>
                                     <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="bg-warning bg-opacity-10 text-warning fw-bold p-2 px-3 rounded-pill" style="font-size: 0.8rem;">
-                                                <i class="bi bi-star-fill"></i>
+                                        <div class="d-flex align-items-center justify-content-between">
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div class="bg-warning bg-opacity-10 text-warning fw-bold p-2 px-3 rounded-pill" style="font-size: 0.8rem;">
+                                                    <i class="bi bi-star-fill"></i>
+                                                </div>
+                                                <span class="fw-bold text-truncate" style="max-width: 150px;"><?= htmlspecialchars($tc['fantasia']) ?></span>
                                             </div>
-                                            <span class="fw-bold text-truncate" style="max-width: 150px;"><?= htmlspecialchars($tc['fantasia']) ?></span>
+                                            <?php if (!empty($tc['anexo'])): ?>
+                                                <a href="<?= (strpos($tc['anexo'], 'http') === 0) ? $tc['anexo'] : 'https://' . $tc['anexo'] ?>" 
+                                                   target="_blank" class="btn-action gestaopro" title="GestãoPRO">
+                                                    <i class="bi bi-rocket-takeoff"></i>
+                                                </a>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
                                     <td class="text-center fw-900">
