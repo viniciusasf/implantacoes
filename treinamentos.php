@@ -264,6 +264,30 @@ function garantirColunaMarcacaoPendencia(PDO $pdo)
     return treinamentosTemColuna($pdo, 'tipo_pendencia_encerramento', true);
 }
 
+function garantirColunaTreinamentoRealizado(PDO $pdo)
+{
+    if (treinamentosTemColuna($pdo, 'treinamento_realizado')) {
+        return true;
+    }
+
+    $comandos = [
+        "ALTER TABLE treinamentos ADD COLUMN treinamento_realizado TINYINT(1) DEFAULT 1 AFTER status",
+        "ALTER TABLE treinamentos ADD COLUMN treinamento_realizado TINYINT(1) DEFAULT 1",
+        "ALTER TABLE treinamentos ADD COLUMN IF NOT EXISTS treinamento_realizado TINYINT(1) DEFAULT 1"
+    ];
+
+    foreach ($comandos as $sql) {
+        try {
+            $pdo->exec($sql);
+            break;
+        } catch (Throwable $e) {
+            // tenta proximo comando
+        }
+    }
+
+    return treinamentosTemColuna($pdo, 'treinamento_realizado', true);
+}
+
 function garantirTabelaPendenciasTreinamentos(PDO $pdo)
 {
     $sql = "CREATE TABLE IF NOT EXISTS pendencias_treinamentos (
@@ -749,15 +773,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $colunaMarcacaoDisponivel = garantirColunaMarcacaoPendencia($pdo);
+        $colunaRealizadoDisponivel = garantirColunaTreinamentoRealizado($pdo);
         $tabelaPendenciasDisponivel = garantirTabelaPendenciasTreinamentos($pdo);
         $mensagemRetorno = "Treinamento encerrado com sucesso.";
+
+        $treinamentoRealizado = isset($_POST['treinamento_realizado']) && $_POST['treinamento_realizado'] === 'nao' ? 0 : 1;
 
         try {
             $pdo->beginTransaction();
 
-            if ($colunaMarcacaoDisponivel) {
+            if ($colunaMarcacaoDisponivel && $colunaRealizadoDisponivel) {
+                $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', treinamento_realizado = ?, data_treinamento_encerrado = ?, observacoes = ?, tipo_pendencia_encerramento = ? WHERE id_treinamento = ?");
+                $stmt->execute([$treinamentoRealizado, $data_hoje, $obs, $tipoPendencia, $id]);
+            } elseif ($colunaMarcacaoDisponivel) {
                 $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', data_treinamento_encerrado = ?, observacoes = ?, tipo_pendencia_encerramento = ? WHERE id_treinamento = ?");
                 $stmt->execute([$data_hoje, $obs, $tipoPendencia, $id]);
+            } else {
+                $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', data_treinamento_encerrado = ?, observacoes = ? WHERE id_treinamento = ?");
+                $stmt->execute([$data_hoje, $obs, $id]);
+            }
             } else {
                 $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', data_treinamento_encerrado = ?, observacoes = ? WHERE id_treinamento = ?");
                 $stmt->execute([$data_hoje, $obs, $id]);
@@ -2266,6 +2300,33 @@ include 'header.php';
                     <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">Informações:
                     </div>
                     <div class="fw-bold text-primary" id="modal_cliente_info"></div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">O treinamento foi
+                        realizado?</label>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <input class="btn-check pendencia-opcao" type="radio" name="treinamento_realizado"
+                                id="treinamento_realizado_sim" value="sim" required checked>
+                            <label
+                                class="btn btn-outline-success w-100 p-3 h-100 d-flex flex-column align-items-center justify-content-center"
+                                for="treinamento_realizado_sim">
+                                <i class="bi bi-check-circle fs-4 mb-1"></i>
+                                <span class="fw-bold" style="font-size: 0.8rem;">Sim, realizado</span>
+                            </label>
+                        </div>
+                        <div class="col-6">
+                            <input class="btn-check pendencia-opcao" type="radio" name="treinamento_realizado"
+                                id="treinamento_realizado_nao" value="nao" required>
+                            <label
+                                class="btn btn-outline-danger w-100 p-3 h-100 d-flex flex-column align-items-center justify-content-center"
+                                for="treinamento_realizado_nao">
+                                <i class="bi bi-x-circle fs-4 mb-1"></i>
+                                <span class="fw-bold" style="font-size: 0.8rem;">Não realizado</span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="mb-3">
