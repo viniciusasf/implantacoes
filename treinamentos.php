@@ -792,10 +792,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', data_treinamento_encerrado = ?, observacoes = ? WHERE id_treinamento = ?");
                 $stmt->execute([$data_hoje, $obs, $id]);
             }
-            } else {
-                $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', data_treinamento_encerrado = ?, observacoes = ? WHERE id_treinamento = ?");
-                $stmt->execute([$data_hoje, $obs, $id]);
-            }
 
             $stmtCliente = $pdo->prepare("SELECT id_cliente FROM treinamentos WHERE id_treinamento = ?");
             $stmtCliente->execute([$id]);
