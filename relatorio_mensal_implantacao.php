@@ -23,6 +23,18 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute([':di' => $data_inicio, ':df' => $data_fim]);
 $clientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// --- CLIENTES ATIVOS COM PREVISÃO DE ENCERRAMENTO ---
+$sql_previsao = "SELECT fantasia, data_inicio, data_previsao_encerramento, vendedor, servidor, id_cliente
+               FROM clientes 
+               WHERE (data_fim IS NULL OR data_fim = '0000-00-00')
+                 AND data_previsao_encerramento IS NOT NULL
+                 AND data_previsao_encerramento != '0000-00-00'
+                 AND data_previsao_encerramento >= CURDATE()
+               ORDER BY data_previsao_encerramento ASC";
+
+$stmtPrev = $pdo->query($sql_previsao);
+$clientes_previsao = $stmtPrev->fetchAll(PDO::FETCH_ASSOC);
+
 // --- KPIs ---
 $kpi_concluidas = 0;
 $kpi_canceladas = 0;
@@ -185,7 +197,7 @@ include 'header.php';
         </div>
     </div>
 
-    <div class="card border-0 shadow-sm gsap-reveal">
+    <div class="card border-0 shadow-sm gsap-reveal mb-4">
         <div class="card-header bg-transparent border-0 pt-4 px-4">
             <h6 class="fw-800 mb-0">Detalhamento dos Encerramentos</h6>
         </div>
@@ -228,6 +240,53 @@ include 'header.php';
                                     <td class="text-center">
                                         <span class="status-pill <?= $status_class ?>"><?= $c['status'] ?></span>
                                     </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm gsap-reveal">
+        <div class="card-header bg-transparent border-0 pt-4 px-4">
+            <h6 class="fw-800 mb-0"><i class="bi bi-calendar-check text-warning me-2"></i>Clientes Ativos com Previsão de Encerramento</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="ps-4 py-3 text-muted small fw-bold">CLIENTE</th>
+                            <th class="py-3 text-muted small fw-bold">VENDEDOR / SERVIDOR</th>
+                            <th class="py-3 text-muted small fw-bold">INÍCIO</th>
+                            <th class="py-3 text-muted small fw-bold">PREVISÃO ENCERRAMENTO</th>
+                            <th class="py-3 text-muted small fw-bold">DIAS ATÉ ENCERRAR</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($clientes_previsao)): ?>
+                            <tr>
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    Nenhum cliente ativo com previsão de encerramento.
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($clientes_previsao as $cp): 
+                                $dataPrev = new DateTime($cp['data_previsao_encerramento']);
+                                $diasPrev = (new DateTime())->diff($dataPrev)->days;
+                                $diasClasse = $diasPrev <= 15 ? 'bg-danger text-white' : ($diasPrev <= 30 ? 'bg-warning text-dark' : 'bg-light text-dark');
+                            ?>
+                                <tr>
+                                    <td class="ps-4 fw-bold"><?= htmlspecialchars($cp['fantasia']) ?></td>
+                                    <td>
+                                        <div class="small fw-bold"><?= htmlspecialchars($cp['vendedor']) ?></div>
+                                        <div class="text-muted small"><?= htmlspecialchars($cp['servidor']) ?></div>
+                                    </td>
+                                    <td class="small"><?= date('d/m/Y', strtotime($cp['data_inicio'])) ?></td>
+                                    <td class="small fw-bold text-warning"><?= date('d/m/Y', strtotime($cp['data_previsao_encerramento'])) ?></td>
+                                    <td><span class="badge <?= $diasClasse ?>"><?= $diasPrev ?> dias</span></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
