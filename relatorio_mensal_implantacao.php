@@ -29,10 +29,11 @@ $sql_previsao = "SELECT fantasia, data_inicio, data_previsao_encerramento, vende
                WHERE (data_fim IS NULL OR data_fim = '0000-00-00')
                  AND data_previsao_encerramento IS NOT NULL
                  AND data_previsao_encerramento != '0000-00-00'
-                 AND data_previsao_encerramento >= CURDATE()
+                 AND data_previsao_encerramento BETWEEN :di AND :df
                ORDER BY data_previsao_encerramento ASC";
 
-$stmtPrev = $pdo->query($sql_previsao);
+$stmtPrev = $pdo->prepare($sql_previsao);
+$stmtPrev->execute([':di' => $data_inicio, ':df' => $data_fim]);
 $clientes_previsao = $stmtPrev->fetchAll(PDO::FETCH_ASSOC);
 
 // --- KPIs ---
