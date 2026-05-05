@@ -120,11 +120,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     if (isset($_POST['id_cliente']) && !empty($_POST['id_cliente'])) {
         // UPDATE com novos campos
-        $stmt = $pdo->prepare("UPDATE clientes SET 
-            fantasia=?, servidor=?, vendedor=?, telefone_ddd=?, 
-            data_inicio=?, data_fim=?, data_previsao_encerramento=?, observacao=?, 
-            emitir_nf=?, configurado=?, num_licencas=?, anexo=?, chamados=?, recursos=? 
-            WHERE id_cliente=?");
+        $stmt = $pdo->prepare("UPDATE `clientes` SET 
+            `fantasia`=?, `servidor`=?, `vendedor`=?, `telefone_ddd`=?, 
+            `data_inicio`=?, `data_fim`=?, `data_previsao_encerramento`=?, `observacao`=?, 
+            `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=? 
+            WHERE `id_cliente`=?");
         $stmt->execute([
             $fantasia,
             $servidor,
@@ -144,11 +144,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         ]);
     } else {
         // INSERT com novos campos
-        $stmt = $pdo->prepare("INSERT INTO clientes (
-            fantasia, servidor, vendedor, telefone_ddd, 
-            data_inicio, data_fim, data_previsao_encerramento, observacao, 
-            emitir_nf, configurado, num_licencas, anexo, chamados, recursos
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt = $pdo->prepare("INSERT INTO `clientes` (
+            `fantasia`, `servidor`, `vendedor`, `telefone_ddd`, 
+            `data_inicio`, `data_fim`, `data_previsao_encerramento`, `observacao`, 
+            `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
             $fantasia,
             $servidor,
@@ -192,7 +192,7 @@ if (!empty($busca)) {
     $params[] = "%$busca%";
 }
 
-$sql .= " GROUP BY c.id_cliente ORDER BY c.fantasia ASC";
+$sql .= " GROUP BY c.id_cliente ORDER BY c.data_inicio DESC";
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
@@ -649,6 +649,9 @@ body, html {
                     <div class="mt-auto">
                         <div class="d-flex justify-content-between small mb-1">
                             <span class="text-muted">Início: <?= date('d/m/Y', strtotime($c['data_inicio'])) ?></span>
+                            <?php if (!empty($c['data_previsao_encerramento']) && $c['data_previsao_encerramento'] !== '0000-00-00'): ?>
+                            <span class="text-warning">Previsão: <?= date('d/m/Y', strtotime($c['data_previsao_encerramento'])) ?></span>
+                            <?php endif; ?>
                             <span class="fw-bold text-main"><?= $d ?> dias</span>
                         </div>
                         <div class="progress mb-3" style="height: 6px; border-radius: 10px; background: var(--bg-body);">
