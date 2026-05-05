@@ -104,6 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $telefone = $_POST['telefone'] ?? '';
     $data_inicio = $_POST['data_inicio'];
     $data_fim = (!empty($_POST['data_fim']) && $_POST['data_fim'] !== '0000-00-00') ? $_POST['data_fim'] : null;
+    $data_previsao_encerramento = !empty($_POST['data_previsao_encerramento']) ? $_POST['data_previsao_encerramento'] : null;
     $observacao = $_POST['observacao'] ?? '';
     $emitir_nf = $_POST['emitir_nf'] ?? 'Não';
     $configurado = $_POST['configurado'] ?? 'Não';
@@ -121,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // UPDATE com novos campos
         $stmt = $pdo->prepare("UPDATE clientes SET 
             fantasia=?, servidor=?, vendedor=?, telefone_ddd=?, 
-            data_inicio=?, data_fim=?, observacao=?, 
+            data_inicio=?, data_fim=?, data_previsao_encerramento=?, observacao=?, 
             emitir_nf=?, configurado=?, num_licencas=?, anexo=?, chamados=?, recursos=? 
             WHERE id_cliente=?");
         $stmt->execute([
@@ -131,6 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $telefone,
             $data_inicio,
             $data_fim,
+            $data_previsao_encerramento,
             $observacao,
             $emitir_nf,
             $configurado,
@@ -144,9 +146,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // INSERT com novos campos
         $stmt = $pdo->prepare("INSERT INTO clientes (
             fantasia, servidor, vendedor, telefone_ddd, 
-            data_inicio, data_fim, observacao, 
+            data_inicio, data_fim, data_previsao_encerramento, observacao, 
             emitir_nf, configurado, num_licencas, anexo, chamados, recursos
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
             $fantasia,
             $servidor,
@@ -154,6 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $telefone,
             $data_inicio,
             $data_fim,
+            $data_previsao_encerramento,
             $observacao,
             $emitir_nf,
             $configurado,
@@ -677,6 +680,7 @@ body, html {
                                     data-telefone="<?= $c['telefone_ddd'] ?>" 
                                     data-inicio="<?= $c['data_inicio'] ?>" 
                                     data-fim="<?= $c['data_fim'] ?>" 
+                                    data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
                                     data-obs="<?= htmlspecialchars($c['observacao']) ?>" 
                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                     data-cfg="<?= $c['configurado'] ?>" 
@@ -804,6 +808,7 @@ body, html {
                                                     data-telefone="<?= $c['telefone_ddd'] ?>" 
                                                     data-inicio="<?= $c['data_inicio'] ?>" 
                                                     data-fim="<?= $c['data_fim'] ?>" 
+                                                    data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
                                                     data-obs="<?= htmlspecialchars($c['observacao']) ?>" 
                                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                                     data-cfg="<?= $c['configurado'] ?>" 
@@ -923,6 +928,10 @@ body, html {
                                 <div class="col-md-6">
                                     <label class="form-label small fw-bold text-muted">Data de Conclusão</label>
                                     <input type="date" name="data_fim" id="id_data_fim" class="form-control">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-muted">Data Previsão Encerramento</label>
+                                    <input type="date" name="data_previsao_encerramento" id="data_previsao_encerramento" class="form-control" title="Data prevista combinada com o cliente">
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label small fw-bold text-muted">Emitir NF?</label>
@@ -1136,6 +1145,7 @@ body, html {
         document.getElementById('vendedor').value = d.vendedor || '';
         document.getElementById('data_inicio').value = d.inicio || '';
         document.getElementById('id_data_fim').value = d.fim || '';
+        document.getElementById('data_previsao_encerramento').value = d.previsaoEncerramento || '';
         document.getElementById('observacao').value = d.obs || '';
         document.getElementById('emitir_nf').value = d.nf || 'Não';
         document.getElementById('configurado').value = d.cfg || 'Não';

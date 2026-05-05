@@ -243,6 +243,9 @@ include 'header.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const labelColor = isDark ? '#cbd5e1' : '#8899a6';
+
     const options = {
         series: [
             { name: 'Concluídas', data: <?= json_encode($evolucao_concluidas) ?> },
@@ -270,11 +273,31 @@ document.addEventListener('DOMContentLoaded', function() {
         xaxis: {
             categories: <?= json_encode($evolucao_labels) ?>,
             axisBorder: { show: false },
-            axisTicks: { show: false }
+            axisTicks: { show: false },
+            labels: {
+                style: {
+                    colors: labelColor
+                }
+            }
         },
-        yaxis: { labels: { style: { colors: '#8899a6' } } },
-        grid: { borderColor: 'rgba(0,0,0,0.05)', strokeDashArray: 4 },
-        legend: { position: 'top', horizontalAlign: 'right' },
+        yaxis: { 
+            labels: { 
+                style: { 
+                    colors: labelColor 
+                } 
+            } 
+        },
+        grid: { 
+            borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', 
+            strokeDashArray: 4 
+        },
+        legend: { 
+            position: 'top', 
+            horizontalAlign: 'right',
+            labels: {
+                colors: isDark ? '#f1f5f9' : '#2b3674'
+            }
+        },
         tooltip: { theme: 'dark' }
     };
 

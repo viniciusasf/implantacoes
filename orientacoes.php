@@ -53,6 +53,7 @@ $sql .= " ORDER BY categoria ASC, ordem ASC, titulo ASC";
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $orientacoes = $stmt->fetchAll();
+$total_orientacoes = count($orientacoes);
 
 // Agrupar por categoria
 $orientacoes_agrupadas = [];
@@ -222,7 +223,10 @@ include 'header.php';
                 </ol>
             </nav>
             <h2 class="fw-800 mb-0">Central de <span class="title-accent">Orientações</span></h2>
-            <p class="text-muted small mb-0">Documentação e procedimentos operacionais atualizados.</p>
+            <p class="text-muted small mb-0">
+                <span class="badge bg-primary bg-opacity-10 text-primary me-2"><?php echo $total_orientacoes; ?> registro<?php echo $total_orientacoes != 1 ? 's' : ''; ?></span>
+                Documentação e procedimentos operacionais atualizados.
+            </p>
         </div>
         <button class="btn btn-primary px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalOrientacao">
             <i class="bi bi-plus-lg"></i>

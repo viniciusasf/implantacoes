@@ -46,6 +46,9 @@ try {
     $total_pendencias_treinamentos = 0;
 }
 
+// 9. CONTADOR DE ORIENTAÇÕES
+$total_orientacoes = $pdo->query("SELECT COUNT(*) FROM orientacoes")->fetchColumn();
+
 // 9. STATUS DO TOKEN GOOGLE AGENDA
 $google_token_status = 'none'; // 'ok' | 'expired' | 'none'
 try {
@@ -561,6 +564,7 @@ try {
                 <li class="<?= $current_page == 'orientacoes.php' ? 'active' : '' ?>">
                     <a href="orientacoes.php">
                         <i class="bi bi-info-circle"></i> <span>Orientações</span>
+                        <span class="badge-notify text-white ms-auto"><?= $total_orientacoes ?></span>
                     </a>
                 </li>
 
