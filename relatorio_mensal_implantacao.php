@@ -44,6 +44,7 @@ foreach ($clientes as $c) {
     elseif ($c['status'] === 'CANCELADA') $kpi_canceladas++;
 }
 $total_periodo = count($clientes);
+$total_previsao = count($clientes_previsao);
 
 // --- EVOLUÇÃO 12 MESES ---
 $sql_evolucao = "SELECT 
@@ -99,6 +100,7 @@ include 'header.php';
 .kpi-concluidas::before { background: #10b981; }
 .kpi-canceladas::before { background: #ef4444; }
 .kpi-total::before { background: #4361ee; }
+.kpi-previsao::before { background: #f59e0b; }
 
 .kpi-value { font-size: 2.2rem; font-weight: 800; line-height: 1; }
 .kpi-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); }
@@ -160,7 +162,7 @@ include 'header.php';
     </div>
 
     <div class="row g-4 mb-4">
-        <div class="col-md-4 gsap-reveal">
+        <div class="col-md-3 gsap-reveal">
             <div class="kpi-card kpi-concluidas">
                 <div class="kpi-label mb-2">Concluídas</div>
                 <div class="d-flex justify-content-between align-items-end">
@@ -169,7 +171,7 @@ include 'header.php';
                 </div>
             </div>
         </div>
-        <div class="col-md-4 gsap-reveal">
+        <div class="col-md-3 gsap-reveal">
             <div class="kpi-card kpi-canceladas">
                 <div class="kpi-label mb-2">Canceladas</div>
                 <div class="d-flex justify-content-between align-items-end">
@@ -178,12 +180,21 @@ include 'header.php';
                 </div>
             </div>
         </div>
-        <div class="col-md-4 gsap-reveal">
+        <div class="col-md-3 gsap-reveal">
             <div class="kpi-card kpi-total">
                 <div class="kpi-label mb-2">Total Movimentado</div>
                 <div class="d-flex justify-content-between align-items-end">
                     <div class="kpi-value text-primary"><?= $total_periodo ?></div>
                     <div class="text-primary small fw-bold">No período</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 gsap-reveal">
+            <div class="kpi-card kpi-previsao">
+                <div class="kpi-label mb-2">Com Previsão</div>
+                <div class="d-flex justify-content-between align-items-end">
+                    <div class="kpi-value text-warning"><?= $total_previsao ?></div>
+                    <div class="text-warning small fw-bold">Encerrar</div>
                 </div>
             </div>
         </div>

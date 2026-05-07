@@ -641,9 +641,15 @@ body, html {
                         <div class="d-flex align-items-center mb-1">
                             <i class="bi bi-person-badge me-2 text-muted"></i> <?= htmlspecialchars($c['vendedor']) ?>
                         </div>
-                        <div class="d-flex align-items-center">
+                        <div class="d-flex align-items-center mb-1">
                             <i class="bi bi-server me-2 text-muted"></i> <?= htmlspecialchars($c['servidor']) ?>
                         </div>
+                        <?php if (!empty($contatos_por_cliente[$c['id_cliente']])): ?>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-person-lines-fill me-2 text-muted"></i> 
+                            <span class="text-truncate"><?= htmlspecialchars(implode(', ', array_column($contatos_por_cliente[$c['id_cliente']], 'nome'))) ?></span>
+                        </div>
+                        <?php endif; ?>
                     </div>
 
                     <div class="mt-auto">
@@ -794,6 +800,9 @@ body, html {
                                     <td>
                                         <div class="small fw-bold"><?= htmlspecialchars($c['vendedor']) ?></div>
                                         <div class="text-muted small"><?= htmlspecialchars($c['servidor']) ?></div>
+                                        <?php if (!empty($contatos_por_cliente[$c['id_cliente']])): ?>
+                                        <div class="text-muted small"><i class="bi bi-person-lines-fill me-1"></i><?= htmlspecialchars(implode(', ', array_column($contatos_por_cliente[$c['id_cliente']], 'nome'))) ?></div>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="text-center">
                                         <span class="badge bg-light text-dark rounded-pill px-3 shadow-sm"><?= $d ?> dias</span>

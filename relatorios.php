@@ -151,6 +151,28 @@ foreach ($temas_data as $tema) {
     $temas_valores[] = (int)$tema['total'];
 }
 
+// ─── PERFORMANCE DE REALIZAÇÃO POR CLIENTE (Ativos) ───────────────────
+$sql_performance_cliente = "
+    SELECT 
+        c.fantasia AS cliente,
+        SUM(CASE WHEN t.status IN ('REALIZADO', 'RESOLVIDO') AND (t.treinamento_realizado = 1 OR t.treinamento_realizado IS NULL) AND t.data_treinamento BETWEEN :di1 AND :df1 THEN 1 ELSE 0 END) AS realizados,
+        SUM(CASE WHEN t.status IN ('REALIZADO', 'RESOLVIDO') AND t.treinamento_realizado = 0 AND t.data_treinamento BETWEEN :di2 AND :df2 THEN 1 ELSE 0 END) AS cancelados,
+        SUM(CASE WHEN t.status IN ('REALIZADO', 'RESOLVIDO') AND t.data_treinamento BETWEEN :di3 AND :df3 THEN 1 ELSE 0 END) AS total,
+        SUM(CASE WHEN t.status IN ('REALIZADO', 'RESOLVIDO') AND (t.treinamento_realizado = 1 OR t.treinamento_realizado IS NULL) THEN 1 ELSE 0 END) AS total_historico
+    FROM clientes c
+    LEFT JOIN treinamentos t ON c.id_cliente = t.id_cliente
+    WHERE (c.data_fim IS NULL OR c.data_fim = '0000-00-00')
+    GROUP BY c.id_cliente, c.fantasia
+    ORDER BY realizados DESC, total_historico DESC
+";
+$stmt_perf = $pdo->prepare($sql_performance_cliente);
+$stmt_perf->execute([
+    ':di1' => $data_inicio_sql, ':df1' => $data_fim_sql,
+    ':di2' => $data_inicio_sql, ':df2' => $data_fim_sql,
+    ':di3' => $data_inicio_sql, ':df3' => $data_fim_sql
+]);
+$performance_clientes = $stmt_perf->fetchAll(PDO::FETCH_ASSOC);
+
 // ─── EXPORTAÇÃO EXCEL ──────────────────────────────────────────────────
 if (isset($_GET['exportar_xls'])) {
     $nome_arquivo = 'relatorio_treinamentos_' . date('Ymd_His') . '.xls';
@@ -816,6 +838,66 @@ include 'header.php';
                                 <td class="text-truncate" style="max-width: 200px;" title="<?= htmlspecialchars($t['tema'] ?? '') ?>"><?= htmlspecialchars($t['tema'] ?? '—') ?></td>
                                 <td><span class="status-pill <?= $status_class ?>"><?= htmlspecialchars($t['status'] ?? '—') ?></span></td>
                                 <td class="text-truncate" style="max-width: 250px;" title="<?= htmlspecialchars($t['observacoes'] ?? '') ?>"><?= htmlspecialchars($t['observacoes'] ?? '—') ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Performance por Cliente -->
+    <div class="report-table-container gsap-reveal mt-4">
+        <div class="report-table-header">
+            <div>
+                <h5 class="fw-800 mb-1 d-flex align-items-center gap-2">
+                    <i class="bi bi-graph-up-arrow text-success"></i>
+                    Performance de Realização por Cliente (Ativos)
+                </h5>
+                <span class="text-muted small">Taxa de treinamentos realizados vs. cancelados no período filtrado</span>
+            </div>
+        </div>
+        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th class="ps-4">Cliente</th>
+                        <th class="text-center">Realizados (Período)</th>
+                        <th class="text-center">Cancelados (Período)</th>
+                        <th class="text-center">Total Histórico</th>
+                        <th class="text-center">Taxa Período</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($performance_clientes)): ?>
+                        <tr>
+                            <td colspan="5" class="text-center py-5">
+                                <i class="bi bi-person-x display-4 text-muted d-block mb-3 opacity-25"></i>
+                                <h6 class="text-muted">Nenhum dado de performance encontrado para este período.</h6>
+                            </td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($performance_clientes as $pc): 
+                            $taxa_aproveitamento = $pc['total'] > 0 ? round(($pc['realizados'] / $pc['total']) * 100, 1) : 0;
+                            $bar_color = 'bg-success';
+                            if ($taxa_aproveitamento < 50) $bar_color = 'bg-danger';
+                            elseif ($taxa_aproveitamento < 80) $bar_color = 'bg-warning';
+                        ?>
+                            <tr>
+                                <td class="ps-4 fw-bold"><?= htmlspecialchars($pc['cliente']) ?></td>
+                                <td class="text-center"><span class="badge bg-success bg-opacity-10 text-success fw-bold" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;"><?= $pc['realizados'] ?></span></td>
+                                <td class="text-center"><span class="badge bg-danger bg-opacity-10 text-danger fw-bold" style="font-size: 0.85rem; padding: 0.4rem 0.8rem;"><?= $pc['cancelados'] ?></span></td>
+                                <td class="text-center fw-bold">
+                                    <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3"><?= $pc['total_historico'] ?></span>
+                                </td>
+                                <td style="width: 300px;">
+                                    <div class="d-flex align-items-center gap-3 px-3">
+                                        <div class="progress flex-fill" style="height: 10px; border-radius: 6px; background: var(--bg-body); border: 1px solid var(--border-color);">
+                                            <div class="progress-bar <?= $bar_color ?> progress-bar-striped progress-bar-animated" role="progressbar" style="width: <?= $taxa_aproveitamento ?>%; border-radius: 6px;"></div>
+                                        </div>
+                                        <span class="fw-900 text-dark" style="min-width: 50px; font-size: 0.9rem;"><?= $taxa_aproveitamento ?>%</span>
+                                    </div>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>

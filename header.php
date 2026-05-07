@@ -486,6 +486,15 @@ try {
                     </a>
                 </li>
 
+                <li class="<?= $current_page == 'pendencias_treinamentos.php' ? 'active' : '' ?>">
+                    <a href="pendencias_treinamentos.php">
+                        <i class="bi bi-exclamation-diamond"></i> <span>Pendências</span>
+                        <?php if ($total_pendencias_treinamentos > 0): ?>
+                            <span class="badge-notify text-white ms-auto" style="padding: 2px 6px; border-radius: 6px;" title="Pendências Abertas"><?= $total_pendencias_treinamentos ?></span>
+                        <?php endif; ?>
+                    </a>
+                </li>
+
                 <li class="<?= $current_page == 'tarefas.php' ? 'active' : '' ?>">
                     <a href="tarefas.php">
                         <i class="bi bi-list-task"></i> <span>Tarefas</span>
@@ -495,18 +504,9 @@ try {
                     </a>
                 </li>
 
-                <li class="<?= $current_page == 'pendencias_treinamentos.php' ? 'active' : '' ?>">
-                    <a href="pendencias_treinamentos.php">
-                        <i class="bi bi-exclamation-diamond"></i> <span>Pendências</span>
-                        <?php if ($total_pendencias_treinamentos > 0): ?>
-                            <span class="badge-notify text-white ms-auto" style="background: #f59e0b; padding: 2px 6px; border-radius: 6px;" title="Pendências Abertas"><?= $total_pendencias_treinamentos ?></span>
-                        <?php endif; ?>
-                    </a>
-                </li>
-
                 <li class="<?= $current_page == 'radar_emergencia.php' ? 'active' : '' ?>">
-                    <a href="radar_emergencia.php" style="color: #ef4444;">
-                        <i class="bi bi-radar" style="color: #ef4444;"></i> <span style="font-weight: 700;">Radar de Emergência</span>
+                    <a href="radar_emergencia.php">
+                        <i class="bi bi-radar"></i> <span style="font-weight: 700;">Radar de Emergência</span>
                         <?php
                         // Contador simplificado para o badge apenas dos clientes "Para Contatar"
                         $sql_radar_badge = "
@@ -532,7 +532,7 @@ try {
                         $total_radar = $pdo->query($sql_radar_badge)->fetchColumn();
                         if ($total_radar > 0):
                         ?>
-                            <span class="badge-notify text-white ms-auto" style="background: #ef4444; padding: 2px 6px; border-radius: 6px;"><?= $total_radar ?></span>
+                            <span class="badge-notify text-white ms-auto" style="padding: 2px 6px; border-radius: 6px;"><?= $total_radar ?></span>
                         <?php endif; ?>
                     </a>
                 </li>
