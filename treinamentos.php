@@ -753,11 +753,11 @@ if (isset($_GET['exportar_xls'])) {
     }
 }
 
-// Lógica para Deletar
+// Lógica para Encerrar (substitui exclusão)
 if (isset($_GET['delete'])) {
     $id = (int) $_GET['delete'];
 
-    // 1. Antes de deletar, buscamos se há um evento do Google vinculado
+    // 1. Antes de encerrar, buscamos se há um evento do Google vinculado
     $stmtG = $pdo->prepare("SELECT google_event_id FROM treinamentos WHERE id_treinamento = ?");
     $stmtG->execute([$id]);
     $treinoG = $stmtG->fetch();
@@ -767,21 +767,20 @@ if (isset($_GET['delete'])) {
             $google_event_id = $treinoG['google_event_id'];
             
             // Incluímos o helper do Google Calendar
-            // Nota: O helper já configura o $client e o $service
             require_once 'google_calendar_helper.php';
             
             // Tentamos deletar no Google
             $service->events->delete('primary', $google_event_id);
         } catch (Exception $e) {
-            // Se der erro (ex: evento já deletado manualmente), ignoramos e seguimos com a exclusão local
+            // Se der erro (ex: evento já deletado manualmente), ignoramos
         }
     }
 
-    // 2. Agora deletamos do banco local
-    $stmt = $pdo->prepare("DELETE FROM treinamentos WHERE id_treinamento = ?");
+    // 2. Agora encerramos o treinamento (status = RESOLVIDO e treinamento_realizado = 0)
+    $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', treinamento_realizado = 0 WHERE id_treinamento = ?");
     $stmt->execute([$id]);
     
-    header("Location: treinamentos.php?msg=Removido com sucesso (incluindo Google Agenda)");
+    header("Location: treinamentos.php?msg=Treinamento encerrado com sucesso");
     exit;
 }
 

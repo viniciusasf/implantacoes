@@ -105,6 +105,9 @@ foreach ($evolucao_data as $row) {
     $evolucao_totais[]     = (int)$row['total'];
 }
 
+$evolucao_media_valor = count($evolucao_totais) > 0 ? array_sum($evolucao_totais) / count($evolucao_totais) : 0;
+$evolucao_media_series = array_fill(0, count($evolucao_totais), round($evolucao_media_valor, 1));
+
 // ─── GRÁFICO: COMPARATIVO POR VENDEDOR (período filtrado) ──────────────
 $sql_vendedor_comp = "SELECT 
     c.vendedor,
@@ -914,31 +917,32 @@ document.addEventListener('DOMContentLoaded', function() {
     // ─── CHART 1: Evolução Mensal ──────────────────────────────────────
     const evolucaoOptions = {
         series: [
-            { name: 'Realizados', data: <?= json_encode($evolucao_realizados) ?> },
-            { name: 'Pendentes',  data: <?= json_encode($evolucao_pendentes) ?> }
+            { name: 'Realizados', type: 'column', data: <?= json_encode($evolucao_realizados) ?> },
+            { name: 'Pendentes',  type: 'column', data: <?= json_encode($evolucao_pendentes) ?> },
+            { name: 'Média Geral', type: 'line',   data: <?= json_encode($evolucao_media_series) ?> }
         ],
         chart: {
-            type: 'bar',
             height: 340,
+            type: 'line', // Permite gráficos mistos
             stacked: false,
             toolbar: { show: false },
             foreColor: 'var(--text-muted)',
             background: 'transparent'
         },
-        colors: ['#10b981', '#f59e0b'],
-        plotOptions: {
-            bar: {
-                borderRadius: 6,
-                columnWidth: '55%',
-                dataLabels: { position: 'top' }
-            }
+        colors: ['#10b981', '#f59e0b', '#4361ee'],
+        stroke: {
+            show: true,
+            width: [0, 0, 4],
+            curve: 'smooth',
+            dashArray: [0, 0, 5],
+            colors: ['transparent', 'transparent', '#4361ee']
         },
         dataLabels: {
             enabled: true,
+            enabledOnSeries: [0, 1], // Mostra apenas nas barras
             offsetY: -20,
             style: { fontSize: '11px', fontWeight: 700, colors: ['var(--text-muted)'] }
         },
-        stroke: { show: true, width: 2, colors: ['transparent'] },
         xaxis: {
             categories: <?= json_encode($evolucao_labels) ?>,
             axisBorder: { show: false },
