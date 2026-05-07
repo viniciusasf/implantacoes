@@ -653,9 +653,17 @@ $mostrar_todos = isset($_GET['mostrar_todos']) ? true : false;
 $where_conditions = []; // Alterado: agora mostramos treinamentos independentemente do cliente estar ativo ou encerrado
 $params = [];
 
-// Por padrão, mostramos apenas pendentes
+// Por padrão, mostramo apenas pendentes
 if (!$mostrar_todos) {
     $where_conditions[] = "UPPER(t.status) = 'PENDENTE'";
+}
+
+// Filtro de pesquisa por cliente e contato
+$filtro_pesquisa = isset($_GET['pesquisa']) ? trim($_GET['pesquisa']) : '';
+if (!empty($filtro_pesquisa)) {
+    $where_conditions[] = "(c.fantasia LIKE ? OR co.nome LIKE ?)";
+    $params[] = "%{$filtro_pesquisa}%";
+    $params[] = "%{$filtro_pesquisa}%";
 }
 
 
@@ -1535,8 +1543,27 @@ include 'header.php';
         <div class="table-premium gsap-reveal">
             <div class="p-4 border-bottom d-flex justify-content-between align-items-center bg-white">
                 <h5 class="fw-bold mb-0">Listagem de Treinamentos</h5>
-                <div class="d-flex gap-2">
-                    <a href="treinamentos.php?mostrar_todos=1" class="btn btn-sm btn-light border px-3">Ver Resolvidos</a>
+                <div class="d-flex gap-2 align-items-center">
+                    <?php if ($mostrar_todos): ?>
+                    <form method="get" class="d-flex gap-2">
+                        <input type="text" name="pesquisa" class="form-control form-control-sm" 
+                               placeholder="Pesquisar cliente ou contato..." 
+                               value="<?= htmlspecialchars($filtro_pesquisa) ?>" 
+                               style="width: 280px;">
+                        <input type="hidden" name="mostrar_todos" value="1">
+                        <button type="submit" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-search"></i>
+                        </button>
+                        <?php if (!empty($filtro_pesquisa)): ?>
+                            <a href="treinamentos.php?mostrar_todos=1" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-x-lg"></i>
+                            </a>
+                        <?php endif; ?>
+                    </form>
+                    <?php endif; ?>
+                    <a href="treinamentos.php<?= $mostrar_todos ? '' : '?mostrar_todos=1' ?>" class="btn btn-sm btn-light border px-3">
+    <?= $mostrar_todos ? 'Ver Pendentes' : 'Ver Resolvidos' ?>
+</a>
                     <div class="dropdown">
                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
                             data-bs-toggle="dropdown">Ordenar</button>
