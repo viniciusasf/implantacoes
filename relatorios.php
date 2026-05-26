@@ -3,7 +3,8 @@ date_default_timezone_set('America/Sao_Paulo');
 require_once 'config.php';
 
 // ─── FILTROS ───────────────────────────────────────────────────────────
-$filtro_data_inicio   = isset($_GET['data_inicio'])   ? trim($_GET['data_inicio'])   : date('Y-m-01');
+$data_inicio_padrao   = '2026-01-01';
+$filtro_data_inicio   = isset($_GET['data_inicio'])   ? trim($_GET['data_inicio'])   : $data_inicio_padrao;
 $filtro_data_fim      = isset($_GET['data_fim'])       ? trim($_GET['data_fim'])       : date('Y-m-t');
 $filtro_vendedor      = isset($_GET['vendedor'])       ? trim($_GET['vendedor'])       : '';
 $filtro_servidor      = isset($_GET['servidor'])       ? trim($_GET['servidor'])       : '';
@@ -12,7 +13,7 @@ $filtro_status        = isset($_GET['status'])         ? trim($_GET['status'])  
 // Validar datas
 $data_inicio_obj = DateTime::createFromFormat('Y-m-d', $filtro_data_inicio);
 $data_fim_obj    = DateTime::createFromFormat('Y-m-d', $filtro_data_fim);
-if (!$data_inicio_obj) $filtro_data_inicio = date('Y-m-01');
+if (!$data_inicio_obj) $filtro_data_inicio = $data_inicio_padrao;
 if (!$data_fim_obj)    $filtro_data_fim    = date('Y-m-t');
 
 $data_inicio_sql = $filtro_data_inicio . ' 00:00:00';
@@ -76,33 +77,66 @@ foreach ($treinamentos as $t) {
 
 $kpi_taxa_resolucao = $kpi_total > 0 ? round(($kpi_realizados / $kpi_total) * 100, 1) : 0;
 
-// ─── GRÁFICO: EVOLUÇÃO MENSAL (últimos 12 meses) ──────────────────────
+// ─── GRÁFICO: EVOLUÇÃO MENSAL (desde Jan/26) ──────────────────────
+$evolucao_inicio = new DateTime('2026-01-01');
+$evolucao_fim = new DateTime('first day of this month');
+if ($evolucao_fim < $evolucao_inicio) {
+    $evolucao_fim = clone $evolucao_inicio;
+}
+
+$evolucao_inicio_sql = $evolucao_inicio->format('Y-m-01');
+$evolucao_fim_sql = $evolucao_fim->format('Y-m-t');
+
 $sql_evolucao = "SELECT 
     DATE_FORMAT(data_treinamento, '%Y-%m') AS mes,
     COUNT(*) AS total,
-    SUM(CASE WHEN UPPER(status) IN ('REALIZADO','RESOLVIDO') THEN 1 ELSE 0 END) AS realizados,
+    SUM(CASE WHEN UPPER(status) IN ('REALIZADO','RESOLVIDO') AND (treinamento_realizado = 1 OR treinamento_realizado IS NULL) THEN 1 ELSE 0 END) AS realizados,
+    SUM(CASE WHEN UPPER(status) IN ('REALIZADO','RESOLVIDO') AND treinamento_realizado = 0 THEN 1 ELSE 0 END) AS nao_realizados,
     SUM(CASE WHEN UPPER(status) = 'PENDENTE' THEN 1 ELSE 0 END) AS pendentes
 FROM treinamentos
-WHERE data_treinamento >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+WHERE data_treinamento BETWEEN '{$evolucao_inicio_sql} 00:00:00' AND '{$evolucao_fim_sql} 23:59:59'
 GROUP BY mes
 ORDER BY mes ASC";
 $evolucao_data = $pdo->query($sql_evolucao)->fetchAll(PDO::FETCH_ASSOC);
 
-$evolucao_labels     = [];
-$evolucao_realizados = [];
-$evolucao_pendentes  = [];
-$evolucao_totais     = [];
+$evolucao_labels         = [];
+$evolucao_realizados     = [];
+$evolucao_nao_realizados = [];
+$evolucao_pendentes      = [];
+$evolucao_totais         = [];
 
 $meses_pt = ['01'=>'Jan','02'=>'Fev','03'=>'Mar','04'=>'Abr','05'=>'Mai','06'=>'Jun',
              '07'=>'Jul','08'=>'Ago','09'=>'Set','10'=>'Out','11'=>'Nov','12'=>'Dez'];
 
+$evolucao_map = [];
 foreach ($evolucao_data as $row) {
-    $partes = explode('-', $row['mes']);
-    $label  = ($meses_pt[$partes[1]] ?? $partes[1]) . '/' . substr($partes[0], 2);
-    $evolucao_labels[]     = $label;
-    $evolucao_realizados[] = (int)$row['realizados'];
-    $evolucao_pendentes[]  = (int)$row['pendentes'];
-    $evolucao_totais[]     = (int)$row['total'];
+    $evolucao_map[$row['mes']] = [
+        'realizados' => (int)$row['realizados'],
+        'nao_realizados' => (int)$row['nao_realizados'],
+        'pendentes' => (int)$row['pendentes'],
+        'total' => (int)$row['total'],
+    ];
+}
+
+$mes_cursor = clone $evolucao_inicio;
+$mes_final = clone $evolucao_fim;
+while ($mes_cursor <= $mes_final) {
+    $mes_key = $mes_cursor->format('Y-m');
+    $label = ($meses_pt[$mes_cursor->format('m')] ?? $mes_cursor->format('m')) . '/' . $mes_cursor->format('y');
+    $dados_mes = $evolucao_map[$mes_key] ?? [
+        'realizados' => 0,
+        'nao_realizados' => 0,
+        'pendentes' => 0,
+        'total' => 0,
+    ];
+
+    $evolucao_labels[] = $label;
+    $evolucao_realizados[] = $dados_mes['realizados'];
+    $evolucao_nao_realizados[] = $dados_mes['nao_realizados'];
+    $evolucao_pendentes[] = $dados_mes['pendentes'];
+    $evolucao_totais[] = $dados_mes['total'];
+
+    $mes_cursor->modify('+1 month');
 }
 
 $evolucao_media_valor = count($evolucao_totais) > 0 ? array_sum($evolucao_totais) / count($evolucao_totais) : 0;
@@ -158,10 +192,10 @@ foreach ($temas_data as $tema) {
 $sql_performance_cliente = "
     SELECT 
         c.fantasia AS cliente,
-        SUM(CASE WHEN t.status IN ('REALIZADO', 'RESOLVIDO') AND (t.treinamento_realizado = 1 OR t.treinamento_realizado IS NULL) AND t.data_treinamento BETWEEN :di1 AND :df1 THEN 1 ELSE 0 END) AS realizados,
-        SUM(CASE WHEN t.status IN ('REALIZADO', 'RESOLVIDO') AND t.treinamento_realizado = 0 AND t.data_treinamento BETWEEN :di2 AND :df2 THEN 1 ELSE 0 END) AS cancelados,
-        SUM(CASE WHEN t.status IN ('REALIZADO', 'RESOLVIDO') AND t.data_treinamento BETWEEN :di3 AND :df3 THEN 1 ELSE 0 END) AS total,
-        SUM(CASE WHEN t.status IN ('REALIZADO', 'RESOLVIDO') AND (t.treinamento_realizado = 1 OR t.treinamento_realizado IS NULL) THEN 1 ELSE 0 END) AS total_historico
+        SUM(CASE WHEN t.status IN ('REALIZADO', 'RESOLVIDO') AND (t.treinamento_realizado = 1 OR t.treinamento_realizado IS NULL) THEN 1 ELSE 0 END) AS realizados,
+        SUM(CASE WHEN t.status IN ('REALIZADO', 'RESOLVIDO') AND t.treinamento_realizado = 0 THEN 1 ELSE 0 END) AS cancelados,
+        SUM(CASE WHEN t.status IN ('REALIZADO', 'RESOLVIDO') THEN 1 ELSE 0 END) AS total,
+        SUM(CASE WHEN t.status IN ('REALIZADO', 'RESOLVIDO') THEN 1 ELSE 0 END) AS total_historico
     FROM clientes c
     LEFT JOIN treinamentos t ON c.id_cliente = t.id_cliente
     WHERE (c.data_fim IS NULL OR c.data_fim = '0000-00-00')
@@ -169,11 +203,7 @@ $sql_performance_cliente = "
     ORDER BY realizados DESC, total_historico DESC
 ";
 $stmt_perf = $pdo->prepare($sql_performance_cliente);
-$stmt_perf->execute([
-    ':di1' => $data_inicio_sql, ':df1' => $data_fim_sql,
-    ':di2' => $data_inicio_sql, ':df2' => $data_fim_sql,
-    ':di3' => $data_inicio_sql, ':df3' => $data_fim_sql
-]);
+$stmt_perf->execute();
 $performance_clientes = $stmt_perf->fetchAll(PDO::FETCH_ASSOC);
 
 // ─── EXPORTAÇÃO EXCEL ──────────────────────────────────────────────────
@@ -729,7 +759,7 @@ include 'header.php';
                 <div class="chart-title">
                     <i class="bi bi-bar-chart-line text-primary"></i>
                     Evolução Mensal de Treinamentos
-                    <span class="badge bg-primary bg-opacity-10 text-primary ms-auto" style="font-size: 0.65rem; font-weight: 700;">Últimos 12 meses</span>
+                    <span class="badge bg-primary bg-opacity-10 text-primary ms-auto" style="font-size: 0.65rem; font-weight: 700;">Desde Jan/26</span>
                 </div>
                 <div id="chart-evolucao" style="min-height: 340px;"></div>
             </div>
@@ -857,7 +887,7 @@ include 'header.php';
                     <i class="bi bi-graph-up-arrow text-success"></i>
                     Performance de Realização por Cliente (Ativos)
                 </h5>
-                <span class="text-muted small">Taxa de treinamentos realizados vs. cancelados no período filtrado</span>
+                <span class="text-muted small">Taxa histórica de treinamentos realizados vs. não realizados por cliente ativo</span>
             </div>
         </div>
         <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
@@ -865,10 +895,10 @@ include 'header.php';
                 <thead>
                     <tr>
                         <th class="ps-4">Cliente</th>
-                        <th class="text-center">Realizados (Período)</th>
-                        <th class="text-center">Cancelados (Período)</th>
+                        <th class="text-center">Realizados (Histórico)</th>
+                        <th class="text-center">Cancelados (Histórico)</th>
                         <th class="text-center">Total Histórico</th>
-                        <th class="text-center">Taxa Período</th>
+                        <th class="text-center">Taxa Histórica</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -962,6 +992,27 @@ document.addEventListener('DOMContentLoaded', function() {
         tooltip: { theme: 'dark', y: { formatter: v => v + ' treinamentos' } }
     };
 
+    evolucaoOptions.series = [
+        { name: 'Realizados', type: 'column', data: <?= json_encode($evolucao_realizados) ?> },
+        { name: 'Nao Realizados', type: 'column', data: <?= json_encode($evolucao_nao_realizados) ?> },
+        { name: 'Pendentes', type: 'column', data: <?= json_encode($evolucao_pendentes) ?> },
+        { name: 'Media Geral', type: 'line', data: <?= json_encode($evolucao_media_series) ?> }
+    ];
+    evolucaoOptions.colors = ['#10b981', '#ef4444', '#f59e0b', '#4361ee'];
+    evolucaoOptions.stroke = {
+        show: true,
+        width: [0, 0, 0, 4],
+        curve: 'smooth',
+        dashArray: [0, 0, 0, 5],
+        colors: ['transparent', 'transparent', 'transparent', '#4361ee']
+    };
+    evolucaoOptions.dataLabels = {
+        enabled: true,
+        enabledOnSeries: [0, 1, 2],
+        offsetY: -20,
+        style: { fontSize: '11px', fontWeight: 700, colors: ['var(--text-muted)'] }
+    };
+
     const evolucaoEl = document.querySelector("#chart-evolucao");
     if (evolucaoEl) new ApexCharts(evolucaoEl, evolucaoOptions).render();
 
@@ -984,7 +1035,18 @@ document.addEventListener('DOMContentLoaded', function() {
             bar: {
                 horizontal: true,
                 borderRadius: 5,
-                barHeight: '60%'
+                barHeight: '60%',
+                dataLabels: {
+                    total: {
+                        enabled: true,
+                        formatter: function (val) { return val; },
+                        style: {
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            color: '#1f2937'
+                        }
+                    }
+                }
             }
         },
         dataLabels: { enabled: false },

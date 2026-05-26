@@ -123,7 +123,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("UPDATE `clientes` SET 
             `fantasia`=?, `servidor`=?, `vendedor`=?, `telefone_ddd`=?, 
             `data_inicio`=?, `data_fim`=?, `data_previsao_encerramento`=?, `observacao`=?, 
-            `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=? 
+            `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=?,
+            `computador_rdp`=?, `usuario_rdp`=?, `senha_rdp`=?
             WHERE `id_cliente`=?");
         $stmt->execute([
             $fantasia,
@@ -140,6 +141,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $anexo,
             $chamados,
             $recursos,
+            $_POST['computador_rdp'] ?? '',
+            $_POST['usuario_rdp'] ?? '',
+            $_POST['senha_rdp'] ?? '',
             $_POST['id_cliente']
         ]);
     } else {
@@ -147,8 +151,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt = $pdo->prepare("INSERT INTO `clientes` (
             `fantasia`, `servidor`, `vendedor`, `telefone_ddd`, 
             `data_inicio`, `data_fim`, `data_previsao_encerramento`, `observacao`, 
-            `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`,
+            `computador_rdp`, `usuario_rdp`, `senha_rdp`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
             $fantasia,
             $servidor,
@@ -163,7 +168,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $num_licencas,
             $anexo,
             $chamados,
-            $recursos
+            $recursos,
+            $_POST['computador_rdp'] ?? '',
+            $_POST['usuario_rdp'] ?? '',
+            $_POST['senha_rdp'] ?? ''
         ]);
     }
     header("Location: clientes.php?msg=Dados+atualizados&view=" . $view_mode);
@@ -456,6 +464,9 @@ body, html {
 .btn-action.treinamentos { color: #4cc9f0; background: rgba(76, 201, 240, 0.15); border-color: rgba(76, 201, 240, 0.3); }
 .btn-action.treinamentos:hover { background: #4cc9f0; color: white; }
 
+.btn-action.efetivo { color: #0ea5e9; background: rgba(14, 165, 233, 0.15); border-color: rgba(14, 165, 233, 0.3); }
+.btn-action.efetivo:hover { background: #0ea5e9; color: white; }
+
 .btn-action.concluir { color: #10b981; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); }
 .btn-action.concluir:hover { background: #10b981; color: white; }
 
@@ -464,9 +475,6 @@ body, html {
 
 .btn-action.delete { color: #ef4444; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); }
 .btn-action.delete:hover { background: #ef4444; color: white; }
-.btn-action.efetivo { color: #0ea5e9; background: rgba(14, 165, 233, 0.15); border-color: rgba(14, 165, 233, 0.3); }
-.btn-action.efetivo:hover { background: #0ea5e9; color: white; }
-
 
 .btn-action.agendar { color: #7c3aed; background: rgba(124, 58, 237, 0.15); border-color: rgba(124, 58, 237, 0.3); }
 .btn-action.agendar:hover { background: #7c3aed; color: white; }
@@ -610,7 +618,14 @@ body, html {
             <?php endif; ?>
 
             <?php foreach ($clientes_filtrados as $index => $c): 
-                $d = (new DateTime($c['data_inicio']))->diff(new DateTime())->days;
+                $data_inicio = new DateTime($c['data_inicio']);
+                $hoje = new DateTime();
+                $d = $data_inicio->diff($hoje)->days;
+                $tem_previsao = !empty($c['data_previsao_encerramento']) && $c['data_previsao_encerramento'] !== '0000-00-00';
+                $dias_previsao = $tem_previsao
+                    ? $data_inicio->diff(new DateTime($c['data_previsao_encerramento']))->days
+                    : null;
+                $dias_restantes = $tem_previsao ? ($dias_previsao - $d) : null;
                 $cliente_encerrado = (!empty($c['data_fim']) && $c['data_fim'] !== '0000-00-00');
                 
                 $status_config = [
@@ -661,7 +676,7 @@ body, html {
                             <?php if (!empty($c['data_previsao_encerramento']) && $c['data_previsao_encerramento'] !== '0000-00-00'): ?>
                             <span class="text-warning">Previsão: <?= date('d/m/Y', strtotime($c['data_previsao_encerramento'])) ?></span>
                             <?php endif; ?>
-                            <span class="fw-bold text-main"><?= $d ?> dias</span>
+                            <span class="fw-bold text-main"><?= $tem_previsao ? 'Restam: ' . $dias_restantes . ' dias' : $d . ' dias' ?></span>
                         </div>
                         <div class="progress mb-3" style="height: 6px; border-radius: 10px; background: var(--bg-body);">
                             <?php 
@@ -700,11 +715,17 @@ body, html {
                                     data-anexo="<?= $c['anexo'] ?>" 
                                     data-chamados="<?= htmlspecialchars($c['chamados'] ?? '') ?>" 
                                     data-recursos="<?= htmlspecialchars($c['recursos'] ?? '') ?>" 
+                                    data-computador-rdp="<?= htmlspecialchars($c['computador_rdp'] ?? '') ?>" 
+                                    data-usuario-rdp="<?= htmlspecialchars($c['usuario_rdp'] ?? '') ?>" 
+                                    data-senha-rdp="<?= htmlspecialchars($c['senha_rdp'] ?? '') ?>" 
                                     title="Editar" onclick="openEditModal(this)">
                                 <i class="bi bi-pencil"></i>
                             </button>
                             <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos" title="Ver Treinamentos">
                                 <i class="bi bi-calendar-check"></i>
+                            </a>
+                            <a href="treinamento_efetivo.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action efetivo" title="Treinamento Efetivo">
+                                <i class="bi bi-clipboard-data"></i>
                             </a>
                                 <button class="btn btn-sm btn-action agendar novo-treino-trigger"
                                         data-id="<?= $c['id_cliente'] ?>"
@@ -723,9 +744,6 @@ body, html {
                                 <?php 
                                     $link_chamados = '';
                                     if (!empty($c['chamados'])) {
-                            <a href="treinamento_efetivo.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action efetivo" title="Treinamento Efetivo">
-                                <i class="bi bi-clipboard-data"></i>
-                            </a>
                                         $link_chamados = $c['chamados'];
                                     } elseif (!empty($c['anexo'])) {
                                         $base = (strpos($c['anexo'], 'http') === 0) ? $c['anexo'] : 'https://' . $c['anexo'];
@@ -840,6 +858,9 @@ body, html {
                                             <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos" title="Ver Treinamentos">
                                                 <i class="bi bi-calendar-check"></i>
                                             </a>
+                                            <a href="treinamento_efetivo.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action efetivo" title="Treinamento Efetivo">
+                                                <i class="bi bi-clipboard-data"></i>
+                                            </a>
                                             <button class="btn btn-sm btn-action agendar novo-treino-trigger"
                                                     data-id="<?= $c['id_cliente'] ?>"
                                                     data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>"
@@ -858,9 +879,6 @@ body, html {
                                                 $link_chamados_t = '';
                                                 if (!empty($c['chamados'])) {
                                                     $link_chamados_t = $c['chamados'];
-                                            <a href="treinamento_efetivo.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action efetivo" title="Treinamento Efetivo">
-                                                <i class="bi bi-clipboard-data"></i>
-                                            </a>
                                                 } elseif (!empty($c['anexo'])) {
                                                     $base_t = (strpos($c['anexo'], 'http') === 0) ? $c['anexo'] : 'https://' . $c['anexo'];
                                                     $link_chamados_t = rtrim($base_t, '?') . '?tab=chamados-abertos';
@@ -999,6 +1017,32 @@ body, html {
                                         </button>
                                     </div>
                                     <small class="text-muted" style="font-size: 0.7rem;">Link direto para os chamados abertos do cliente no GestãoPRO</small>
+                                </div>
+                                <div class="col-12 mt-3">
+                                    <h6 class="text-secondary fw-bold mb-3 d-flex align-items-center">
+                                        <i class="bi bi-display me-2"></i> Área de Trabalho Remota (RDP)
+                                    </h6>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold text-muted">Computador</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-pc text-info"></i></span>
+                                        <input type="text" name="computador_rdp" id="computador_rdp" class="form-control border-start-0 ps-0" placeholder="Ex: SP21.GESTAOPRO.SRV.BR:15594">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold text-muted">Usuário</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-person text-info"></i></span>
+                                        <input type="text" name="usuario_rdp" id="usuario_rdp" class="form-control border-start-0 ps-0" placeholder="Usuário">
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold text-muted">Senha</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-key text-info"></i></span>
+                                        <input type="password" name="senha_rdp" id="senha_rdp" class="form-control border-start-0 ps-0" placeholder="Senha">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1173,6 +1217,11 @@ body, html {
         document.getElementById('num_licencas').value = d.licencas || 0;
         document.getElementById('anexo').value = d.anexo || '';
         document.getElementById('chamados').value = d.chamados || '';
+        
+        // Campos RDP
+        document.getElementById('computador_rdp').value = d.computadorRdp || '';
+        document.getElementById('usuario_rdp').value = d.usuarioRdp || '';
+        document.getElementById('senha_rdp').value = d.senhaRdp || '';
         
         // Limpar e preencher checkbox de recursos
         document.querySelectorAll('.recurso-checkbox').forEach(cb => cb.checked = false);

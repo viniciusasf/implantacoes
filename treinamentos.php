@@ -31,7 +31,6 @@ function garantirTabelaObservacoes($pdo)
     }
 }
 garantirTabelaObservacoes($pdo);
-garantirColunaTreinamentoRealizado($pdo);
 
 
 
@@ -653,17 +652,9 @@ $mostrar_todos = isset($_GET['mostrar_todos']) ? true : false;
 $where_conditions = []; // Alterado: agora mostramos treinamentos independentemente do cliente estar ativo ou encerrado
 $params = [];
 
-// Por padrão, mostramo apenas pendentes
+// Por padrão, mostramos apenas pendentes
 if (!$mostrar_todos) {
     $where_conditions[] = "UPPER(t.status) = 'PENDENTE'";
-}
-
-// Filtro de pesquisa por cliente e contato
-$filtro_pesquisa = isset($_GET['pesquisa']) ? trim($_GET['pesquisa']) : '';
-if (!empty($filtro_pesquisa)) {
-    $where_conditions[] = "(c.fantasia LIKE ? OR co.nome LIKE ?)";
-    $params[] = "%{$filtro_pesquisa}%";
-    $params[] = "%{$filtro_pesquisa}%";
 }
 
 
@@ -753,34 +744,12 @@ if (isset($_GET['exportar_xls'])) {
     }
 }
 
-// Lógica para Encerrar (substitui exclusão)
+// Lógica para Deletar
 if (isset($_GET['delete'])) {
     $id = (int) $_GET['delete'];
-
-    // 1. Antes de encerrar, buscamos se há um evento do Google vinculado
-    $stmtG = $pdo->prepare("SELECT google_event_id FROM treinamentos WHERE id_treinamento = ?");
-    $stmtG->execute([$id]);
-    $treinoG = $stmtG->fetch();
-
-    if ($treinoG && !empty($treinoG['google_event_id'])) {
-        try {
-            $google_event_id = $treinoG['google_event_id'];
-            
-            // Incluímos o helper do Google Calendar
-            require_once 'google_calendar_helper.php';
-            
-            // Tentamos deletar no Google
-            $service->events->delete('primary', $google_event_id);
-        } catch (Exception $e) {
-            // Se der erro (ex: evento já deletado manualmente), ignoramos
-        }
-    }
-
-    // 2. Agora encerramos o treinamento (status = RESOLVIDO e treinamento_realizado = 0)
-    $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', treinamento_realizado = 0 WHERE id_treinamento = ?");
+    $stmt = $pdo->prepare("DELETE FROM treinamentos WHERE id_treinamento = ?");
     $stmt->execute([$id]);
-    
-    header("Location: treinamentos.php?msg=Treinamento encerrado com sucesso");
+    header("Location: treinamentos.php?msg=Removido com sucesso");
     exit;
 }
 
@@ -813,15 +782,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         try {
             $pdo->beginTransaction();
 
-            // Usamos uma única query para simplificar, já que as colunas são garantidas no topo
-            $stmt = $pdo->prepare("UPDATE treinamentos SET 
-                status = 'Resolvido', 
-                treinamento_realizado = ?, 
-                data_treinamento_encerrado = ?, 
-                observacoes = ?, 
-                tipo_pendencia_encerramento = ? 
-                WHERE id_treinamento = ?");
-            $stmt->execute([$treinamentoRealizado, $data_hoje, $obs, $tipoPendencia, $id]);
+            if ($colunaMarcacaoDisponivel && $colunaRealizadoDisponivel) {
+                $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', treinamento_realizado = ?, data_treinamento_encerrado = ?, observacoes = ?, tipo_pendencia_encerramento = ? WHERE id_treinamento = ?");
+                $stmt->execute([$treinamentoRealizado, $data_hoje, $obs, $tipoPendencia, $id]);
+            } elseif ($colunaMarcacaoDisponivel) {
+                $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', data_treinamento_encerrado = ?, observacoes = ?, tipo_pendencia_encerramento = ? WHERE id_treinamento = ?");
+                $stmt->execute([$data_hoje, $obs, $tipoPendencia, $id]);
+            } else {
+                $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'Resolvido', data_treinamento_encerrado = ?, observacoes = ? WHERE id_treinamento = ?");
+                $stmt->execute([$data_hoje, $obs, $id]);
+            }
 
             $stmtCliente = $pdo->prepare("SELECT id_cliente FROM treinamentos WHERE id_treinamento = ?");
             $stmtCliente->execute([$id]);
@@ -866,64 +836,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $pdo->rollBack();
             }
             header("Location: treinamentos.php?msg=" . urlencode("Erro ao encerrar treinamento: " . $e->getMessage()) . "&tipo=danger");
-            exit;
-        }
-    }
-
-    if (isset($_POST['gerar_pendencia_resolvido'])) {
-        $id = (int) ($_POST['id_treinamento'] ?? 0);
-        $obs = trim((string) ($_POST['observacoes'] ?? ''));
-        $data_hoje = date('Y-m-d H:i:s');
-
-        if ($id <= 0 || $obs === '') {
-            header("Location: treinamentos.php?msg=" . urlencode("Preencha as observações para gerar a pendência.") . "&tipo=warning");
-            exit;
-        }
-
-        $colunaMarcacaoDisponivel = garantirColunaMarcacaoPendencia($pdo);
-        $tabelaPendenciasDisponivel = garantirTabelaPendenciasTreinamentos($pdo);
-
-        try {
-            $pdo->beginTransaction();
-
-            if ($colunaMarcacaoDisponivel) {
-                $stmt = $pdo->prepare("UPDATE treinamentos SET tipo_pendencia_encerramento = 'COM_PENDENCIA', observacoes = ? WHERE id_treinamento = ?");
-                $stmt->execute([$obs, $id]);
-            }
-
-            $stmtCliente = $pdo->prepare("SELECT id_cliente FROM treinamentos WHERE id_treinamento = ?");
-            $stmtCliente->execute([$id]);
-            $idCliente = (int) ($stmtCliente->fetchColumn() ?: 0);
-
-            if ($tabelaPendenciasDisponivel) {
-                $stmtPendencia = $pdo->prepare(
-                    "INSERT INTO pendencias_treinamentos
-                        (id_treinamento, id_cliente, status_pendencia, observacao_finalizacao, observacao_conclusao, data_criacao, data_atualizacao, data_conclusao)
-                     VALUES (?, ?, 'ABERTA', ?, NULL, ?, NULL, NULL)
-                     ON DUPLICATE KEY UPDATE
-                        id_cliente = VALUES(id_cliente),
-                        status_pendencia = 'ABERTA',
-                        observacao_finalizacao = VALUES(observacao_finalizacao),
-                        observacao_conclusao = NULL,
-                        data_atualizacao = VALUES(data_criacao),
-                        data_conclusao = NULL"
-                );
-                $stmtPendencia->execute([
-                    $id,
-                    $idCliente > 0 ? $idCliente : null,
-                    $obs,
-                    $data_hoje
-                ]);
-            }
-
-            $pdo->commit();
-            header("Location: treinamentos.php?mostrar_todos=1&msg=" . urlencode("Pendência gerada com sucesso para o treinamento encerrado.") . "&tipo=success");
-            exit;
-        } catch (Throwable $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            header("Location: treinamentos.php?mostrar_todos=1&msg=" . urlencode("Erro ao gerar pendência: " . $e->getMessage()) . "&tipo=danger");
             exit;
         }
     }
@@ -1224,10 +1136,7 @@ $offset = ($pagina - 1) * $por_pagina;
 
 // Query principal com contagem para paginação
 $sql_base = "
-    SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim, c.recursos, c.anexo, c.chamados,
-           (SELECT CASE WHEN COUNT(*) > 0 THEN ROUND(SUM(CASE WHEN t2.treinamento_realizado = 0 THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 0) ELSE 0 END
-            FROM treinamentos t2 
-            WHERE t2.id_cliente = t.id_cliente AND UPPER(t2.status) = 'RESOLVIDO') as taxa_cancelamento
+    SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim, c.recursos, c.anexo, c.chamados
     FROM treinamentos t
     LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
     LEFT JOIN contatos co ON t.id_contato = co.id_contato
@@ -1542,27 +1451,8 @@ include 'header.php';
         <div class="table-premium gsap-reveal">
             <div class="p-4 border-bottom d-flex justify-content-between align-items-center bg-white">
                 <h5 class="fw-bold mb-0">Listagem de Treinamentos</h5>
-                <div class="d-flex gap-2 align-items-center">
-                    <?php if ($mostrar_todos): ?>
-                    <form method="get" class="d-flex gap-2">
-                        <input type="text" name="pesquisa" class="form-control form-control-sm" 
-                               placeholder="Pesquisar cliente ou contato..." 
-                               value="<?= htmlspecialchars($filtro_pesquisa) ?>" 
-                               style="width: 280px;">
-                        <input type="hidden" name="mostrar_todos" value="1">
-                        <button type="submit" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-search"></i>
-                        </button>
-                        <?php if (!empty($filtro_pesquisa)): ?>
-                            <a href="treinamentos.php?mostrar_todos=1" class="btn btn-sm btn-outline-secondary">
-                                <i class="bi bi-x-lg"></i>
-                            </a>
-                        <?php endif; ?>
-                    </form>
-                    <?php endif; ?>
-                    <a href="treinamentos.php<?= $mostrar_todos ? '' : '?mostrar_todos=1' ?>" class="btn btn-sm btn-light border px-3">
-    <?= $mostrar_todos ? 'Ver Pendentes' : 'Ver Resolvidos' ?>
-</a>
+                <div class="d-flex gap-2">
+                    <a href="treinamentos.php?mostrar_todos=1" class="btn btn-sm btn-light border px-3">Ver Resolvidos</a>
                     <div class="dropdown">
                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
                             data-bs-toggle="dropdown">Ordenar</button>
@@ -1595,7 +1485,6 @@ include 'header.php';
                             <th class="col-mini text-center">Cadastro</th>
                             <th class="col-mini text-center">Link Chamados</th>
                             <th class="col-mini">Status</th>
-                            <th class="col-mini text-center">Taxa Canc</th>
                             <th class="col-mini">Serv.</th>
                             <th>Contato</th>
                             <th>Tema</th>
@@ -1652,10 +1541,6 @@ include 'header.php';
                                             <?php if ($e_hoje): ?>
                                                 <span class="badge bg-primary text-white"
                                                     style="font-size: 0.55rem; padding: 1.5px 3.5px; line-height: 1;">HOJE</span>
-                                            <?php endif; ?>
-                                            <?php if (isset($t['treinamento_realizado']) && $t['treinamento_realizado'] == 0): ?>
-                                                <span class="badge bg-danger text-white"
-                                                    style="font-size: 0.55rem; padding: 1.5px 3.5px; line-height: 1;">NÃO REALIZADO</span>
                                             <?php endif; ?>
                                         </div>
                                     </td>
@@ -1743,17 +1628,6 @@ include 'header.php';
                                             <i class="bi <?= $c_st['icon'] ?> me-1"></i> <?= $c_st['label'] ?>
                                         </span>
                                     </td>
-                                    <td class="text-center">
-                                        <?php 
-                                        $taxa = (int)($t['taxa_cancelamento'] ?? 0);
-                                        $taxaClass = 'bg-success bg-opacity-10 text-success';
-                                        if ($taxa > 50) $taxaClass = 'bg-danger bg-opacity-10 text-danger';
-                                        elseif ($taxa > 0) $taxaClass = 'bg-warning bg-opacity-10 text-warning';
-                                        ?>
-                                        <span class="badge <?= $taxaClass ?> rounded-pill fw-bold" style="font-size: 0.75rem;">
-                                            <?= $taxa ?>%
-                                        </span>
-                                    </td>
                                     <td class="fw-bold">
                                         <div class="small"><?= htmlspecialchars($t['servidor'] ?: '---') ?></div>
                                     </td>
@@ -1836,7 +1710,7 @@ include 'header.php';
                                                 <i class="bi bi-whatsapp"></i>
                                             </button>
 
-                                            <!-- 3. FINALIZAR / PENDÊNCIA -->
+                                            <!-- 3. FINALIZAR -->
                                             <?php if (strtoupper($t['status']) == 'PENDENTE'): ?>
                                                 <button class="btn btn-sm btn-outline-success open-finish-modal" data-id="<?= $id_tr ?>"
                                                     data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>"
@@ -1844,21 +1718,12 @@ include 'header.php';
                                                     data-bs-toggle="tooltip">
                                                     <i class="bi bi-check-lg"></i>
                                                 </button>
-                                            <?php elseif (strtoupper($t['status']) == 'RESOLVIDO'): ?>
-                                                <button class="btn btn-sm btn-outline-warning open-pendencia-modal" data-id="<?= $id_tr ?>"
-                                                    data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>"
-                                                    data-tema="<?= htmlspecialchars($t['tema']) ?>" 
-                                                    data-obs="<?= htmlspecialchars($t['observacoes']) ?>"
-                                                    title="Gerar Pendência"
-                                                    data-bs-toggle="tooltip">
-                                                    <i class="bi bi-exclamation-triangle"></i>
-                                                </button>
                                             <?php endif; ?>
 
                                             <!-- 4. EXCLUIR -->
                                             <a href="?delete=<?= $id_tr ?>&pagina=<?= $pagina ?>&filtro_cliente=<?= urlencode($filtro_cliente) ?>"
                                                 class="btn btn-sm btn-outline-danger" data-bs-toggle="tooltip"
-                                                data-bs-title="Excluir" onclick="return confirm('Deseja Realmente Excluir este Agendamento?')">
+                                                data-bs-title="Excluir" onclick="return confirm('Excluir este treinamento?')">
                                                 <i class="bi bi-trash"></i>
                                             </a>
                                         </div>
@@ -2503,40 +2368,6 @@ include 'header.php';
     </div>
 </div>
 
-<!-- Modal Gerar Pendencia para Resolvido -->
-<div class="modal fade" id="modalGerarPendencia" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
-            <div class="modal-header border-0 px-4 pt-4">
-                <h5 class="fw-bold text-dark"><i class="bi bi-exclamation-triangle me-2 text-warning"></i>Gerar Pendência
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body px-4 text-start">
-                <input type="hidden" name="id_treinamento" id="modal_pendencia_id_treinamento">
-                <input type="hidden" name="gerar_pendencia_resolvido" value="1">
-
-                <div class="mb-3 p-3 bg-light rounded-3 border">
-                    <div class="small text-muted mb-1 text-uppercase fw-bold" style="font-size: 0.65rem;">Informações:
-                    </div>
-                    <div class="fw-bold text-primary" id="modal_pendencia_cliente_info"></div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label small fw-bold text-muted text-uppercase">O que ficou acordado com o
-                        cliente?</label>
-                    <textarea name="observacoes" id="modal_pendencia_obs" class="form-control" rows="4"
-                        placeholder="Descreva os detalhes da pendência..." required></textarea>
-                </div>
-            </div>
-            <div class="modal-footer border-0 p-4">
-                <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-warning px-4 fw-bold shadow-sm">Gerar Pendência</button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <!-- Modal Gerenciar Link Manual -->
 <div class="modal fade" id="modalGoogleLink" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
@@ -3078,21 +2909,6 @@ include 'header.php';
             });
 
             new bootstrap.Modal(document.getElementById('modalEncerrar')).show();
-        });
-    });
-
-    document.querySelectorAll('.open-pendencia-modal').forEach(btn => {
-        btn.addEventListener('click', function () {
-            const id = this.dataset.id;
-            const cliente = this.dataset.cliente;
-            const tema = this.dataset.tema;
-            const obs = this.dataset.obs || '';
-
-            document.getElementById('modal_pendencia_id_treinamento').value = id;
-            document.getElementById('modal_pendencia_cliente_info').innerText = cliente + " | " + tema;
-            document.getElementById('modal_pendencia_obs').value = obs;
-
-            new bootstrap.Modal(document.getElementById('modalGerarPendencia')).show();
         });
     });
 

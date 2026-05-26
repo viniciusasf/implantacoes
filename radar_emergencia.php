@@ -15,6 +15,7 @@ $query_clientes_inativos = "
         c.fantasia, 
         c.vendedor, 
         c.data_inicio,
+        c.data_previsao_encerramento,
         COALESCE(
             NULLIF(TRIM(c.telefone_ddd), ''),
             (SELECT telefone_ddd FROM contatos ct WHERE ct.id_cliente = c.id_cliente AND ct.telefone_ddd IS NOT NULL AND TRIM(ct.telefone_ddd) != '' LIMIT 1)
@@ -30,14 +31,33 @@ $query_clientes_inativos = "
             FROM observacoes_cliente oc2 
             WHERE oc2.id_cliente = c.id_cliente AND oc2.tipo = 'CONTATO' 
             ORDER BY oc2.data_observacao DESC LIMIT 1
-        ) as ultima_mensagem
+        ) as ultima_mensagem,
+        (
+            SELECT MAX(data_observacao)
+            FROM observacoes_cliente oc3
+            WHERE oc3.id_cliente = c.id_cliente
+              AND oc3.tags LIKE '%SEM_RETORNO%'
+        ) as ultimo_sem_retorno_data,
+        (
+            SELECT conteudo
+            FROM observacoes_cliente oc4
+            WHERE oc4.id_cliente = c.id_cliente
+              AND oc4.tags LIKE '%SEM_RETORNO%'
+            ORDER BY oc4.data_observacao DESC LIMIT 1
+        ) as ultima_mensagem_sem_retorno,
+        (
+            SELECT MAX(data_observacao)
+            FROM observacoes_cliente oc5
+            WHERE oc5.id_cliente = c.id_cliente
+              AND oc5.tags LIKE '%RETIRADO_SEM_RETORNO%'
+        ) as ultimo_retirado_sem_retorno_data
     FROM clientes c
     LEFT JOIN treinamentos t ON c.id_cliente = t.id_cliente
     WHERE (c.data_fim IS NULL OR c.data_fim = '0000-00-00')
     AND c.id_cliente NOT IN (
         SELECT DISTINCT id_cliente FROM treinamentos WHERE status = 'PENDENTE'
     )
-    GROUP BY c.id_cliente, c.fantasia, c.vendedor, c.data_inicio, c.telefone_ddd
+    GROUP BY c.id_cliente, c.fantasia, c.vendedor, c.data_inicio, c.data_previsao_encerramento, c.telefone_ddd
     HAVING 
         (ulimo_treinamento_data < DATE_SUB(CURDATE(), INTERVAL :dias_inatividade DAY)) OR 
         (ulimo_treinamento_data IS NULL AND c.data_inicio < DATE_SUB(CURDATE(), INTERVAL :dias_inatividade2 DAY))
@@ -52,6 +72,7 @@ $todos_inativos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $lista_para_contatar = [];
 $lista_aguardando_resposta = [];
+$lista_sem_retorno = [];
 
 $hoje_time = time();
 
@@ -72,6 +93,26 @@ foreach ($todos_inativos as $cliente) {
     }
     $cliente['dias_ultimo_contato'] = $dias_ultimo_contato;
 
+    $dias_sem_retorno = null;
+    if (!empty($cliente['ultimo_sem_retorno_data'])) {
+        $dias_sem_retorno = floor(($hoje_time - strtotime($cliente['ultimo_sem_retorno_data'])) / 86400);
+    }
+    $cliente['dias_sem_retorno'] = $dias_sem_retorno;
+
+    $sem_retorno_ativo = false;
+    if (!empty($cliente['ultimo_sem_retorno_data'])) {
+        $timestamp_sem_retorno = strtotime($cliente['ultimo_sem_retorno_data']);
+        $timestamp_ultimo_contato = !empty($cliente['ultimo_contato_data']) ? strtotime($cliente['ultimo_contato_data']) : 0;
+        $timestamp_retirado_sem_retorno = !empty($cliente['ultimo_retirado_sem_retorno_data']) ? strtotime($cliente['ultimo_retirado_sem_retorno_data']) : 0;
+        $sem_retorno_ativo = $timestamp_sem_retorno >= max($timestamp_ultimo_contato, $timestamp_retirado_sem_retorno);
+    }
+    $cliente['sem_retorno_ativo'] = $sem_retorno_ativo;
+
+    if ($sem_retorno_ativo) {
+        $lista_sem_retorno[] = $cliente;
+        continue;
+    }
+
     // Regra de separação das abas
     if ($dias_ultimo_contato !== null && $dias_ultimo_contato <= $dias_aguardando_retorno) {
         $lista_aguardando_resposta[] = $cliente;
@@ -83,6 +124,10 @@ foreach ($todos_inativos as $cliente) {
 // Ordenar a aba "Aguardando Resposta" do maior dia para o menor (dias_ultimo_contato desc)
 usort($lista_aguardando_resposta, function($a, $b) {
     return $b['dias_ultimo_contato'] <=> $a['dias_ultimo_contato'];
+});
+
+usort($lista_sem_retorno, function($a, $b) {
+    return ($b['dias_sem_retorno'] ?? 0) <=> ($a['dias_sem_retorno'] ?? 0);
 });
 
 include 'header.php';
@@ -224,6 +269,14 @@ body {
     background: var(--warning) !important;
 }
 
+.nav-item-secondary .nav-link.active {
+    color: #64748b !important;
+}
+
+.nav-item-secondary .nav-link.active::after {
+    background: #64748b !important;
+}
+
 
 /* List Cards */
 .client-card-premium {
@@ -250,6 +303,11 @@ body {
 
 .client-card-warning {
     border-left: 4px solid var(--warning);
+}
+
+.client-card-no-response {
+    border-left: 4px solid #64748b;
+    background: rgba(100, 116, 139, 0.06);
 }
 
 .client-card-critical {
@@ -296,6 +354,18 @@ body {
 .btn-contact:hover {
     background: var(--primary);
     color: white;
+}
+
+.btn-sem-retorno {
+    background: rgba(100, 116, 139, 0.12);
+    color: #475569;
+    border: 1px solid rgba(100, 116, 139, 0.25);
+}
+
+.btn-sem-retorno:hover {
+    background: #475569;
+    color: #fff;
+    border-color: #475569;
 }
 
 /* Modals */
@@ -347,6 +417,10 @@ body {
                     <div class="h3 fw-900 mb-0"><?= count($lista_aguardando_resposta) ?></div>
                     <div class="small fw-bold text-uppercase" style="letter-spacing: 1px;">Aguardando</div>
                 </div>
+                <div class="px-4 py-3 rounded-4 border text-center" style="background: rgba(100, 116, 139, 0.10); color: #475569; border-color: rgba(100, 116, 139, 0.25) !important;">
+                    <div class="h3 fw-900 mb-0"><?= count($lista_sem_retorno) ?></div>
+                    <div class="small fw-bold text-uppercase" style="letter-spacing: 1px;">Sem Retorno</div>
+                </div>
             </div>
         </div>
     </div>
@@ -376,6 +450,12 @@ body {
             <button class="nav-link" id="aguardando-tab" data-bs-toggle="tab" data-bs-target="#aguardando" type="button" role="tab" aria-selected="false" style="font-size: 1.1rem;">
                 <i class="bi bi-hourglass-split me-2"></i> Aguardando Resposta
                 <span class="badge bg-warning text-dark rounded-pill ms-2"><?= count($lista_aguardando_resposta) ?></span>
+            </button>
+        </li>
+        <li class="nav-item nav-item-secondary" role="presentation">
+            <button class="nav-link" id="sem-retorno-tab" data-bs-toggle="tab" data-bs-target="#sem-retorno" type="button" role="tab" aria-selected="false" style="font-size: 1.1rem;">
+                <i class="bi bi-person-x-fill me-2"></i> Sem Retorno
+                <span class="badge rounded-pill ms-2" style="background: #64748b; color: #fff;"><?= count($lista_sem_retorno) ?></span>
             </button>
         </li>
     </ul>
@@ -424,7 +504,11 @@ body {
                                             <span class="mx-2">•</span>
                                             <i class="bi bi-telephone me-1"></i> Tel: <span class="fw-bold"><?= htmlspecialchars($c['telefone_ddd'] ?: 'Não informado') ?></span>
                                         </div>
-
+                                        <?php if (!empty($c['data_previsao_encerramento']) && $c['data_previsao_encerramento'] !== '0000-00-00'): ?>
+                                            <div class="small text-warning fw-bold mb-3">
+                                                <i class="bi bi-calendar2-check me-1"></i> Previsao: <?= date('d/m/Y', strtotime($c['data_previsao_encerramento'])) ?>
+                                            </div>
+                                        <?php endif; ?>
                                         <?php if ($c['ultima_mensagem']): ?>
                                             <div class="message-box mt-3">
                                                 <div class="fw-bold text-main mb-1 d-flex justify-content-between align-items-center">
@@ -443,6 +527,12 @@ body {
                                             onclick="abrirModalContato(<?= $c['id_cliente'] ?>, '<?= htmlspecialchars(addslashes($c['fantasia'])) ?>')">
                                         <i class="bi bi-whatsapp"></i> Registrar Contato
                                     </button>
+                                    <form method="POST" action="marcar_sem_retorno_radar.php" class="w-100" onsubmit="return confirm('Marcar este cliente como sem retorno para repasse ao responsavel?');">
+                                        <input type="hidden" name="id_cliente" value="<?= (int)$c['id_cliente'] ?>">
+                                        <button type="submit" class="btn btn-action-premium btn-sem-retorno w-100 justify-content-center">
+                                            <i class="bi bi-person-x"></i> Marcar Sem Retorno
+                                        </button>
+                                    </form>
                                     <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-action-premium btn-ficha w-100 justify-content-center">
                                         <i class="bi bi-person-lines-fill"></i> Ficha Completa
                                     </a>
@@ -490,6 +580,12 @@ body {
                                             <i class="bi bi-telephone me-1"></i> Tel: <span class="fw-bold"><?= htmlspecialchars($c['telefone_ddd'] ?: 'Não informado') ?></span>
                                         </div>
 
+                                        <?php if (!empty($c['data_previsao_encerramento']) && $c['data_previsao_encerramento'] !== '0000-00-00'): ?>
+                                            <div class="small text-warning fw-bold mb-2">
+                                                <i class="bi bi-calendar2-check me-1"></i> Previsao: <?= date('d/m/Y', strtotime($c['data_previsao_encerramento'])) ?>
+                                            </div>
+                                        <?php endif; ?>
+
                                         <?php if ($c['ultima_mensagem']): ?>
                                             <div class="message-box border-warning" style="border-left-width: 3px;">
                                                 <div class="fw-bold text-warning mb-1 d-flex justify-content-between">
@@ -508,6 +604,96 @@ body {
                                             onclick="abrirModalContato(<?= $c['id_cliente'] ?>, '<?= htmlspecialchars(addslashes($c['fantasia'])) ?>')">
                                         <i class="bi bi-reply"></i> Novo Registro
                                     </button>
+                                    <form method="POST" action="marcar_sem_retorno_radar.php" class="w-100" onsubmit="return confirm('Marcar este cliente como sem retorno para repasse ao responsavel?');">
+                                        <input type="hidden" name="id_cliente" value="<?= (int)$c['id_cliente'] ?>">
+                                        <button type="submit" class="btn btn-action-premium btn-sem-retorno w-100 justify-content-center">
+                                            <i class="bi bi-person-x"></i> Marcar Sem Retorno
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Tab: Sem Retorno -->
+        <div class="tab-pane fade" id="sem-retorno" role="tabpanel" aria-labelledby="sem-retorno-tab">
+            <?php if (empty($lista_sem_retorno)): ?>
+                 <div class="text-center py-5 mt-5">
+                    <div class="d-inline-flex p-4 rounded-circle mb-4" style="background: rgba(100, 116, 139, 0.10); color: #64748b;">
+                        <i class="bi bi-person-check display-3"></i>
+                    </div>
+                    <h3 class="fw-900">Nenhum cliente marcado como sem retorno.</h3>
+                </div>
+            <?php else: ?>
+                <div class="row">
+                    <?php foreach ($lista_sem_retorno as $c): ?>
+                        <div class="col-12">
+                            <div class="client-card-premium client-card-no-response">
+                                <div class="d-flex gap-4 flex-grow-1">
+                                    <div class="text-center" style="min-width: 90px;">
+                                        <div class="h3 fw-900 mb-0" style="color: #475569;"><?= (int)($c['dias_sem_retorno'] ?? 0) ?></div>
+                                        <div class="small fw-bold text-muted text-uppercase mt-1">dias</div>
+                                        <div class="small text-muted" style="font-size: 0.7rem;">sem retorno</div>
+                                    </div>
+
+                                    <div class="vr bg-secondary opacity-25"></div>
+
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center gap-3 mb-1">
+                                            <h5 class="fw-900 mb-0"><?= htmlspecialchars($c['fantasia']) ?></h5>
+                                            <span class="badge rounded-pill" style="background: rgba(100, 116, 139, 0.14); color: #475569;">Escalar ao responsavel</span>
+                                        </div>
+
+                                        <div class="text-muted small mb-2">
+                                            <i class="bi bi-person-badge me-1"></i> Resp: <span class="fw-bold"><?= htmlspecialchars($c['vendedor'] ?: 'Nao definido') ?></span>
+                                            <span class="mx-2">•</span>
+                                            <i class="bi bi-calendar2-x me-1"></i> Ultimo treino: <?= $c['ulimo_treinamento_data'] ? date('d/m/Y', strtotime($c['ulimo_treinamento_data'])) : 'Nunca realizou' ?>
+                                            <?php if ($c['ultimo_contato_data']): ?>
+                                                <span class="mx-2">•</span>
+                                                <i class="bi bi-chat-left-dots me-1"></i> Ultimo contato: <?= date('d/m/Y H:i', strtotime($c['ultimo_contato_data'])) ?>
+                                            <?php endif; ?>
+                                        </div>
+
+                                        <div class="text-muted small mb-2">
+                                            <i class="bi bi-telephone me-1"></i> Tel: <span class="fw-bold"><?= htmlspecialchars($c['telefone_ddd'] ?: 'Nao informado') ?></span>
+                                            <span class="mx-2">•</span>
+                                            Total de dias sem treinamento: <span class="fw-bold"><?= $c['dias_sem_treinamento'] ?> dias</span>
+                                        </div>
+
+                                        <?php if (!empty($c['data_previsao_encerramento']) && $c['data_previsao_encerramento'] !== '0000-00-00'): ?>
+                                            <div class="small text-warning fw-bold mb-2">
+                                                <i class="bi bi-calendar2-check me-1"></i> Previsao: <?= date('d/m/Y', strtotime($c['data_previsao_encerramento'])) ?>
+                                            </div>
+                                        <?php endif; ?>
+
+                                        <?php if (!empty($c['ultima_mensagem_sem_retorno'])): ?>
+                                            <div class="message-box" style="border-left-color: #64748b;">
+                                                <div class="fw-bold mb-1 d-flex justify-content-between align-items-center" style="color: #475569;">
+                                                    <span><i class="bi bi-flag me-1"></i> Marcacao de sem retorno</span>
+                                                    <span class="small opacity-75"><?= date('d/m/Y H:i', strtotime($c['ultimo_sem_retorno_data'])) ?></span>
+                                                </div>
+                                                <?= nl2br(htmlspecialchars($c['ultima_mensagem_sem_retorno'])) ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+
+                                <div class="d-flex flex-column justify-content-center align-items-end gap-2 ps-4" style="min-width: 220px;">
+                                    <button class="btn btn-action-premium btn-contact w-100 justify-content-center" onclick="abrirModalContato(<?= $c['id_cliente'] ?>, '<?= htmlspecialchars(addslashes($c['fantasia'])) ?>')">
+                                        <i class="bi bi-arrow-repeat"></i> Novo Contato
+                                    </button>
+                                    <form method="POST" action="retirar_sem_retorno_radar.php" class="w-100" onsubmit="return confirm('Retirar este cliente da lista de sem retorno?');">
+                                        <input type="hidden" name="id_cliente" value="<?= (int)$c['id_cliente'] ?>">
+                                        <button type="submit" class="btn btn-action-premium btn-warning w-100 justify-content-center text-dark">
+                                            <i class="bi bi-person-check"></i> Retirar de Sem Retorno
+                                        </button>
+                                    </form>
+                                    <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-action-premium btn-ficha w-100 justify-content-center">
+                                        <i class="bi bi-person-lines-fill"></i> Ficha Completa
+                                    </a>
                                 </div>
                             </div>
                         </div>
@@ -534,7 +720,7 @@ body {
             
             <div class="modal-body p-4 pt-2">
                 <div class="alert alert-info border-0 rounded-4 small mb-4 bg-primary bg-opacity-10 text-primary">
-                    <i class="bi bi-info-circle-fill me-2"></i> Ao registrar um contato, este cliente será movido para a aba "Aguardando Resposta" por 5 dias.
+                    <i class="bi bi-info-circle-fill me-2"></i> Ao registrar um contato, este cliente será movido para a aba "Aguardando Resposta" por <?= (int)$dias_aguardando_retorno ?> dias.
                 </div>
 
                 <div class="mb-3">
