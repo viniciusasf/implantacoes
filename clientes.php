@@ -464,6 +464,9 @@ body, html {
 
 .btn-action.delete { color: #ef4444; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); }
 .btn-action.delete:hover { background: #ef4444; color: white; }
+.btn-action.efetivo { color: #0ea5e9; background: rgba(14, 165, 233, 0.15); border-color: rgba(14, 165, 233, 0.3); }
+.btn-action.efetivo:hover { background: #0ea5e9; color: white; }
+
 
 .btn-action.agendar { color: #7c3aed; background: rgba(124, 58, 237, 0.15); border-color: rgba(124, 58, 237, 0.3); }
 .btn-action.agendar:hover { background: #7c3aed; color: white; }
@@ -720,6 +723,9 @@ body, html {
                                 <?php 
                                     $link_chamados = '';
                                     if (!empty($c['chamados'])) {
+                            <a href="treinamento_efetivo.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action efetivo" title="Treinamento Efetivo">
+                                <i class="bi bi-clipboard-data"></i>
+                            </a>
                                         $link_chamados = $c['chamados'];
                                     } elseif (!empty($c['anexo'])) {
                                         $base = (strpos($c['anexo'], 'http') === 0) ? $c['anexo'] : 'https://' . $c['anexo'];
@@ -852,6 +858,9 @@ body, html {
                                                 $link_chamados_t = '';
                                                 if (!empty($c['chamados'])) {
                                                     $link_chamados_t = $c['chamados'];
+                                            <a href="treinamento_efetivo.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action efetivo" title="Treinamento Efetivo">
+                                                <i class="bi bi-clipboard-data"></i>
+                                            </a>
                                                 } elseif (!empty($c['anexo'])) {
                                                     $base_t = (strpos($c['anexo'], 'http') === 0) ? $c['anexo'] : 'https://' . $c['anexo'];
                                                     $link_chamados_t = rtrim($base_t, '?') . '?tab=chamados-abertos';

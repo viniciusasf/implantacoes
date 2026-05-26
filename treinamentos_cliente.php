@@ -1,6 +1,120 @@
 <?php
 require_once 'config.php';
 
+function tabelaTreinamentoEfetivoExiste(PDO $pdo)
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    try {
+        $stmt = $pdo->query("SHOW TABLES LIKE 'treinamento_efetivo_cliente'");
+        $cache = (bool) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        $cache = false;
+    }
+
+    return $cache;
+}
+
+function obterResumoTreinamentoEfetivoCliente(PDO $pdo, $idCliente)
+{
+    $resumo = [
+        'tem_avaliacao' => false,
+        'score_geral' => 0,
+        'processos_prontos' => 0,
+        'processos_total' => 6,
+        'status_texto' => 'Nao avaliado',
+        'status_cor' => 'text-muted',
+        'ultima_atualizacao' => null,
+    ];
+
+    if (!tabelaTreinamentoEfetivoExiste($pdo)) {
+        return $resumo;
+    }
+
+    $processos = [
+        'produtos' => ['meta' => 20],
+        'clientes' => ['meta' => 10],
+        'orcamento' => ['meta' => 3],
+        'pdv' => ['meta' => 5],
+        'boleto' => ['meta' => 2],
+        'nota_fiscal' => ['meta' => 2],
+    ];
+
+    try {
+        $stmt = $pdo->prepare("SELECT processo, nivel, meta_minima, uso_real, operacoes_suporte, erros_retrabalho, updated_at
+                               FROM treinamento_efetivo_cliente
+                               WHERE id_cliente = ?");
+        $stmt->execute([$idCliente]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return $resumo;
+    }
+
+    if (empty($rows)) {
+        return $resumo;
+    }
+
+    $resumo['tem_avaliacao'] = true;
+
+    foreach ($rows as $row) {
+        $slug = (string) ($row['processo'] ?? '');
+        if (!isset($processos[$slug])) {
+            continue;
+        }
+
+        $processos[$slug]['nivel'] = max(0, min(4, (int) ($row['nivel'] ?? 0)));
+        $processos[$slug]['meta'] = max(0, (int) ($row['meta_minima'] ?? $processos[$slug]['meta']));
+        $processos[$slug]['uso'] = max(0, (int) ($row['uso_real'] ?? 0));
+        $processos[$slug]['suporte'] = max(0, (int) ($row['operacoes_suporte'] ?? 0));
+        $processos[$slug]['erros'] = max(0, (int) ($row['erros_retrabalho'] ?? 0));
+        $processos[$slug]['updated_at'] = $row['updated_at'] ?? null;
+
+        if (!empty($processos[$slug]['updated_at']) && ($resumo['ultima_atualizacao'] === null || strtotime($processos[$slug]['updated_at']) > strtotime($resumo['ultima_atualizacao']))) {
+            $resumo['ultima_atualizacao'] = $processos[$slug]['updated_at'];
+        }
+    }
+
+    $scores = [];
+    $prontos = [];
+    foreach ($processos as $slug => $dados) {
+        $nivel = (int) ($dados['nivel'] ?? 0);
+        $meta = max(0, (int) ($dados['meta'] ?? 0));
+        $uso = max(0, (int) ($dados['uso'] ?? 0));
+        $suporte = min($uso, max(0, (int) ($dados['suporte'] ?? 0)));
+        $erros = min($uso, max(0, (int) ($dados['erros'] ?? 0)));
+
+        $nivelScore = ($nivel / 4) * 100;
+        $usoScore = $meta > 0 ? min(100, ($uso / $meta) * 100) : 100;
+        $autonomia = $uso > 0 ? max(0, min(100, (($uso - $suporte) / $uso) * 100)) : 0;
+        $qualidade = $uso > 0 ? max(0, min(100, (($uso - $erros) / $uso) * 100)) : 0;
+        $score = ($nivelScore * 0.4) + ($usoScore * 0.2) + ($autonomia * 0.2) + ($qualidade * 0.2);
+        $pronto = $nivel >= 3 && $uso >= $meta && $autonomia >= 80 && $qualidade >= 85;
+
+        $scores[] = $score;
+        $prontos[$slug] = $pronto;
+    }
+
+    $resumo['score_geral'] = !empty($scores) ? (int) round(array_sum($scores) / count($scores)) : 0;
+    $resumo['processos_prontos'] = count(array_filter($prontos));
+
+    $coreReady = !empty($prontos['produtos']) && !empty($prontos['clientes']) && !empty($prontos['boleto']) && !empty($prontos['nota_fiscal']);
+    $commercialReady = !empty($prontos['orcamento']) || !empty($prontos['pdv']);
+    $globalReady = $coreReady && $commercialReady;
+
+    if ($globalReady) {
+        $resumo['status_texto'] = 'Pronto para encerrar';
+        $resumo['status_cor'] = 'text-success';
+    } elseif ($resumo['score_geral'] > 0) {
+        $resumo['status_texto'] = 'Em evolucao';
+        $resumo['status_cor'] = 'text-primary';
+    }
+
+    return $resumo;
+}
+
 $id_cliente = isset($_GET['id_cliente']) ? $_GET['id_cliente'] : null;
 
 
@@ -127,6 +241,8 @@ if ($total_treinamentos > 0) {
     }
     $ultimo_treinamento = $treinamentos[0]['data_treinamento'] ?? null;
 }
+
+$resumo_treinamento_efetivo = obterResumoTreinamentoEfetivoCliente($pdo, (int) $id_cliente);
 
 include 'header.php';
 ?>
@@ -398,6 +514,9 @@ body {
                     </div>
                 </div>
                 <div class="d-flex gap-2 flex-wrap">
+                    <a href="treinamento_efetivo.php?id_cliente=<?= (int) $id_cliente ?>" class="btn btn-outline-primary btn-premium border-0">
+                        <i class="bi bi-clipboard-data"></i> Treinamento Efetivo
+                    </a>
                     <button class="btn-premium btn-primary-premium" data-bs-toggle="modal" data-bs-target="#modalTreinamento">
                         <i class="bi bi-plus-lg"></i> Novo Treinamento
                     </button>
@@ -430,6 +549,23 @@ body {
             <div class="h2 fw-800 mb-1 text-warning"><?= $treinamentos_pendentes ?></div>
             <div class="text-muted small fw-bold text-uppercase letter-spacing-1">Aguardando</div>
         </div>
+        <a href="treinamento_efetivo.php?id_cliente=<?= (int) $id_cliente ?>" class="stat-card-premium text-decoration-none">
+            <div class="stat-icon-circle bg-info bg-opacity-10 text-info">
+                <i class="bi bi-clipboard-data"></i>
+            </div>
+            <div class="h2 fw-800 mb-1 <?= htmlspecialchars($resumo_treinamento_efetivo['status_cor'], ENT_QUOTES, 'UTF-8') ?>">
+                <?= $resumo_treinamento_efetivo['tem_avaliacao'] ? $resumo_treinamento_efetivo['score_geral'] . '%' : '--' ?>
+            </div>
+            <div class="text-muted small fw-bold text-uppercase letter-spacing-1">Treinamento Efetivo</div>
+            <div class="small mt-2 <?= htmlspecialchars($resumo_treinamento_efetivo['status_cor'], ENT_QUOTES, 'UTF-8') ?>">
+                <?= htmlspecialchars($resumo_treinamento_efetivo['status_texto'], ENT_QUOTES, 'UTF-8') ?>
+                <?php if ($resumo_treinamento_efetivo['tem_avaliacao']): ?>
+                    <span class="d-block text-muted mt-1"><?= (int) $resumo_treinamento_efetivo['processos_prontos'] ?>/<?= (int) $resumo_treinamento_efetivo['processos_total'] ?> processos prontos</span>
+                <?php else: ?>
+                    <span class="d-block text-muted mt-1">Clique para iniciar a avaliacao</span>
+                <?php endif; ?>
+            </div>
+        </a>
 
     </div>
 
