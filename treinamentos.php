@@ -744,6 +744,57 @@ if (isset($_GET['exportar_xls'])) {
     }
 }
 
+// Lógica para Reabrir Treinamento como Pendente (pendencias_treinamentos)
+if (isset($_GET['reabrir_pendente'])) {
+    $id = (int) $_GET['reabrir_pendente'];
+    if ($id > 0) {
+        try {
+            $pdo->beginTransaction();
+
+            // Voltar status do treinamento para Pendente
+            $stmtReabrir = $pdo->prepare("UPDATE treinamentos SET status = 'Pendente' WHERE id_treinamento = ?");
+            $stmtReabrir->execute([$id]);
+
+            // Obter id_cliente e observações do treinamento
+            $stmtInfo = $pdo->prepare("SELECT id_cliente, observacoes FROM treinamentos WHERE id_treinamento = ?");
+            $stmtInfo->execute([$id]);
+            $infoTreino = $stmtInfo->fetch(PDO::FETCH_ASSOC);
+            $idClienteReabrir = (int) ($infoTreino['id_cliente'] ?? 0);
+            $obsReabrir = trim((string) ($infoTreino['observacoes'] ?? ''));
+
+            // Criar/reabrir pendência na tabela pendencias_treinamentos
+            garantirTabelaPendenciasTreinamentos($pdo);
+            $stmtPend = $pdo->prepare(
+                "INSERT INTO pendencias_treinamentos
+                    (id_treinamento, id_cliente, status_pendencia, observacao_finalizacao, data_criacao, data_atualizacao)
+                 VALUES (?, ?, 'ABERTA', ?, NOW(), NOW())
+                 ON DUPLICATE KEY UPDATE
+                    id_cliente = VALUES(id_cliente),
+                    status_pendencia = 'ABERTA',
+                    observacao_finalizacao = VALUES(observacao_finalizacao),
+                    observacao_conclusao = NULL,
+                    data_atualizacao = NOW(),
+                    data_conclusao = NULL"
+            );
+            $stmtPend->execute([
+                $id,
+                $idClienteReabrir > 0 ? $idClienteReabrir : null,
+                $obsReabrir !== '' ? $obsReabrir : 'Treinamento reaberto como pendente.'
+            ]);
+
+            $pdo->commit();
+            header("Location: treinamentos.php?mostrar_todos=1&msg=" . urlencode("Treinamento #$id reaberto como pendente com sucesso.") . "&tipo=success");
+            exit;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            header("Location: treinamentos.php?mostrar_todos=1&msg=" . urlencode("Erro ao reabrir treinamento: " . $e->getMessage()) . "&tipo=danger");
+            exit;
+        }
+    }
+}
+
 // Lógica para Deletar
 if (isset($_GET['delete'])) {
     $id = (int) $_GET['delete'];
@@ -1122,7 +1173,7 @@ $view_mode = $_GET['view'] ?? 'list';
 
 // Ordenação
 $ordenacao = isset($_GET['ordenacao']) ? $_GET['ordenacao'] : 'data_treinamento';
-$direcao = isset($_GET['direcao']) ? $_GET['direcao'] : 'asc';
+$direcao = isset($_GET['direcao']) ? $_GET['direcao'] : 'desc';
 
 // Validação da ordenação para segurança
 $colunas_permitidas = ['cliente_nome', 'data_treinamento', 'tema', 'status'];
@@ -1718,6 +1769,17 @@ include 'header.php';
                                                     data-bs-toggle="tooltip">
                                                     <i class="bi bi-check-lg"></i>
                                                 </button>
+                                            <?php endif; ?>
+
+                                            <!-- 3b. REABRIR COMO PENDENTE (só para resolvidos) -->
+                                            <?php if (strtoupper($t['status']) == 'RESOLVIDO'): ?>
+                                                <a href="?reabrir_pendente=<?= $id_tr ?>&mostrar_todos=1"
+                                                    class="btn btn-sm btn-outline-warning"
+                                                    data-bs-toggle="tooltip"
+                                                    data-bs-title="Reabrir como Pendente"
+                                                    onclick="return confirm('Deseja reabrir o treinamento #<?= $id_tr ?> como pendente?')">
+                                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                                </a>
                                             <?php endif; ?>
 
                                             <!-- 4. EXCLUIR -->
