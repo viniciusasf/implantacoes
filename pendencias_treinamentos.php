@@ -93,6 +93,7 @@ include 'header.php';
     --border-color: #2b2e35;
     --text-main: #f1f5f9;
     --text-muted: #cbd5e1;
+    --primary-light: rgba(67, 97, 238, 0.15);
 }
 
 body, html {
@@ -114,62 +115,48 @@ body, html {
     -webkit-text-fill-color: transparent;
 }
 
-/* Controls */
-.control-bar {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 1rem;
-    margin-bottom: 2rem;
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-    flex-wrap: wrap;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.02);
-}
+    /* Table Style */
+    .table-premium {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        overflow: hidden;
+        margin-bottom: 3rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    }
 
-.search-input-modern {
-    background: var(--bg-body) !important;
-    border: 1px solid var(--border-color) !important;
-    border-radius: 10px !important;
-    color: var(--text-main) !important;
-    padding-left: 2.5rem !important;
-    height: 42px;
-}
+    .table-premium table {
+        border-collapse: separate;
+        border-spacing: 0;
+        width: 100%;
+    }
 
-/* Dashboard Section (Table wrapper) */
-.dashboard-section {
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.02);
-    overflow: hidden;
-}
+    .table-premium thead th {
+        background: var(--bg-body);
+        font-size: 0.75rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-muted) !important;
+        padding: 1rem 1rem;
+        border-bottom: 2px solid var(--border-color) !important;
+        border-top: none;
+    }
 
-/* Table overrides */
-.table-premium th {
-    background: var(--bg-body);
-    color: var(--text-muted);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding: 1rem;
-    border-bottom: 1px solid var(--border-color);
-    border-top: none;
-}
-.table-premium td {
-    padding: 1.25rem 1rem;
-    border-bottom: 1px solid var(--border-color);
-    font-size: 0.9rem;
-    vertical-align: middle;
-    color: var(--text-main);
-}
-.table-premium tbody tr {
-    transition: background 0.15s ease;
-}
-.table-premium tbody tr:hover {
-    background: rgba(255,255,255,0.03);
-}
+    .table-premium tbody tr {
+        transition: all 0.2s ease;
+    }
+
+    .table-premium tbody tr:hover {
+        background-color: var(--primary-light) !important;
+    }
+
+    .table-premium tbody td {
+        padding: 1rem 1rem;
+        border-bottom: 1px solid var(--border-color) !important;
+        font-size: 0.9rem;
+        color: var(--text-main);
+        vertical-align: middle;
+    }
 
 /* Badges */
 .badge-premium {
@@ -262,20 +249,12 @@ body, html {
         </div>
     <?php endif; ?>
 
-    <!-- Control Bar -->
-    <div class="control-bar gsap-reveal">
-        <div class="search-container position-relative flex-grow-1" style="max-width: 500px;">
-            <i class="bi bi-search position-absolute text-muted" style="left: 1.2rem; top: 50%; transform: translateY(-50%);"></i>
-            <form method="GET" action="pendencias_treinamentos.php" id="searchForm">
-                <input type="text" name="busca" class="form-control search-input-modern w-100" 
-                       placeholder="Buscar por cliente ou tema..." value="<?= htmlspecialchars($busca) ?>">
-            </form>
+    <div class="table-premium gsap-reveal">
+        <div class="p-4 border-bottom d-flex justify-content-between align-items-center" style="background: var(--bg-card);">
+            <h5 class="fw-bold mb-0">Listagem de Pendências</h5>
         </div>
-    </div>
-
-    <div class="dashboard-section p-0 mb-5 gsap-reveal">
-        <div class="table-responsive" style="max-height: 700px; overflow-y: auto;">
-            <table class="table table-premium mb-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
                 <thead>
                     <tr>
                         <th class="ps-4">Treinamento</th>

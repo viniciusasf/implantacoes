@@ -744,16 +744,12 @@ if (isset($_GET['exportar_xls'])) {
     }
 }
 
-// Lógica para Reabrir Treinamento como Pendente (pendencias_treinamentos)
-if (isset($_GET['reabrir_pendente'])) {
-    $id = (int) $_GET['reabrir_pendente'];
+// Lógica para Enviar Treinamento para Pendências (pendencias_treinamentos)
+if (isset($_GET['enviar_pendencia'])) {
+    $id = (int) $_GET['enviar_pendencia'];
     if ($id > 0) {
         try {
             $pdo->beginTransaction();
-
-            // Voltar status do treinamento para Pendente
-            $stmtReabrir = $pdo->prepare("UPDATE treinamentos SET status = 'Pendente' WHERE id_treinamento = ?");
-            $stmtReabrir->execute([$id]);
 
             // Obter id_cliente e observações do treinamento
             $stmtInfo = $pdo->prepare("SELECT id_cliente, observacoes FROM treinamentos WHERE id_treinamento = ?");
@@ -779,17 +775,17 @@ if (isset($_GET['reabrir_pendente'])) {
             $stmtPend->execute([
                 $id,
                 $idClienteReabrir > 0 ? $idClienteReabrir : null,
-                $obsReabrir !== '' ? $obsReabrir : 'Treinamento reaberto como pendente.'
+                $obsReabrir !== '' ? $obsReabrir : 'Treinamento enviado para pendências.'
             ]);
 
             $pdo->commit();
-            header("Location: treinamentos.php?mostrar_todos=1&msg=" . urlencode("Treinamento #$id reaberto como pendente com sucesso.") . "&tipo=success");
+            header("Location: treinamentos.php?mostrar_todos=1&msg=" . urlencode("Treinamento #$id enviado para pendências com sucesso.") . "&tipo=success");
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            header("Location: treinamentos.php?mostrar_todos=1&msg=" . urlencode("Erro ao reabrir treinamento: " . $e->getMessage()) . "&tipo=danger");
+            header("Location: treinamentos.php?mostrar_todos=1&msg=" . urlencode("Erro ao enviar treinamento: " . $e->getMessage()) . "&tipo=danger");
             exit;
         }
     }
@@ -1771,14 +1767,14 @@ include 'header.php';
                                                 </button>
                                             <?php endif; ?>
 
-                                            <!-- 3b. REABRIR COMO PENDENTE (só para resolvidos) -->
+                                            <!-- 3b. ENVIAR PARA PENDÊNCIAS (só para resolvidos) -->
                                             <?php if (strtoupper($t['status']) == 'RESOLVIDO'): ?>
-                                                <a href="?reabrir_pendente=<?= $id_tr ?>&mostrar_todos=1"
+                                                <a href="?enviar_pendencia=<?= $id_tr ?>&mostrar_todos=1"
                                                     class="btn btn-sm btn-outline-warning"
                                                     data-bs-toggle="tooltip"
-                                                    data-bs-title="Reabrir como Pendente"
-                                                    onclick="return confirm('Deseja reabrir o treinamento #<?= $id_tr ?> como pendente?')">
-                                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                                    data-bs-title="Enviar para Pendências"
+                                                    onclick="return confirm('Deseja enviar o treinamento #<?= $id_tr ?> para a lista de pendências?')">
+                                                    <i class="bi bi-exclamation-circle"></i>
                                                 </a>
                                             <?php endif; ?>
 
