@@ -1169,7 +1169,7 @@ $view_mode = $_GET['view'] ?? 'list';
 
 // Ordenação
 $ordenacao = isset($_GET['ordenacao']) ? $_GET['ordenacao'] : 'data_treinamento';
-$direcao = isset($_GET['direcao']) ? $_GET['direcao'] : 'desc';
+$direcao = isset($_GET['direcao']) ? $_GET['direcao'] : 'asc';
 
 // Validação da ordenação para segurança
 $colunas_permitidas = ['cliente_nome', 'data_treinamento', 'tema', 'status'];
@@ -1241,6 +1241,24 @@ $clientes_list = $pdo->query("
     FROM clientes 
     ORDER BY fantasia ASC
 ")->fetchAll();
+
+// --- PERFORMANCE DE REALIZAÇÃO POR CLIENTE (Para Taxa Histórica) ---
+$sql_performance_cliente = "
+    SELECT 
+        id_cliente,
+        SUM(CASE WHEN UPPER(status) IN ('REALIZADO', 'RESOLVIDO') AND (treinamento_realizado = 1 OR treinamento_realizado IS NULL) THEN 1 ELSE 0 END) AS realizados,
+        SUM(CASE WHEN UPPER(status) IN ('REALIZADO', 'RESOLVIDO') THEN 1 ELSE 0 END) AS total
+    FROM treinamentos
+    WHERE id_cliente IS NOT NULL
+    GROUP BY id_cliente
+";
+$stmt_perf = $pdo->query($sql_performance_cliente);
+$taxas_clientes = [];
+foreach ($stmt_perf->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $total = (int)$row['total'];
+    $realizados = (int)$row['realizados'];
+    $taxas_clientes[$row['id_cliente']] = $total > 0 ? round(($realizados / $total) * 100, 1) : 0;
+}
 
 
 include 'header.php';
@@ -1529,6 +1547,7 @@ include 'header.php';
                                 </a>
                             </th>
                             <th>Cliente</th>
+                            <th class="col-mini text-center" title="Performance de Realização (Ativos)">Taxa Histórica</th>
                             <th class="col-mini text-center">Cadastro</th>
                             <th class="col-mini text-center">Link Chamados</th>
                             <th class="col-mini">Status</th>
@@ -1611,6 +1630,21 @@ include 'header.php';
                                                     <?= $numLics ?> <i class="bi bi-pc-display"></i>
                                                 </span>
                                             <?php endif; ?>
+                                        </div>
+                                    </td>
+                                    <td class="text-center align-middle">
+                                        <?php
+                                            $id_cliente_atual = $t['id_cliente'];
+                                            $taxa = isset($taxas_clientes[$id_cliente_atual]) ? $taxas_clientes[$id_cliente_atual] : 0;
+                                            $bar_color = 'bg-success';
+                                            if ($taxa < 50) $bar_color = 'bg-danger';
+                                            elseif ($taxa < 80) $bar_color = 'bg-warning';
+                                        ?>
+                                        <div class="d-flex align-items-center justify-content-center gap-2" title="Taxa Histórica: <?= $taxa ?>%">
+                                            <div class="progress" style="width: 50px; height: 8px; border-radius: 4px; background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1);">
+                                                <div class="progress-bar <?= $bar_color ?>" style="width: <?= $taxa ?>%; border-radius: 4px;"></div>
+                                            </div>
+                                            <span class="small fw-bold text-muted"><?= $taxa ?>%</span>
                                         </div>
                                     </td>
                                     <td class="text-center col-mini">

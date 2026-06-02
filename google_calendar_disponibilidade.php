@@ -93,12 +93,58 @@ try {
         return $a['start'] <=> $b['start'];
     });
 
+    // Identificar feriados
+    $holidays = [];
+    try {
+        $calendarList = $service->calendarList->listCalendarList();
+        $holidayCalendarId = null;
+        foreach ($calendarList->getItems() as $cal) {
+            if (strpos(strtolower($cal->getSummary()), 'feriado') !== false) {
+                $holidayCalendarId = $cal->getId();
+                break;
+            }
+        }
+
+        if ($holidayCalendarId) {
+            $events = $service->events->listEvents($holidayCalendarId, [
+                'timeMin' => $windowStart->format(DateTime::RFC3339),
+                'timeMax' => $windowEnd->format(DateTime::RFC3339),
+            ]);
+            foreach ($events->getItems() as $event) {
+                if ($event->getStart() && $event->getStart()->getDate()) {
+                    $holidays[] = $event->getStart()->getDate(); // Y-m-d
+                } else if ($event->getStart() && $event->getStart()->getDateTime()) {
+                    $dt = new DateTime($event->getStart()->getDateTime());
+                    $holidays[] = $dt->format('Y-m-d');
+                }
+            }
+        }
+
+        // Também verificar eventos de dia inteiro no calendário principal que contenham "feriado" no título
+        $primaryEvents = $service->events->listEvents('primary', [
+            'timeMin' => $windowStart->format(DateTime::RFC3339),
+            'timeMax' => $windowEnd->format(DateTime::RFC3339),
+        ]);
+        foreach ($primaryEvents->getItems() as $event) {
+            if ($event->getStart() && $event->getStart()->getDate()) { // Evento de dia inteiro
+                if (strpos(strtolower((string)$event->getSummary()), 'feriado') !== false) {
+                    $holidays[] = $event->getStart()->getDate();
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        // Ignorar erros ao buscar feriados para não quebrar a funcionalidade principal
+    }
+
     $diasDisponiveis = [];
     for ($offset = 0; $offset <= $dias; $offset++) {
         $dia = (clone $agora)->modify('+' . $offset . ' days');
-        // Regra comercial: apenas segunda a sexta, das 08:30 às 17:30.
+        $diaDataStr = $dia->format('Y-m-d');
+        
         $diaSemana = (int)$dia->format('N');
-        if ($diaSemana > 5) {
+        
+        // Se for fim de semana OU for feriado
+        if ($diaSemana > 5 || in_array($diaDataStr, $holidays)) {
             $diasDisponiveis[] = [
                 'data' => $dia->format('Y-m-d'),
                 'data_label' => $dia->format('d/m') . ' ' . ($diasSemana[$dia->format('N')] ?? ''),

@@ -495,15 +495,6 @@ try {
                     </a>
                 </li>
 
-                <li class="<?= $current_page == 'tarefas.php' ? 'active' : '' ?>">
-                    <a href="tarefas.php">
-                        <i class="bi bi-list-task"></i> <span>Tarefas</span>
-                        <?php if ($total_tarefas > 0): ?>
-                            <span class="badge-notify text-white ms-auto" title="Tarefas Pendentes"><?= $total_tarefas ?></span>
-                        <?php endif; ?>
-                    </a>
-                </li>
-
                 <li class="<?= $current_page == 'radar_emergencia.php' ? 'active' : '' ?>">
                     <a href="radar_emergencia.php">
                         <i class="bi bi-radar"></i> <span style="font-weight: 700;">Radar de Emergência</span>
