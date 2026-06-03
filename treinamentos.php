@@ -1785,6 +1785,12 @@ include 'header.php';
                                             $msg_wp .= "\n📌 *Lembrete importante:* no momento do treinamento, tenha o *TeamViewer* ou *AnyDesk* instalado e pronto para uso.\n\nQualquer dúvida, é só me chamar. Até lá! 🚀";
                                             $msg_wp_attr = htmlspecialchars($msg_wp, ENT_QUOTES, 'UTF-8');
                                             ?>
+                                            <?php if (!empty($link_google_meet)): ?>
+                                                <a href="<?= htmlspecialchars($link_google_meet) ?>" target="_blank" class="btn btn-sm btn-success" data-bs-toggle="tooltip" data-bs-title="Google Meet">
+                                                    <i class="bi bi-camera-video"></i> Meet
+                                                </a>
+                                            <?php endif; ?>
+
                                             <button class="btn btn-sm btn-outline-success copy-whatsapp-message"
                                                 data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp"
                                                 data-message="<?= $msg_wp_attr ?>">
