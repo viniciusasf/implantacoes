@@ -74,7 +74,7 @@ if ($busca !== '') {
     $params = [$likeBusca, $likeBusca, (int)$busca];
 }
 
-$sqlPendencias .= " ORDER BY t.data_treinamento_encerrado DESC, p.data_criacao DESC";
+$sqlPendencias .= " ORDER BY c.fantasia ASC, t.data_treinamento_encerrado DESC, p.data_criacao DESC";
 
 $stmt = $pdo->prepare($sqlPendencias);
 $stmt->execute($params);
@@ -234,12 +234,6 @@ body, html {
             <h2 class="fw-800 mb-0">Gestão de <span class="title-accent">Pendências</span></h2>
             <p class="text-muted small mb-0">Treinamentos encerrados com atividades pendentes ou chamados vinculados.</p>
         </div>
-        <div class="d-flex align-items-center gap-2">
-            <span class="badge bg-body border text-muted px-3 py-2 rounded-3 me-2">Total: <?= $total_pendencias ?></span>
-            <a href="treinamentos.php" class="btn btn-outline-secondary px-4 fw-bold" style="border-radius: 10px; height: 42px; display: inline-flex; align-items: center;">
-                <i class="bi bi-calendar-check me-2"></i> Treinamentos
-            </a>
-        </div>
     </div>
 
     <!-- Mensagens -->
@@ -259,8 +253,6 @@ body, html {
                     <tr>
                         <th class="ps-4">Treinamento</th>
                         <th>Cliente</th>
-                        <th>Data Encerramento</th>
-                        <th>Status</th>
                         <th>Observação (Origem)</th>
                         <th class="text-center">Chamados</th>
                         <th class="text-end pe-4">Ação</th>
@@ -269,7 +261,7 @@ body, html {
                 <tbody>
                     <?php if (empty($pendencias)): ?>
                         <tr>
-                            <td colspan="7" class="text-center py-5">
+                            <td colspan="5" class="text-center py-5">
                                 <i class="bi bi-ui-checks display-1 text-muted opacity-25 mb-4 d-block"></i>
                                 <h4 class="text-muted">Nenhuma pendência em aberto encontrada.</h4>
                             </td>
@@ -285,14 +277,6 @@ body, html {
                                 </td>
                                 <td>
                                     <span class="fw-bold"><i class="bi bi-building text-muted me-2"></i><?= htmlspecialchars((string)($p['cliente_nome'] ?? '---')) ?></span>
-                                </td>
-                                <td>
-                                    <?= !empty($p['data_treinamento_encerrado']) ? date('d/m/Y', strtotime($p['data_treinamento_encerrado'])) . ' <small class="ms-1 opacity-50">' . date('H:i', strtotime($p['data_treinamento_encerrado'])) . '</small>' : '<span class="text-muted">---</span>' ?>
-                                </td>
-                                <td>
-                                    <span class="badge-premium badge-warning-soft">
-                                        <i class="bi bi-clock-history me-1"></i><?= htmlspecialchars((string)$p['status_pendencia']) ?>
-                                    </span>
                                 </td>
                                 <td style="max-width: 280px; font-size: 0.85rem;" class="opacity-75">
                                     <?= nl2br(htmlspecialchars((string)($p['observacao_finalizacao'] ?? '---'))) ?>

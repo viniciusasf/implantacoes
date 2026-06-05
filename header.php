@@ -21,7 +21,7 @@ $total_pendencias = $res_pendencias ? $res_pendencias->rowCount() : 0;
 $total_clientes = $pdo->query("SELECT COUNT(*) FROM clientes WHERE (data_fim IS NULL OR data_fim = '0000-00-00')")->fetchColumn();
 
 // 3. CONTADOR DE CONTATOS TOTAIS
-$total_contatos = $pdo->query("SELECT COUNT(*) FROM contatos")->fetchColumn();
+$total_contatos = $pdo->query("SELECT COUNT(c.id_contato) FROM contatos c JOIN clientes cl ON c.id_cliente = cl.id_cliente WHERE (cl.data_fim IS NULL OR cl.data_fim = '0000-00-00')")->fetchColumn();
 
 // 4. CONTADOR DE AGENDAMENTOS PARA HOJE (Apenas os que ainda estão PENDENTES)
 $total_hoje = $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE DATE(data_treinamento) = CURDATE() AND status = 'PENDENTE'")->fetchColumn();
