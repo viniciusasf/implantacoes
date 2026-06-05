@@ -478,60 +478,10 @@ body {
         </div>
     </div>
 
-    <!-- Terceira Linha: Servidor (Left) e Performance (Right) -->
+    <!-- Terceira Linha: Performance -->
     <div class="row g-4 mb-5">
-        <!-- Análise por Servidor -->
-        <div class="col-lg-7 gsap-reveal" style="transition-delay: 0.2s">
-            <div class="card-glass shadow-sm">
-                <h5 class="fw-900 mb-4 d-flex align-items-center gap-2">
-                    <i class="bi bi-hdd-network text-info"></i>
-                    Análise por Servidor x Clientes
-                </h5>
-                <div class="table-responsive">
-                    <table class="table-premium">
-                        <thead>
-                            <tr>
-                                <th>Servidor</th>
-                                <th class="text-center">Total</th>
-                                <th class="text-center">Ativos</th>
-                                <th class="text-center">Status (Sucesso)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach($servidores as $s): 
-                                $success_rate_s = $s['total_clientes'] > 0 ? round(($s['clientes_concluidos'] / $s['total_clientes']) * 100) : 0;
-                            ?>
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="bg-info bg-opacity-10 text-info fw-bold p-2 px-3 rounded-pill" style="font-size: 0.8rem;">
-                                                <i class="bi bi-server"></i>
-                                            </div>
-                                            <span class="fw-bold"><?= htmlspecialchars($s['servidor']) ?></span>
-                                        </div>
-                                    </td>
-                                    <td class="text-center fw-900"><?= $s['total_clientes'] ?></td>
-                                    <td class="text-center">
-                                        <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3"><?= $s['clientes_ativos'] ?></span>
-                                    </td>
-                                    <td style="min-width: 150px;">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <div class="progress flex-grow-1" style="height: 8px; border-radius: 10px; background: rgba(0,0,0,0.05);">
-                                                <div class="progress-bar bg-info" style="width: <?= $success_rate_s ?>%; border-radius: 10px;"></div>
-                                            </div>
-                                            <span class="small fw-bold"><?= $success_rate_s ?>%</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
         <!-- Performance Vendedores -->
-        <div class="col-lg-5 gsap-reveal" style="transition-delay: 0.3s">
+        <div class="col-lg-12 gsap-reveal" style="transition-delay: 0.3s">
             <div class="card-glass">
                 <h5 class="fw-900 mb-4 d-flex align-items-center gap-2">
                     <i class="bi bi-award text-warning"></i>
@@ -544,12 +494,15 @@ body {
                                 <th>Vendedor</th>
                                 <th class="text-center">Total</th>
                                 <th class="text-center">Ativos</th>
+                                <th class="text-center">Concluídos</th>
+                                <th class="text-center">Cancelados</th>
                                 <th class="text-center">Sucesso</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach(array_slice($vendedores, 0, 5) as $v): 
-                                $success_rate = $v['total_clientes'] > 0 ? round(($v['clientes_concluidos'] / $v['total_clientes']) * 100) : 0;
+                                $finalizados_v = $v['total_clientes'] - $v['clientes_ativos'];
+                                $success_rate = $finalizados_v > 0 ? round(($v['clientes_concluidos'] / $finalizados_v) * 100) : 0;
                             ?>
                                 <tr>
                                     <td>
@@ -563,6 +516,12 @@ body {
                                     <td class="text-center fw-900"><?= $v['total_clientes'] ?></td>
                                     <td class="text-center">
                                         <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3"><?= $v['clientes_ativos'] ?></span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3"><?= $v['clientes_concluidos'] ?></span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-3"><?= $v['clientes_cancelados'] ?></span>
                                     </td>
                                     <td style="min-width: 150px;">
                                         <div class="d-flex align-items-center gap-2">
