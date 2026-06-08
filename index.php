@@ -19,6 +19,31 @@ $sql_vendedores = "SELECT
 $stmt_vendedores = $pdo->query($sql_vendedores);
 $vendedores = $stmt_vendedores->fetchAll(PDO::FETCH_ASSOC);
 
+// Calcular Score Composto (Performance)
+$max_finalizados = 0;
+foreach($vendedores as $v) {
+    $fin = $v['total_clientes'] - $v['clientes_ativos'];
+    if ($fin > $max_finalizados) {
+        $max_finalizados = $fin;
+    }
+}
+
+foreach($vendedores as &$v) {
+    $v['finalizados'] = $v['total_clientes'] - $v['clientes_ativos'];
+    $v['success_rate'] = $v['finalizados'] > 0 ? round(($v['clientes_concluidos'] / $v['finalizados']) * 100) : 0;
+    
+    $volume_relativo = $max_finalizados > 0 ? ($v['finalizados'] / $max_finalizados) * 100 : 0;
+    
+    // Pesos: 60% Qualidade (Sucesso), 40% Quantidade (Volume)
+    $v['score_composto'] = ($v['success_rate'] * 0.6) + ($volume_relativo * 0.4);
+}
+unset($v);
+
+// Ordenar do maior score para o menor
+usort($vendedores, function($a, $b) {
+    return $b['score_composto'] <=> $a['score_composto'];
+});
+
 // 2. Relatório por Servidor
 $sql_servidores = "SELECT 
                     servidor,
@@ -497,12 +522,13 @@ body {
                                 <th class="text-center">Concluídos</th>
                                 <th class="text-center">Cancelados</th>
                                 <th class="text-center">Sucesso</th>
+                                <th class="text-center">Score</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach(array_slice($vendedores, 0, 5) as $v): 
-                                $finalizados_v = $v['total_clientes'] - $v['clientes_ativos'];
-                                $success_rate = $finalizados_v > 0 ? round(($v['clientes_concluidos'] / $finalizados_v) * 100) : 0;
+                                $success_rate = $v['success_rate'];
+                                $score = number_format($v['score_composto'], 1, ',', '.');
                             ?>
                                 <tr>
                                     <td>
@@ -530,6 +556,11 @@ body {
                                             </div>
                                             <span class="small fw-bold"><?= $success_rate ?>%</span>
                                         </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge rounded-pill px-3 py-2 fw-bold" style="color: var(--purple); background: rgba(114, 9, 183, 0.1); border: 1px solid rgba(114, 9, 183, 0.2);">
+                                            <i class="bi bi-lightning-fill me-1" style="font-size: 0.7rem;"></i> <?= $score ?>
+                                        </span>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

@@ -67,13 +67,22 @@ $kpi_total       = count($treinamentos);
 $kpi_realizados  = 0;
 $kpi_pendentes   = 0;
 $kpi_cancelados  = 0;
+$clientes_unicos = [];
 
 foreach ($treinamentos as $t) {
     $st = strtoupper($t['status'] ?? '');
-    if ($st === 'REALIZADO' || $st === 'RESOLVIDO') $kpi_realizados++;
+    if ($st === 'REALIZADO' || $st === 'RESOLVIDO') {
+        $kpi_realizados++;
+        if (!empty($t['fantasia'])) {
+            $clientes_unicos[$t['fantasia']] = true;
+        }
+    }
     elseif ($st === 'PENDENTE') $kpi_pendentes++;
     elseif ($st === 'CANCELADO') $kpi_cancelados++;
 }
+
+$total_clientes_unicos = count($clientes_unicos);
+$kpi_media_por_cliente = $total_clientes_unicos > 0 ? round($kpi_total / $total_clientes_unicos, 1) : 0;
 
 $kpi_taxa_resolucao = $kpi_total > 0 ? round(($kpi_realizados / $kpi_total) * 100, 1) : 0;
 
@@ -718,13 +727,20 @@ include 'header.php';
         </div>
         <div class="col-6 col-lg-3 gsap-reveal">
             <div class="kpi-card kpi-pending">
+                <div class="kpi-tooltip">
+                    <div class="kpi-tooltip-title"><i class="bi bi-calculator me-1"></i>Cálculo</div>
+                    <div class="kpi-tooltip-formula">Total de Treinamentos &divide; Clientes Treinados</div>
+                    <div class="kpi-tooltip-divider"></div>
+                    <div class="kpi-tooltip-result" style="color: #f59e0b;"><?= number_format($kpi_media_por_cliente, 1, ',', '.') ?></div>
+                    <div class="kpi-tooltip-desc"><?= $kpi_total ?> treinamentos em <?= $total_clientes_unicos ?> clientes</div>
+                </div>
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <div class="kpi-label mb-2">Pendentes</div>
-                        <div class="kpi-value" style="color: #f59e0b;"><?= $kpi_pendentes ?></div>
+                        <div class="kpi-label mb-2" title="Média Geral de Treinamento por Cliente">Média por Cliente <i class="bi bi-question-circle ms-1 opacity-50" style="font-size: 0.6rem;"></i></div>
+                        <div class="kpi-value" style="color: #f59e0b;"><?= number_format($kpi_media_por_cliente, 1, ',', '.') ?></div>
                     </div>
                     <div class="kpi-icon" style="background: rgba(245,158,11,0.1); color: #f59e0b;">
-                        <i class="bi bi-clock-history"></i>
+                        <i class="bi bi-bar-chart-steps"></i>
                     </div>
                 </div>
             </div>
