@@ -93,8 +93,9 @@ try {
         return $a['start'] <=> $b['start'];
     });
 
-    // Identificar feriados
+    // Identificar feriados e dias de trabalho forçado
     $holidays = [];
+    $work_days = [];
     try {
         $calendarList = $service->calendarList->listCalendarList();
         $holidayCalendarId = null;
@@ -120,15 +121,24 @@ try {
             }
         }
 
-        // Também verificar eventos de dia inteiro no calendário principal que contenham "feriado" no título
+        // Também verificar eventos de dia inteiro no calendário principal
         $primaryEvents = $service->events->listEvents('primary', [
             'timeMin' => $windowStart->format(DateTime::RFC3339),
             'timeMax' => $windowEnd->format(DateTime::RFC3339),
         ]);
         foreach ($primaryEvents->getItems() as $event) {
             if ($event->getStart() && $event->getStart()->getDate()) { // Evento de dia inteiro
-                if (strpos(strtolower((string)$event->getSummary()), 'feriado') !== false) {
-                    $holidays[] = $event->getStart()->getDate();
+                $summary = strtolower((string)$event->getSummary());
+                $data_evento = $event->getStart()->getDate();
+                
+                // Adiciona como folga se tiver as palavras
+                if (strpos($summary, 'feriado') !== false || strpos($summary, 'folga') !== false || strpos($summary, 'férias') !== false || strpos($summary, 'ferias') !== false || strpos($summary, 'ausente') !== false) {
+                    $holidays[] = $data_evento;
+                }
+                
+                // Adiciona como trabalho se tiver as palavras
+                if (strpos($summary, 'trabalho') !== false || strpos($summary, 'plantão') !== false || strpos($summary, 'plantao') !== false || strpos($summary, 'expediente') !== false) {
+                    $work_days[] = $data_evento;
                 }
             }
         }
@@ -143,8 +153,9 @@ try {
         
         $diaSemana = (int)$dia->format('N');
         
-        // Se for fim de semana OU for feriado
-        if ($diaSemana > 5 || in_array($diaDataStr, $holidays)) {
+        // Se for fim de semana OU for feriado (e NÃO for dia de trabalho forçado)
+        $is_weekend_or_holiday = ($diaSemana > 5 || in_array($diaDataStr, $holidays));
+        if ($is_weekend_or_holiday && !in_array($diaDataStr, $work_days)) {
             $diasDisponiveis[] = [
                 'data' => $dia->format('Y-m-d'),
                 'data_label' => $dia->format('d/m') . ' ' . ($diasSemana[$dia->format('N')] ?? ''),
