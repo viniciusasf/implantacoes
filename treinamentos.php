@@ -1548,14 +1548,11 @@ include 'header.php';
                             </th>
                             <th>Cliente</th>
                             <th class="col-mini text-center" title="Performance de Realização (Ativos)">Taxa Histórica</th>
-                            <th class="col-mini text-center">Cadastro</th>
                             <th class="col-mini text-center">Link Chamados</th>
-                            <th class="col-mini">Status</th>
                             <th class="col-mini">Serv.</th>
                             <th>Contato</th>
                             <th>Tema</th>
                             <th>Vendedor</th>
-                            <th class="col-mini text-center">Recursos</th>
                             <th class="text-end pe-3 col-mini">Ações</th>
                         </tr>
                     </thead>
@@ -1647,15 +1644,7 @@ include 'header.php';
                                             <span class="small fw-bold text-muted"><?= $taxa ?>%</span>
                                         </div>
                                     </td>
-                                    <td class="text-center col-mini">
-                                        <?php if (!empty($t['anexo'])): ?>
-                                            <a href="<?= htmlspecialchars($t['anexo']) ?>" target="_blank" class="btn btn-sm btn-outline-primary fw-bold" title="Abrir Cadastro" style="font-size: 0.75rem; white-space: nowrap;">
-                                                <i class="bi bi-rocket-takeoff-fill me-1"></i> GestaoPRO
-                                            </a>
-                                        <?php else: ?>
-                                            <span class="text-muted small">---</span>
-                                        <?php endif; ?>
-                                    </td>
+
                                     <td class="text-center col-mini">
                                         <?php
                                         $link_chamados_tr = '';
@@ -1677,38 +1666,7 @@ include 'header.php';
                                             <span class="text-muted small">---</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td>
-                                        <?php
-                                        // Cálculo do Status do Cliente (semelhante ao clientes.php)
-                                        $data_inicio_cl = !empty($t['data_inicio']) ? $t['data_inicio'] : date('Y-m-d');
-                                        $d_cl = (new DateTime($data_inicio_cl))->diff(new DateTime())->days;
-                                        $cl_encerrado = (!empty($t['data_fim']) && $t['data_fim'] !== '0000-00-00');
 
-                                        $st_config = [
-                                            'integracao' => ['label' => 'Integração', 'class' => 'bg-info bg-opacity-10 text-info', 'icon' => 'bi-rocket-takeoff'],
-                                            'operacional' => ['label' => 'Operacional', 'class' => 'bg-primary bg-opacity-10 text-primary', 'icon' => 'bi-gear'],
-                                            'finalizacao' => ['label' => 'Finalização', 'class' => 'bg-success bg-opacity-10 text-success', 'icon' => 'bi-flag'],
-                                            'critico' => ['label' => 'Atenção', 'class' => 'bg-danger bg-opacity-10 text-danger', 'icon' => 'bi-exclamation-triangle'],
-                                            'encerrado' => ['label' => 'Encerrado', 'class' => 'bg-secondary bg-opacity-10 text-secondary', 'icon' => 'bi-archive']
-                                        ];
-
-                                        $curr_st = 'integracao';
-                                        if ($cl_encerrado)
-                                            $curr_st = 'encerrado';
-                                        elseif ($d_cl > 60)
-                                            $curr_st = 'critico';
-                                        elseif ($d_cl > 30)
-                                            $curr_st = 'finalizacao';
-                                        elseif ($d_cl > 15)
-                                            $curr_st = 'operacional';
-
-                                        $c_st = $st_config[$curr_st] ?? $st_config['integracao'];
-                                        ?>
-                                        <span class="client-badge-soft <?= $c_st['class'] ?>"
-                                            style="font-size: 0.72rem; padding: 0.25rem 0.65rem; border-radius: 50px; font-weight: 800; text-transform: uppercase;">
-                                            <i class="bi <?= $c_st['icon'] ?> me-1"></i> <?= $c_st['label'] ?>
-                                        </span>
-                                    </td>
                                     <td class="fw-bold">
                                         <div class="small"><?= htmlspecialchars($t['servidor'] ?: '---') ?></div>
                                     </td>
@@ -1722,25 +1680,9 @@ include 'header.php';
                                         <div class="small text-uppercase fw-bold"><?= htmlspecialchars($t['vendedor'] ?? '---') ?>
                                         </div>
                                     </td>
-                                    <td class="text-center col-recursos">
-                                        <?php
-                                        $id_tr = (int) $t['id_treinamento'];
-                                        $recursos_cliente = trim((string) ($t['recursos'] ?? ''));
-                                        if ($recursos_cliente !== ''):
-                                            $lista_recursos = explode(',', $recursos_cliente);
-                                            foreach ($lista_recursos as $rec):
-                                                $rec = trim($rec);
-                                                ?>
-                                                <span class="badge bg-light text-dark border p-1" style="font-size: 0.65rem;"
-                                                    title="<?= htmlspecialchars($rec) ?>"><?= mb_strimwidth(htmlspecialchars($rec), 0, 10, "...") ?></span>
-                                                <?php
-                                            endforeach;
-                                        else:
-                                            ?>
-                                            <span class="text-muted small">---</span>
-                                        <?php endif; ?>
-                                    </td>
+
                                     <td class="text-end pe-3 col-mini">
+                                        <?php $id_tr = (int) $t['id_treinamento']; ?>
                                         <div class="d-flex justify-content-end gap-1 flex-nowrap">
                                             <!-- 1. HISTÓRICO (CRM) -->
                                             <button class="btn btn-sm btn-outline-primary btn-history-client"
@@ -1830,7 +1772,7 @@ include 'header.php';
                             <?php endforeach; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="10" class="text-center py-5">
+                                <td colspan="9" class="text-center py-5">
                                     <div class="mb-3">
                                         <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
                                     </div>
