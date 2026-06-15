@@ -32,6 +32,18 @@ if (!garantirTabelaPendenciasTreinamentos($pdo)) {
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['nova_pendencia_avulsa'])) {
+    $idCliente = (int)($_POST['id_cliente'] ?? 0);
+    $observacao = trim((string)($_POST['observacao'] ?? ''));
+
+    if ($idCliente > 0 && $observacao !== '') {
+        $stmt = $pdo->prepare("INSERT INTO pendencias_treinamentos (id_treinamento, id_cliente, status_pendencia, observacao_finalizacao) VALUES (NULL, ?, 'ABERTA', ?)");
+        $stmt->execute([$idCliente, $observacao]);
+        header("Location: pendencias_treinamentos.php?msg=" . urlencode("Pendencia avulsa criada com sucesso."));
+        exit;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['concluir_pendencia'])) {
     $idPendencia = (int)($_POST['id_pendencia'] ?? 0);
     $observacaoConclusao = trim((string)($_POST['observacao_conclusao'] ?? ''));
@@ -62,7 +74,7 @@ $busca = isset($_GET['busca']) ? trim($_GET['busca']) : '';
 
 $sqlPendencias = "SELECT p.*, t.tema, t.data_treinamento_encerrado, c.fantasia AS cliente_nome, c.anexo, c.chamados AS cliente_chamados
                   FROM pendencias_treinamentos p
-                  INNER JOIN treinamentos t ON t.id_treinamento = p.id_treinamento
+                  LEFT JOIN treinamentos t ON t.id_treinamento = p.id_treinamento
                   LEFT JOIN clientes c ON c.id_cliente = p.id_cliente
                   WHERE p.status_pendencia = 'ABERTA'";
 
@@ -81,6 +93,8 @@ $stmt->execute($params);
 $pendencias = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $total_pendencias = count($pendencias);
+
+$clientes_lista = $pdo->query("SELECT id_cliente, fantasia FROM clientes WHERE status = 'EM ANDAMENTO' ORDER BY fantasia ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 include 'header.php';
 ?>
@@ -246,6 +260,9 @@ body, html {
     <div class="table-premium gsap-reveal">
         <div class="p-4 border-bottom d-flex justify-content-between align-items-center" style="background: var(--bg-card);">
             <h5 class="fw-bold mb-0">Listagem de Pendências</h5>
+            <button class="btn btn-warning fw-bold text-dark px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalNovaPendencia" style="border-radius: 12px;">
+                <i class="bi bi-plus-circle me-2"></i>Nova Pendência
+            </button>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -270,10 +287,15 @@ body, html {
                         <?php foreach ($pendencias as $p): ?>
                             <tr>
                                 <td class="ps-4">
-                                    <div class="fw-bold mb-1">#<?= (int)$p['id_treinamento'] ?></div>
-                                    <div class="small opacity-75 text-truncate" style="max-width: 200px;" title="<?= htmlspecialchars((string)($p['tema'] ?? '---')) ?>">
-                                        <?= htmlspecialchars((string)($p['tema'] ?? '---')) ?>
-                                    </div>
+                                    <?php if (!empty($p['id_treinamento'])): ?>
+                                        <div class="fw-bold mb-1">#<?= (int)$p['id_treinamento'] ?></div>
+                                        <div class="small opacity-75 text-truncate" style="max-width: 200px;" title="<?= htmlspecialchars((string)($p['tema'] ?? '---')) ?>">
+                                            <?= htmlspecialchars((string)($p['tema'] ?? '---')) ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="fw-bold mb-1 text-warning"><i class="bi bi-star-fill me-1"></i> Avulsa</div>
+                                        <div class="small opacity-75">Criada manualmente</div>
+                                    <?php endif; ?>
                                 </td>
                                 <td>
                                     <span class="fw-bold"><i class="bi bi-building text-muted me-2"></i><?= htmlspecialchars((string)($p['cliente_nome'] ?? '---')) ?></span>
@@ -313,7 +335,7 @@ body, html {
                                                 class="btn btn-primary btn-sm px-3 fw-bold open-concluir-pendencia"
                                                 style="border-radius: 8px;"
                                                 data-id="<?= (int)$p['id_pendencia'] ?>"
-                                                data-treinamento="<?= (int)$p['id_treinamento'] ?>"
+                                                data-treinamento="<?= $p['id_treinamento'] ? (int)$p['id_treinamento'] : 'Avulsa' ?>"
                                                 data-cliente="<?= htmlspecialchars((string)($p['cliente_nome'] ?? '---')) ?>">
                                             <i class="bi bi-check2-all me-1"></i> Finalizar
                                         </button>
@@ -361,6 +383,49 @@ body, html {
                 <button type="button" class="btn btn-link text-muted fw-bold text-decoration-none me-auto" data-bs-dismiss="modal">Cancelar</button>
                 <button type="submit" class="btn btn-success px-4 fw-bold" style="border-radius: 12px; height: 46px;">
                     <i class="bi bi-check-lg me-2"></i> Confirmar Resolução
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Nova Pendência Avulsa -->
+<div class="modal fade" id="modalNovaPendencia" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden; background: var(--bg-card);">
+            <div class="modal-header border-0 p-4 border-bottom" style="background: rgba(255,255,255,0.02); border-color: var(--border-color)!important;">
+                <h5 class="fw-bold mb-0 text-main d-flex align-items-center">
+                    <div class="bg-warning bg-opacity-10 text-warning p-2 rounded-3 me-3 d-flex align-items-center justify-content-center">
+                        <i class="bi bi-plus-circle"></i>
+                    </div>
+                    Nova Pendência Avulsa
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            
+            <div class="modal-body p-4">
+                <input type="hidden" name="nova_pendencia_avulsa" value="1">
+
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase" style="letter-spacing: 0.5px;">Cliente</label>
+                    <select name="id_cliente" class="form-select text-main" style="background: var(--bg-body); border-color: var(--border-color); border-radius: 12px; height: 46px;" required>
+                        <option value="">Selecione um cliente...</option>
+                        <?php foreach($clientes_lista as $cl): ?>
+                            <option value="<?= $cl['id_cliente'] ?>"><?= htmlspecialchars($cl['fantasia']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label small fw-bold text-muted text-uppercase" style="letter-spacing: 0.5px;">Observação / Descrição da Pendência</label>
+                    <textarea name="observacao" class="form-control text-main" style="background: var(--bg-body); border-color: var(--border-color); border-radius: 12px; padding: 1rem;" rows="4" placeholder="Descreva a pendência..." required></textarea>
+                </div>
+            </div>
+            
+            <div class="modal-footer border-0 p-4 pt-2 gap-2" style="background: rgba(255,255,255,0.02);">
+                <button type="button" class="btn btn-link text-muted fw-bold text-decoration-none me-auto" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-warning text-dark px-4 fw-bold" style="border-radius: 12px; height: 46px;">
+                    <i class="bi bi-save me-2"></i> Criar Pendência
                 </button>
             </div>
         </form>

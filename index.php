@@ -675,7 +675,7 @@ body {
     // --- UTILS ---
     function exportToExcel() {
         // Logica simplificada de exportação (pode ser expandida)
-        window.location.href = 'relatorio.php?export=xls';
+        window.location.href = 'relatorios.php?exportar_xls=1';
     }
 
     // --- ANIMATIONS ---
