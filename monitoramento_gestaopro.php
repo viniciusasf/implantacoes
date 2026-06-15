@@ -1,0 +1,335 @@
+<?php require_once 'header.php'; ?>
+
+<div class="container-fluid px-0">
+
+<!-- PAGE HEADER -->
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h1 class="mb-1" style="font-size:1.6rem;">
+            <i class="bi bi-cloud-arrow-down-fill me-2" style="color:var(--primary)"></i>
+            Monitoramento GestãoPro
+        </h1>
+        <p class="mb-0" style="color:var(--text-muted);font-size:.85rem;">
+            Dados em tempo real da API <strong>interno.gestaopro.srv.br</strong>
+        </p>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+        <span id="badge-origem" class="badge rounded-pill" style="font-size:.75rem;background:var(--primary-light);color:var(--primary)">—</span>
+        <span id="badge-atualizacao" style="font-size:.75rem;color:var(--text-muted)"></span>
+        <button id="btn-refresh" class="btn btn-primary btn-sm">
+            <i class="bi bi-arrow-clockwise" id="ico-refresh"></i> Atualizar
+        </button>
+    </div>
+</div>
+
+<!-- KPI CARDS -->
+<div class="row g-3 mb-4" id="kpi-row">
+    <?php
+    $kpis = [
+        ['id'=>'kpi-total',    'label'=>'Total',          'icon'=>'bi-list-ul',           'color'=>'primary'],
+        ['id'=>'kpi-andamento','label'=>'Em Andamento',   'icon'=>'bi-play-circle-fill',  'color'=>'info'],
+        ['id'=>'kpi-aguardando','label'=>'Aguard. Cliente','icon'=>'bi-hourglass-split',  'color'=>'warning'],
+        ['id'=>'kpi-encerrado','label'=>'Encerrados',     'icon'=>'bi-check-circle-fill', 'color'=>'success'],
+    ];
+    foreach ($kpis as $k): ?>
+    <div class="col-6 col-md-3">
+        <div class="card h-100 border-0">
+            <div class="card-body d-flex align-items-center gap-3 p-3">
+                <div style="width:44px;height:44px;border-radius:12px;background:var(--<?=$k['color']?>-light);display:flex;align-items:center;justify-content:center;">
+                    <i class="bi <?=$k['icon']?>" style="font-size:1.3rem;color:var(--<?=$k['color']?>)"></i>
+                </div>
+                <div>
+                    <div id="<?=$k['id']?>" style="font-size:1.6rem;font-weight:800;color:var(--text-dark);line-height:1">—</div>
+                    <div style="font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em"><?=$k['label']?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endforeach; ?>
+</div>
+
+<!-- FILTROS -->
+<div class="card mb-4">
+    <div class="card-body py-3 px-4">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-4">
+                <input type="text" id="filtro-busca" class="form-control form-control-sm" placeholder="🔍  Buscar cliente, vendedor, serial...">
+            </div>
+            <div class="col-md-2">
+                <select id="filtro-status" class="form-select form-select-sm">
+                    <option value="">Todos os status</option>
+                    <option value="ANDAMENTO">Em Andamento</option>
+                    <option value="AGUARD.CLI">Aguard. Cliente</option>
+                    <option value="ENCERRADA">Encerrada</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select id="filtro-vendedor" class="form-select form-select-sm">
+                    <option value="">Todos os vendedores</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select id="filtro-nuvem" class="form-select form-select-sm">
+                    <option value="">Nuvem / Local</option>
+                    <option value="T">Nuvem</option>
+                    <option value="F">Local</option>
+                </select>
+            </div>
+            <div class="col-md-2 text-end">
+                <span id="lbl-contagem" style="font-size:.8rem;color:var(--text-muted)">—</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- TABELA -->
+<div class="card">
+    <div class="card-body p-0">
+        <div id="estado-carregando" class="text-center py-5">
+            <div class="spinner-border" style="color:var(--primary)" role="status"></div>
+            <p class="mt-3 mb-0" style="color:var(--text-muted)">Buscando dados da API...</p>
+        </div>
+        <div id="estado-erro" class="text-center py-5 d-none">
+            <i class="bi bi-exclamation-triangle-fill" style="font-size:2.5rem;color:var(--danger)"></i>
+            <p class="mt-3 mb-1 fw-bold">Não foi possível carregar os dados</p>
+            <p id="msg-erro" style="color:var(--text-muted);font-size:.85rem"></p>
+        </div>
+        <div id="wrapper-tabela" class="d-none">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="tabela-gp">
+                    <thead>
+                        <tr style="background:var(--bg-body);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">
+                            <th class="px-4 py-3 sortable" data-col="FANTASIA">Cliente <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3 sortable" data-col="STATUS_IMPLANTACAO">Status <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3 sortable" data-col="VENDEDOR">Consultor <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3 sortable" data-col="SERVIDOR">Servidor <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3 sortable" data-col="DDU" style="text-align:center">DDU <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3 sortable" data-col="QTD_FOLLOW_UP" style="text-align:center">Follow-ups <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3 sortable" data-col="ULTIMO_TREINAMENTO">Último Trei. <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3 sortable" data-col="TREINAMENTO_AGENDADO">Próximo Trei. <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3" style="text-align:center">Nuvem</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-gp"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+</div><!-- /container-fluid -->
+
+<style>
+.sortable { cursor:pointer; user-select:none; }
+.sortable:hover { color:var(--primary) !important; }
+.badge-status { font-size:.68rem; font-weight:700; padding:4px 10px; border-radius:20px; letter-spacing:.04em; }
+.badge-andamento  { background:var(--info-light);    color:var(--info);    }
+.badge-aguardando { background:var(--warning-light); color:var(--warning); }
+.badge-encerrada  { background:var(--success-light); color:var(--success); }
+.badge-outros     { background:var(--primary-light); color:var(--primary); }
+.ddu-chip { display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:8px; font-weight:700; font-size:.8rem; }
+.ddu-neg  { background:var(--danger-light);  color:var(--danger);  }
+.ddu-zero { background:var(--warning-light); color:var(--warning); }
+.ddu-pos  { background:var(--success-light); color:var(--success); }
+#tabela-gp tbody tr { transition:background .15s; }
+#tabela-gp tbody tr td:first-child { padding-left:1.5rem; }
+</style>
+
+<script>
+(function(){
+    let todosRegistros = [];
+    let sortCol = 'FANTASIA', sortAsc = true;
+
+    // ── helpers ────────────────────────────────────────────────────────────────
+    function fmtData(iso){
+        if (!iso) return '<span style="color:var(--text-muted)">—</span>';
+        const d = new Date(iso);
+        return d.toLocaleDateString('pt-BR');
+    }
+
+    function badgeStatus(s){
+        if (!s) return '<span class="badge-status badge-outros">—</span>';
+        const mapa = {
+            'ANDAMENTO':'badge-andamento',
+            'AGUARD.CLI':'badge-aguardando',
+            'ENCERRADA':'badge-encerrada',
+        };
+        const cls = mapa[s] || 'badge-outros';
+        const label = s === 'AGUARD.CLI' ? 'Aguard. Cliente' : s.charAt(0)+s.slice(1).toLowerCase();
+        return `<span class="badge-status ${cls}">${label}</span>`;
+    }
+
+    function chipDDU(v){
+        const cls = v < 0 ? 'ddu-neg' : (v === 0 ? 'ddu-zero' : 'ddu-pos');
+        return `<span class="ddu-chip ${cls}">${v}</span>`;
+    }
+
+    function iconeNuvem(v){
+        if (v === 'T') return '<i class="bi bi-cloud-fill" style="color:var(--info)" title="Nuvem"></i>';
+        if (v === 'F') return '<i class="bi bi-hdd-fill" style="color:var(--text-muted)" title="Local"></i>';
+        return '<span style="color:var(--text-muted)">—</span>';
+    }
+
+    function nomeConsultor(row){
+        const v  = (row.VENDEDOR  || '').trim();
+        const v2 = (row.VENDEDOR2 || '').trim();
+        if (v && v2) return `${v} <small style="color:var(--text-muted)">/ ${v2}</small>`;
+        return v || v2 || '<span style="color:var(--text-muted)">—</span>';
+    }
+
+    // ── render ─────────────────────────────────────────────────────────────────
+    function renderTabela(lista){
+        const tbody = document.getElementById('tbody-gp');
+        if (!lista.length){
+            tbody.innerHTML = `<tr><td colspan="9" class="text-center py-5" style="color:var(--text-muted)">Nenhum registro encontrado.</td></tr>`;
+            document.getElementById('lbl-contagem').textContent = '0 registros';
+            return;
+        }
+
+        // Ordenação
+        lista.sort((a,b)=>{
+            let va = a[sortCol] ?? '', vb = b[sortCol] ?? '';
+            if (typeof va === 'number') return sortAsc ? va-vb : vb-va;
+            return sortAsc ? String(va).localeCompare(String(vb),'pt-BR') : String(vb).localeCompare(String(va),'pt-BR');
+        });
+
+        tbody.innerHTML = lista.map(r => `
+            <tr>
+                <td class="py-3" style="padding-left:1.5rem">
+                    <div style="font-weight:600;color:var(--text-dark);font-size:.88rem">${r.FANTASIA || r.RAZAOSOCIAL || '—'}</div>
+                    <div style="font-size:.72rem;color:var(--text-muted)">${r.SERIAL || ''}</div>
+                </td>
+                <td>${badgeStatus(r.STATUS_IMPLANTACAO)}</td>
+                <td style="font-size:.82rem">${nomeConsultor(r)}</td>
+                <td><span style="font-size:.78rem;font-family:monospace;background:var(--bg-body);padding:2px 8px;border-radius:6px">${r.SERVIDOR || '—'}</span></td>
+                <td style="text-align:center">${chipDDU(r.DDU ?? 0)}</td>
+                <td style="text-align:center;font-weight:600;color:var(--text-dark)">${r.QTD_FOLLOW_UP ?? 0}</td>
+                <td style="font-size:.82rem">${fmtData(r.ULTIMO_TREINAMENTO)}</td>
+                <td style="font-size:.82rem">${fmtData(r.TREINAMENTO_AGENDADO)}</td>
+                <td style="text-align:center">${iconeNuvem(r.NUVEM)}</td>
+            </tr>
+        `).join('');
+
+        document.getElementById('lbl-contagem').textContent = `${lista.length} registro${lista.length!==1?'s':''}`;
+    }
+
+    // ── filtros ────────────────────────────────────────────────────────────────
+    function aplicarFiltros(){
+        const busca    = document.getElementById('filtro-busca').value.toLowerCase();
+        const status   = document.getElementById('filtro-status').value;
+        const vendedor = document.getElementById('filtro-vendedor').value;
+        const nuvem    = document.getElementById('filtro-nuvem').value;
+
+        const filtrado = todosRegistros.filter(r => {
+            const texto = `${r.FANTASIA} ${r.RAZAOSOCIAL} ${r.SERIAL} ${r.VENDEDOR} ${r.VENDEDOR2} ${r.SERVIDOR}`.toLowerCase();
+            if (busca && !texto.includes(busca)) return false;
+            if (status && r.STATUS_IMPLANTACAO !== status) return false;
+            if (vendedor && r.VENDEDOR !== vendedor && r.VENDEDOR2 !== vendedor) return false;
+            if (nuvem && r.NUVEM !== nuvem) return false;
+            return true;
+        });
+
+        renderTabela(filtrado);
+    }
+
+    function popularFiltroVendedor(lista){
+        const sel = document.getElementById('filtro-vendedor');
+        const nomes = new Set();
+        lista.forEach(r => {
+            if (r.VENDEDOR)  nomes.add(r.VENDEDOR.trim());
+            if (r.VENDEDOR2) nomes.add(r.VENDEDOR2.trim());
+        });
+        [...nomes].sort().forEach(n => {
+            const op = document.createElement('option');
+            op.value = n; op.textContent = n;
+            sel.appendChild(op);
+        });
+    }
+
+    // ── KPIs ───────────────────────────────────────────────────────────────────
+    function atualizarKPIs(lista){
+        document.getElementById('kpi-total').textContent     = lista.length;
+        document.getElementById('kpi-andamento').textContent = lista.filter(r=>r.STATUS_IMPLANTACAO==='ANDAMENTO').length;
+        document.getElementById('kpi-aguardando').textContent= lista.filter(r=>r.STATUS_IMPLANTACAO==='AGUARD.CLI').length;
+        document.getElementById('kpi-encerrado').textContent = lista.filter(r=>r.STATUS_IMPLANTACAO==='ENCERRADA').length;
+    }
+
+    // ── carregar dados ─────────────────────────────────────────────────────────
+    function carregarDados(forcar){
+        document.getElementById('estado-carregando').classList.remove('d-none');
+        document.getElementById('estado-erro').classList.add('d-none');
+        document.getElementById('wrapper-tabela').classList.add('d-none');
+        document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise';
+
+        const url = forcar ? 'api_gestaopro_bridge.php?forcar=1' : 'api_gestaopro_bridge.php';
+
+        fetch(url)
+            .then(r => r.json())
+            .then(resp => {
+                if (!resp.sucesso) throw new Error(resp.erro || 'Erro desconhecido');
+
+                const clientes = resp.dados.clientes || resp.dados || [];
+                todosRegistros = clientes;
+
+                atualizarKPIs(clientes);
+                popularFiltroVendedor(clientes);
+                aplicarFiltros();
+
+                const origemBadge = document.getElementById('badge-origem');
+                origemBadge.textContent = resp.origem === 'cache' ? '⚡ Cache' : '🌐 API';
+                origemBadge.style.background = resp.origem === 'cache' ? 'var(--success-light)' : 'var(--primary-light)';
+                origemBadge.style.color = resp.origem === 'cache' ? 'var(--success)' : 'var(--primary)';
+                document.getElementById('badge-atualizacao').textContent = 'Atualizado: ' + (resp.gerado_em || '—');
+
+                document.getElementById('estado-carregando').classList.add('d-none');
+                document.getElementById('wrapper-tabela').classList.remove('d-none');
+            })
+            .catch(err => {
+                document.getElementById('estado-carregando').classList.add('d-none');
+                document.getElementById('estado-erro').classList.remove('d-none');
+                document.getElementById('msg-erro').textContent = err.message;
+            })
+            .finally(() => {
+                document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise';
+                document.getElementById('btn-refresh').disabled = false;
+            });
+    }
+
+    // ── eventos ────────────────────────────────────────────────────────────────
+    document.getElementById('btn-refresh').addEventListener('click', function(){
+        this.disabled = true;
+        document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise spin';
+        // Invalida cache deletando arquivo via parâmetro
+        fetch('api_gestaopro_bridge.php?forcar=1').then(()=>carregarDados(false));
+    });
+
+    ['filtro-busca','filtro-status','filtro-vendedor','filtro-nuvem'].forEach(id => {
+        document.getElementById(id).addEventListener('input', aplicarFiltros);
+        document.getElementById(id).addEventListener('change', aplicarFiltros);
+    });
+
+    document.querySelectorAll('.sortable').forEach(th => {
+        th.addEventListener('click', function(){
+            const col = this.dataset.col;
+            if (sortCol === col) sortAsc = !sortAsc;
+            else { sortCol = col; sortAsc = true; }
+            document.querySelectorAll('.sortable i').forEach(i=>i.className='bi bi-chevron-expand ms-1');
+            this.querySelector('i').className = `bi bi-chevron-${sortAsc?'up':'down'} ms-1`;
+            aplicarFiltros();
+        });
+    });
+
+    // Init
+    carregarDados(false);
+})();
+</script>
+
+<style>
+@keyframes spin { to { transform:rotate(360deg); } }
+.spin { animation:spin .7s linear infinite; display:inline-block; }
+</style>
+
+<?php
+$js_extra = '';
+include 'footer.php';
+?>

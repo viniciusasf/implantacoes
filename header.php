@@ -466,6 +466,18 @@ try {
                     </a>
                 </li>
 
+                <li class="<?= $current_page == 'monitoramento_gestaopro.php' ? 'active' : '' ?>">
+                    <a href="monitoramento_gestaopro.php">
+                        <i class="bi bi-cloud-arrow-down-fill"></i> <span>GP · Implantações</span>
+                    </a>
+                </li>
+
+                <li class="<?= $current_page == 'chamados_gestaopro.php' ? 'active' : '' ?>">
+                    <a href="chamados_gestaopro.php">
+                        <i class="bi bi-headset"></i> <span>GP · Chamados</span>
+                    </a>
+                </li>
+
                 <li class="<?= $current_page == 'relatorio_mensal_implantacao.php' ? 'active' : '' ?>">
                     <a href="relatorio_mensal_implantacao.php">
                         <i class="bi bi-calendar-range"></i> <span>Relat. Encerramentos</span>
