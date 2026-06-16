@@ -337,3 +337,15 @@
 [data-theme="dark"] div[style*="background: #f8fafc"] {
     background: var(--bg-body) !important;
 }
+
+/* Dropdowns Menus e Checkboxes */
+[data-theme="dark"] .dropdown-menu {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+}
+[data-theme="dark"] .dropdown-menu .form-check-label {
+    color: var(--text-main) !important;
+}
+[data-theme="dark"] .dropdown-menu .form-check-label:hover {
+    color: var(--text-dark) !important;
+}

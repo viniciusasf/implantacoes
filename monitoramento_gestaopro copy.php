@@ -26,8 +26,8 @@
 <div class="row g-3 mb-4" id="kpi-row">
     <?php
     $kpis = [
+        ['id'=>'kpi-total',    'label'=>'Total',          'icon'=>'bi-list-ul',           'color'=>'primary'],
         ['id'=>'kpi-andamento','label'=>'Em Andamento',   'icon'=>'bi-play-circle-fill',  'color'=>'info'],
-        ['id'=>'kpi-clienteok','label'=>'Cliente OK',     'icon'=>'bi-check-circle',      'color'=>'primary'],
         ['id'=>'kpi-aguardando','label'=>'Aguard. Cliente','icon'=>'bi-hourglass-split',  'color'=>'warning'],
         ['id'=>'kpi-encerrado','label'=>'Encerrados',     'icon'=>'bi-check-circle-fill', 'color'=>'success'],
     ];
@@ -57,7 +57,7 @@
             </div>
             <div class="col-md-2">
                 <div class="dropdown">
-                    <button class="form-select form-select-sm dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" type="button" id="filtro-status-btn" data-bs-toggle="dropdown" aria-expanded="false">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" type="button" id="filtro-status-btn" data-bs-toggle="dropdown" aria-expanded="false" style="background-color: #f8fafc; border-color: #e2e8f0; color: var(--text-dark);">
                         <span id="filtro-status-label" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Todos os status</span>
                     </button>
                     <ul class="dropdown-menu w-100 shadow-sm p-2" aria-labelledby="filtro-status-btn" style="border-radius: var(--radius-md); border-color: var(--border-color); font-size: 0.9rem;" id="filtro-status-menu">
@@ -258,7 +258,6 @@
             return true;
         });
 
-        atualizarKPIs(filtrado);
         renderTabela(filtrado);
     }
 
@@ -280,10 +279,10 @@
 
     // ── KPIs ───────────────────────────────────────────────────────────────────
     function atualizarKPIs(lista){
+        document.getElementById('kpi-total').textContent     = lista.length;
         document.getElementById('kpi-andamento').textContent = lista.filter(r=>r.STATUS_IMPLANTACAO==='ANDAMENTO').length;
-        document.getElementById('kpi-clienteok').textContent = lista.filter(r=>r.STATUS_IMPLANTACAO==='CLIENTE.OK').length;
         document.getElementById('kpi-aguardando').textContent= lista.filter(r=>r.STATUS_IMPLANTACAO==='AGUARD.CLI').length;
-        document.getElementById('kpi-encerrado').textContent = todosRegistros.filter(r=>r.STATUS_IMPLANTACAO==='ENCERRADA' && r.VENDEDOR2 === 'VINICIUS').length;
+        document.getElementById('kpi-encerrado').textContent = lista.filter(r=>r.STATUS_IMPLANTACAO==='ENCERRADA').length;
     }
 
     // ── carregar dados ─────────────────────────────────────────────────────────
@@ -303,6 +302,7 @@
                 const clientes = resp.dados.clientes || resp.dados || [];
                 todosRegistros = clientes;
 
+                atualizarKPIs(clientes);
                 popularFiltroVendedor(clientes);
                 aplicarFiltros();
 

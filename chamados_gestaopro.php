@@ -24,10 +24,10 @@
 <div class="row g-3 mb-4">
     <?php
     $kpis = [
-        ['id'=>'kpi-total',        'label'=>'Total',                'icon'=>'bi-ticket-detailed',   'color'=>'primary'],
         ['id'=>'kpi-aguard-dev',   'label'=>'Aguard. Desenvolvimento','icon'=>'bi-code-slash',       'color'=>'warning'],
-        ['id'=>'kpi-customizacao', 'label'=>'Customização de Tela',  'icon'=>'bi-brush',             'color'=>'purple'],
-        ['id'=>'kpi-excedido',     'label'=>'Prazo Excedido',        'icon'=>'bi-alarm-fill',        'color'=>'danger'],
+        ['id'=>'kpi-aguard-testes','label'=>'Aguardando Testes',     'icon'=>'bi-check2-circle',     'color'=>'success'],
+        ['id'=>'kpi-aguard-suporte','label'=>'Aguardando Suporte',   'icon'=>'bi-headset',           'color'=>'purple'],
+        ['id'=>'kpi-total',        'label'=>'Total',                'icon'=>'bi-ticket-detailed',   'color'=>'primary'],
     ];
     foreach ($kpis as $k): ?>
     <div class="col-6 col-md-3">
@@ -54,14 +54,24 @@
                 <input type="text" id="filtro-busca" class="form-control form-control-sm" placeholder="🔍  Buscar cliente, responsável, descrição...">
             </div>
             <div class="col-md-2">
-                <select id="filtro-status" class="form-select form-select-sm">
-                    <option value="">Todos os status</option>
-                </select>
+                <div class="dropdown">
+                    <button class="form-select form-select-sm dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" type="button" id="filtro-status-btn" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span id="filtro-status-label" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Todos os status</span>
+                    </button>
+                    <ul class="dropdown-menu w-100 shadow-sm p-2" aria-labelledby="filtro-status-btn" style="border-radius: var(--radius-md); border-color: var(--border-color); font-size: 0.9rem; max-height: 300px; overflow-y: auto;" id="filtro-status-menu">
+                        <!-- Gerado via JS -->
+                    </ul>
+                </div>
             </div>
             <div class="col-md-2">
-                <select id="filtro-tipo" class="form-select form-select-sm">
-                    <option value="">Todos os tipos</option>
-                </select>
+                <div class="dropdown">
+                    <button class="form-select form-select-sm dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" type="button" id="filtro-tipo-btn" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span id="filtro-tipo-label" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Todos os tipos</span>
+                    </button>
+                    <ul class="dropdown-menu w-100 shadow-sm p-2" aria-labelledby="filtro-tipo-btn" style="border-radius: var(--radius-md); border-color: var(--border-color); font-size: 0.9rem; max-height: 300px; overflow-y: auto;" id="filtro-tipo-menu">
+                        <!-- Gerado via JS -->
+                    </ul>
+                </div>
             </div>
             <div class="col-md-2">
                 <select id="filtro-responsavel" class="form-select form-select-sm">
@@ -101,6 +111,7 @@
                             <th class="py-3 sortable" data-col="DATA">Abertura</th>
                             <th class="py-3 sortable" data-col="DATAPREV_RETORNO">Prev. Retorno</th>
                             <th class="py-3 sortable" data-col="EXCEDIDO" style="text-align:center">Excedido</th>
+                            <th class="py-3 text-center">Ações</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-chamados"></tbody>
@@ -131,6 +142,7 @@
         'Aguardando Desenvolvimento': ['var(--warning-light)','var(--warning)'],
         'Em Desenvolvimento':          ['var(--info-light)',   'var(--info)'],
         'Aguardando Cliente':          ['var(--purple-light)', 'var(--purple)'],
+        'Aguardando Testes':           ['var(--success-light)','var(--success)'],
         'Resolvido':                   ['var(--success-light)','var(--success)'],
         'Cancelado':                   ['#f1f5f9',             'var(--text-muted)'],
     };
@@ -147,18 +159,58 @@
         return `<span class="peso-chip" style="background:var(--${cls}-light);color:var(--${cls})">${n}</span>`;
     }
 
-    function populaSelect(id, valores){
+    function populaSelect(id, valores, padrao){
         const sel=document.getElementById(id);
+        sel.innerHTML = `<option value="">Todos os ${id==='filtro-responsavel'?'responsáveis':'itens'}</option>`;
         [...new Set(valores)].filter(Boolean).sort().forEach(v=>{
             const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o);
         });
+        if (padrao && [...sel.options].some(o => o.value === padrao)) sel.value = padrao;
+    }
+
+    function atualizarLabelDropdown(idLabel, classeCb, textoTodos) {
+        const selecionados = Array.from(document.querySelectorAll('.' + classeCb + ':checked'));
+        const btnLabel = document.getElementById(idLabel);
+        if (selecionados.length === 0) {
+            btnLabel.textContent = textoTodos;
+        } else if (selecionados.length === 1) {
+            btnLabel.textContent = selecionados[0].nextElementSibling.textContent;
+        } else {
+            btnLabel.textContent = selecionados.length + ' selecionados';
+        }
+    }
+
+    function populaDropdownCheckboxes(idMenu, idLabel, classeCb, valores, padroes, textoTodos) {
+        const menu = document.getElementById(idMenu);
+        menu.innerHTML = '';
+        [...new Set(valores)].filter(Boolean).sort().forEach((v, i) => {
+            const isChecked = padroes.includes(v) ? 'checked' : '';
+            const chkId = idMenu + '-chk-' + i;
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <div class="form-check mb-1">
+                    <input class="form-check-input ${classeCb}" type="checkbox" value="${v}" id="${chkId}" ${isChecked}>
+                    <label class="form-check-label w-100" for="${chkId}" style="cursor:pointer;">${v}</label>
+                </div>
+            `;
+            menu.appendChild(li);
+        });
+        
+        document.querySelectorAll('.' + classeCb).forEach(cb => {
+            cb.addEventListener('change', function() {
+                atualizarLabelDropdown(idLabel, classeCb, textoTodos);
+                aplicarFiltros();
+            });
+        });
+        
+        atualizarLabelDropdown(idLabel, classeCb, textoTodos);
     }
 
     function renderTabela(lista){
         const tbody=document.getElementById('tbody-chamados');
         document.getElementById('lbl-contagem').textContent=lista.length+' registro'+(lista.length!==1?'s':'');
         if(!lista.length){
-            tbody.innerHTML='<tr><td colspan="9" class="text-center py-5" style="color:var(--text-muted)">Nenhum chamado encontrado.</td></tr>';
+            tbody.innerHTML='<tr><td colspan="10" class="text-center py-5" style="color:var(--text-muted)">Nenhum chamado encontrado.</td></tr>';
             return;
         }
         lista.sort((a,b)=>{
@@ -182,31 +234,37 @@
             <td style="text-align:center">
                 ${r.EXCEDIDO?'<i class="bi bi-alarm-fill" style="color:var(--danger)" title="Prazo excedido"></i>':'<span style="color:var(--text-muted)">—</span>'}
             </td>
+            <td style="text-align:center">
+                <a href="https://interno.gestaopro.srv.br/chamados/${r.ID}" target="_blank" class="btn btn-sm btn-primary fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Abrir chamado">
+                    <i class="bi bi-box-arrow-up-right"></i> Abrir
+                </a>
+            </td>
         </tr>`).join('');
     }
 
     function aplicarFiltros(){
         const busca=document.getElementById('filtro-busca').value.toLowerCase();
-        const status=document.getElementById('filtro-status').value;
-        const tipo=document.getElementById('filtro-tipo').value;
+        const statusList = Array.from(document.querySelectorAll('.filtro-status-cb:checked')).map(cb => cb.value);
+        const tipoList   = Array.from(document.querySelectorAll('.filtro-tipo-cb:checked')).map(cb => cb.value);
         const resp=document.getElementById('filtro-responsavel').value;
 
         const fil=todos.filter(r=>{
             const txt=`${r.FANTASIA} ${r.SERIAL} ${r.DESCRICAO} ${r.RESPONSAVEL} ${r.CHAMADO_USUARIO}`.toLowerCase();
             if(busca&&!txt.includes(busca)) return false;
-            if(status&&r.CHAMADO_STATUS!==status) return false;
-            if(tipo&&r.TIPOACOMP!==tipo) return false;
+            if(statusList.length > 0 && !statusList.includes(r.CHAMADO_STATUS)) return false;
+            if(tipoList.length > 0 && !tipoList.includes(r.TIPOACOMP)) return false;
             if(resp&&r.RESPONSAVEL!==resp) return false;
             return true;
         });
+        atualizarKPIs(fil);
         renderTabela(fil);
     }
 
     function atualizarKPIs(lista){
-        document.getElementById('kpi-total').textContent=lista.length;
         document.getElementById('kpi-aguard-dev').textContent=lista.filter(r=>r.CHAMADO_STATUS==='Aguardando Desenvolvimento').length;
-        document.getElementById('kpi-customizacao').textContent=lista.filter(r=>(r.TIPOACOMP||'').includes('Customiza')).length;
-        document.getElementById('kpi-excedido').textContent=lista.filter(r=>r.EXCEDIDO).length;
+        document.getElementById('kpi-aguard-testes').textContent=lista.filter(r=>r.CHAMADO_STATUS==='Aguardando Testes').length;
+        document.getElementById('kpi-aguard-suporte').textContent=lista.filter(r=>r.CHAMADO_STATUS==='Aguardando Suporte').length;
+        document.getElementById('kpi-total').textContent=lista.length;
     }
 
     function carregarDados(){
@@ -223,10 +281,9 @@
             const lista=resp.dados.chamados||[];
             todos=lista;
 
-            atualizarKPIs(lista);
-            populaSelect('filtro-status', lista.map(r=>r.CHAMADO_STATUS));
-            populaSelect('filtro-tipo',   lista.map(r=>r.TIPOACOMP));
-            populaSelect('filtro-responsavel', lista.map(r=>r.RESPONSAVEL));
+            populaDropdownCheckboxes('filtro-status-menu', 'filtro-status-label', 'filtro-status-cb', lista.map(r=>r.CHAMADO_STATUS), ['Aguardando Desenvolvimento', 'Aguardando Suporte', 'Aguardando Testes'], 'Todos os status');
+            populaDropdownCheckboxes('filtro-tipo-menu', 'filtro-tipo-label', 'filtro-tipo-cb', lista.map(r=>r.TIPOACOMP), [], 'Todos os tipos');
+            populaSelect('filtro-responsavel', lista.map(r=>r.RESPONSAVEL), 'VINICIUS');
             aplicarFiltros();
 
             const ob=document.getElementById('badge-origem');
@@ -253,10 +310,13 @@
         carregarDados();
     });
 
-    ['filtro-busca','filtro-status','filtro-tipo','filtro-responsavel'].forEach(id=>{
+    ['filtro-busca','filtro-responsavel'].forEach(id=>{
         document.getElementById(id).addEventListener('input',aplicarFiltros);
         document.getElementById(id).addEventListener('change',aplicarFiltros);
     });
+
+    document.getElementById('filtro-status-menu').addEventListener('click', function (e) { e.stopPropagation(); });
+    document.getElementById('filtro-tipo-menu').addEventListener('click', function (e) { e.stopPropagation(); });
 
     document.querySelectorAll('.sortable').forEach(th=>{
         th.addEventListener('click',function(){
