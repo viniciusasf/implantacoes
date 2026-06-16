@@ -105,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $data_inicio = $_POST['data_inicio'];
     $data_fim = (!empty($_POST['data_fim']) && $_POST['data_fim'] !== '0000-00-00') ? $_POST['data_fim'] : null;
     $data_previsao_encerramento = !empty($_POST['data_previsao_encerramento']) ? $_POST['data_previsao_encerramento'] : null;
-    $observacao = $_POST['observacao'] ?? '';
+    $id_cliente_api = !empty($_POST['id_cliente_api']) ? $_POST['id_cliente_api'] : null;
     $emitir_nf = $_POST['emitir_nf'] ?? 'Não';
     $configurado = $_POST['configurado'] ?? 'Não';
 
@@ -122,9 +122,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // UPDATE com novos campos
         $stmt = $pdo->prepare("UPDATE `clientes` SET 
             `fantasia`=?, `servidor`=?, `vendedor`=?, `telefone_ddd`=?, 
-            `data_inicio`=?, `data_fim`=?, `data_previsao_encerramento`=?, `observacao`=?, 
-            `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=?,
-            `computador_rdp`=?, `usuario_rdp`=?, `senha_rdp`=?
+            `data_inicio`=?, `data_fim`=?, `data_previsao_encerramento`=?, `id_cliente_api`=?, 
+            `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=?
             WHERE `id_cliente`=?");
         $stmt->execute([
             $fantasia,
@@ -134,26 +133,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $data_inicio,
             $data_fim,
             $data_previsao_encerramento,
-            $observacao,
+            $id_cliente_api,
             $emitir_nf,
             $configurado,
             $num_licencas,
             $anexo,
             $chamados,
             $recursos,
-            $_POST['computador_rdp'] ?? '',
-            $_POST['usuario_rdp'] ?? '',
-            $_POST['senha_rdp'] ?? '',
             $_POST['id_cliente']
         ]);
     } else {
         // INSERT com novos campos
         $stmt = $pdo->prepare("INSERT INTO `clientes` (
             `fantasia`, `servidor`, `vendedor`, `telefone_ddd`, 
-            `data_inicio`, `data_fim`, `data_previsao_encerramento`, `observacao`, 
-            `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`,
-            `computador_rdp`, `usuario_rdp`, `senha_rdp`
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            `data_inicio`, `data_fim`, `data_previsao_encerramento`, `id_cliente_api`,
+            `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
         $stmt->execute([
             $fantasia,
             $servidor,
@@ -162,16 +157,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $data_inicio,
             $data_fim,
             $data_previsao_encerramento,
-            $observacao,
+            $id_cliente_api,
             $emitir_nf,
             $configurado,
             $num_licencas,
             $anexo,
             $chamados,
             $recursos,
-            $_POST['computador_rdp'] ?? '',
-            $_POST['usuario_rdp'] ?? '',
-            $_POST['senha_rdp'] ?? ''
         ]);
     }
     header("Location: clientes.php?msg=Dados+atualizados&view=" . $view_mode);
@@ -708,16 +700,13 @@ body, html {
                                     data-inicio="<?= $c['data_inicio'] ?>" 
                                     data-fim="<?= $c['data_fim'] ?>" 
                                     data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
-                                    data-obs="<?= htmlspecialchars($c['observacao']) ?>" 
+                                    data-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '') ?>" 
                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                     data-cfg="<?= $c['configurado'] ?>" 
                                     data-licencas="<?= $c['num_licencas'] ?>" 
                                     data-anexo="<?= $c['anexo'] ?>" 
                                     data-chamados="<?= htmlspecialchars($c['chamados'] ?? '') ?>" 
                                     data-recursos="<?= htmlspecialchars($c['recursos'] ?? '') ?>" 
-                                    data-computador-rdp="<?= htmlspecialchars($c['computador_rdp'] ?? '') ?>" 
-                                    data-usuario-rdp="<?= htmlspecialchars($c['usuario_rdp'] ?? '') ?>" 
-                                    data-senha-rdp="<?= htmlspecialchars($c['senha_rdp'] ?? '') ?>" 
                                     title="Editar" onclick="openEditModal(this)">
                                 <i class="bi bi-pencil"></i>
                             </button>
@@ -1018,31 +1007,13 @@ body, html {
                                     </div>
                                     <small class="text-muted" style="font-size: 0.7rem;">Link direto para os chamados abertos do cliente no GestãoPRO</small>
                                 </div>
-                                <div class="col-12 mt-3">
-                                    <h6 class="text-secondary fw-bold mb-3 d-flex align-items-center">
-                                        <i class="bi bi-display me-2"></i> Área de Trabalho Remota (RDP)
-                                    </h6>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label small fw-bold text-muted">Computador</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-pc text-info"></i></span>
-                                        <input type="text" name="computador_rdp" id="computador_rdp" class="form-control border-start-0 ps-0" placeholder="Ex: SP21.GESTAOPRO.SRV.BR:15594">
+                                <div class="col-12">
+                                    <label class="form-label small fw-bold text-muted">ID Cliente API (GestãoPro)</label>
+                                    <div class="input-group mb-1">
+                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-braces-asterisk text-primary"></i></span>
+                                        <input type="number" name="id_cliente_api" id="id_cliente_api" class="form-control border-start-0 ps-0" placeholder="Ex: 5698">
                                     </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label small fw-bold text-muted">Usuário</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-person text-info"></i></span>
-                                        <input type="text" name="usuario_rdp" id="usuario_rdp" class="form-control border-start-0 ps-0" placeholder="Usuário">
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label small fw-bold text-muted">Senha</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-key text-info"></i></span>
-                                        <input type="password" name="senha_rdp" id="senha_rdp" class="form-control border-start-0 ps-0" placeholder="Senha">
-                                    </div>
+                                    <small class="text-muted" style="font-size: 0.7rem;">ID utilizado para vincular os dados da API ao sistema local.</small>
                                 </div>
                             </div>
                         </div>
@@ -1067,14 +1038,7 @@ body, html {
                             </div>
                         </div>
                     </div>
-                    <div class="col-12">
-                        <div class="dashboard-section p-4">
-                            <h6 class="text-main fw-bold mb-3 d-flex align-items-center">
-                                <i class="bi bi-chat-right-text me-2"></i> Observações Internas
-                            </h6>
-                            <textarea name="observacao" id="observacao" class="form-control" rows="3" placeholder="Informações relevantes para a equipe técnica..."></textarea>
-                        </div>
-                    </div>
+                    
                 </div>
             </div>
 
@@ -1211,17 +1175,12 @@ body, html {
         document.getElementById('data_inicio').value = d.inicio || '';
         document.getElementById('id_data_fim').value = d.fim || '';
         document.getElementById('data_previsao_encerramento').value = d.previsaoEncerramento || '';
-        document.getElementById('observacao').value = d.obs || '';
+        document.getElementById('id_cliente_api').value = d.api || '';
         document.getElementById('emitir_nf').value = d.nf || 'Não';
         document.getElementById('configurado').value = d.cfg || 'Não';
         document.getElementById('num_licencas').value = d.licencas || 0;
         document.getElementById('anexo').value = d.anexo || '';
         document.getElementById('chamados').value = d.chamados || '';
-        
-        // Campos RDP
-        document.getElementById('computador_rdp').value = d.computadorRdp || '';
-        document.getElementById('usuario_rdp').value = d.usuarioRdp || '';
-        document.getElementById('senha_rdp').value = d.senhaRdp || '';
         
         // Limpar e preencher checkbox de recursos
         document.querySelectorAll('.recurso-checkbox').forEach(cb => cb.checked = false);

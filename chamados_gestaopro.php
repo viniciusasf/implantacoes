@@ -1,4 +1,14 @@
-<?php require_once 'header.php'; ?>
+<?php 
+require_once 'config.php';
+require_once 'header.php'; 
+
+// Buscar mapeamento de clientes
+$stmt_map = $pdo->query("SELECT id_cliente, id_cliente_api FROM clientes WHERE id_cliente_api IS NOT NULL AND id_cliente_api != ''");
+$mapa_clientes_local = [];
+while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
+    $mapa_clientes_local[$row_map['id_cliente_api']] = $row_map['id_cliente'];
+}
+?>
 <div class="container-fluid px-0">
 
 <!-- HEADER -->
@@ -130,6 +140,8 @@
 </style>
 
 <script>
+const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
+
 (function(){
     let todos=[], sortCol='DATA', sortAsc=false;
 
@@ -218,12 +230,22 @@
             if(typeof va==='number') return sortAsc?va-vb:vb-va;
             return sortAsc?String(va).localeCompare(String(vb),'pt-BR'):String(vb).localeCompare(String(va),'pt-BR');
         });
-        tbody.innerHTML=lista.map(r=>`
+        tbody.innerHTML=lista.map(r=>{
+            const isVinculado = MAPA_CLIENTES_LOCAL[r.ID_CLIENTE];
+            const btnLink = isVinculado ? 
+                `<a href="clientes.php?busca=${encodeURIComponent(r.FANTASIA || r.RAZAOSOCIAL || '')}" target="_blank" class="btn btn-sm btn-outline-primary ms-auto" style="padding:2px 6px; font-size:.7rem; margin-top:2px;" title="Acessar Cliente Local"><i class="bi bi-link-45deg"></i> Vinculado</a>` : '';
+                
+            return `
         <tr>
             <td class="px-4 py-3" style="font-size:.78rem;font-family:monospace;color:var(--text-muted)">#${r.ID}</td>
             <td>
-                <div style="font-weight:600;font-size:.88rem">${r.FANTASIA||'—'}</div>
-                <div style="font-size:.72rem;color:var(--text-muted)">${r.SERIAL||''}</div>
+                <div class="d-flex align-items-start gap-2">
+                    <div style="min-width:0; flex:1;">
+                        <div style="font-weight:600;font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.FANTASIA||'—'}</div>
+                        <div style="font-size:.72rem;color:var(--text-muted)">${r.SERIAL||''}</div>
+                    </div>
+                    ${btnLink}
+                </div>
             </td>
             <td>${badgeStatus(r.CHAMADO_STATUS)}</td>
             <td style="font-size:.82rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.TIPOACOMP||''}">${r.TIPOACOMP||'—'}</td>
@@ -239,7 +261,8 @@
                     <i class="bi bi-box-arrow-up-right"></i> Abrir
                 </a>
             </td>
-        </tr>`).join('');
+        </tr>`;
+        }).join('');
     }
 
     function aplicarFiltros(){
