@@ -3,10 +3,22 @@ require_once 'config.php';
 require_once 'header.php'; 
 
 // Buscar mapeamento de clientes
-$stmt_map = $pdo->query("SELECT id_cliente, id_cliente_api FROM clientes WHERE id_cliente_api IS NOT NULL AND id_cliente_api != ''");
+$stmt_map = $pdo->query("SELECT id_cliente, id_cliente_api, chamados, anexo FROM clientes WHERE id_cliente_api IS NOT NULL AND id_cliente_api != ''");
 $mapa_clientes_local = [];
+$mapa_links_chamados = [];
 while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
     $mapa_clientes_local[$row_map['id_cliente_api']] = $row_map['id_cliente'];
+    
+    $link = '';
+    if (!empty($row_map['chamados'])) {
+        $link = $row_map['chamados'];
+    } elseif (!empty($row_map['anexo'])) {
+        $base = (strpos($row_map['anexo'], 'http') === 0) ? $row_map['anexo'] : 'https://' . $row_map['anexo'];
+        $link = rtrim($base, '?') . '?tab=chamados-abertos';
+    }
+    if ($link !== '') {
+        $mapa_links_chamados[$row_map['id_cliente_api']] = $link;
+    }
 }
 ?>
 
@@ -138,11 +150,7 @@ while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
                             <th class="py-3 sortable" data-col="STATUS_IMPLANTACAO">Status <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3 sortable" data-col="VENDEDOR">Consultor <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3 sortable" data-col="SERVIDOR">Servidor <i class="bi bi-chevron-expand ms-1"></i></th>
-                            <th class="py-3 sortable" data-col="DDU" style="text-align:center">DDU <i class="bi bi-chevron-expand ms-1"></i></th>
-                            <th class="py-3 sortable" data-col="QTD_FOLLOW_UP" style="text-align:center">Follow-ups <i class="bi bi-chevron-expand ms-1"></i></th>
-                            <th class="py-3 sortable" data-col="ULTIMO_TREINAMENTO">Último Trei. <i class="bi bi-chevron-expand ms-1"></i></th>
-                            <th class="py-3 sortable" data-col="TREINAMENTO_AGENDADO">Próximo Trei. <i class="bi bi-chevron-expand ms-1"></i></th>
-                            <th class="py-3" style="text-align:center">Nuvem</th>
+                            <th class="py-3" style="text-align:center">Ações</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-gp"></tbody>
@@ -169,10 +177,37 @@ while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
 .ddu-pos  { background:var(--success-light); color:var(--success); }
 #tabela-gp tbody tr { transition:background .15s; }
 #tabela-gp tbody tr td:first-child { padding-left:1.5rem; }
+
+.btn-agendar-gp {
+    background: rgba(124,58,237,0.12);
+    color: #7c3aed;
+    border: 1px solid rgba(124,58,237,0.3);
+    font-size: .72rem;
+    padding: 3px 8px;
+    border-radius: 7px;
+    white-space: nowrap;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+.btn-agendar-gp:hover {
+    background: #7c3aed;
+    color: #fff;
+}
+[data-theme="dark"] .btn-agendar-gp {
+    background: rgba(167, 139, 250, 0.15);
+    color: #c4b5fd;
+    border-color: rgba(167, 139, 250, 0.3);
+}
+[data-theme="dark"] .btn-agendar-gp:hover {
+    background: #8b5cf6;
+    color: #fff;
+    border-color: #8b5cf6;
+}
 </style>
 
 <script>
 const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
+const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
 
 (function(){
     let todosRegistros = [];
@@ -222,13 +257,21 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
     function renderTabela(lista){
         const tbody = document.getElementById('tbody-gp');
         if (!lista.length){
-            tbody.innerHTML = `<tr><td colspan="9" class="text-center py-5" style="color:var(--text-muted)">Nenhum registro encontrado.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-5" style="color:var(--text-muted)">Nenhum registro encontrado.</td></tr>`;
             document.getElementById('lbl-contagem').textContent = '0 registros';
             return;
         }
 
         // Ordenação
         lista.sort((a,b)=>{
+            // Priorizar clientes com botão de chamados visível
+            const aTemBtn = window.chamadosValidos && window.chamadosValidos[a.ID_CLIENTE] && MAPA_LINKS_CHAMADOS[a.ID_CLIENTE] ? 1 : 0;
+            const bTemBtn = window.chamadosValidos && window.chamadosValidos[b.ID_CLIENTE] && MAPA_LINKS_CHAMADOS[b.ID_CLIENTE] ? 1 : 0;
+            
+            if (aTemBtn !== bTemBtn) {
+                return bTemBtn - aTemBtn;
+            }
+
             let va = a[sortCol] ?? '', vb = b[sortCol] ?? '';
             if (typeof va === 'number') return sortAsc ? va-vb : vb-va;
             return sortAsc ? String(va).localeCompare(String(vb),'pt-BR') : String(vb).localeCompare(String(va),'pt-BR');
@@ -238,13 +281,32 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             const isVinculado = MAPA_CLIENTES_LOCAL[r.ID_CLIENTE];
             const btnLink = isVinculado ? 
                 `<a href="clientes.php?busca=${encodeURIComponent(r.FANTASIA || r.RAZAOSOCIAL)}" target="_blank" class="btn btn-sm btn-outline-primary ms-auto" style="padding:2px 6px; font-size:.7rem" title="Acessar Cliente Local"><i class="bi bi-link-45deg"></i> Vinculado</a>` : '';
+            
+            const localId = MAPA_CLIENTES_LOCAL[r.ID_CLIENTE] || 0;
+            const nomeCliente = r.FANTASIA || r.RAZAOSOCIAL || '';
+            const btnAgendar = `<button class="btn btn-sm btn-agendar-gp" onclick="abrirModalAgendamento(${localId}, '${nomeCliente.replace(/'/g, "\\'")}')"
+                title="Novo Agendamento">
+                <i class="bi bi-calendar-plus me-1"></i>Agendar
+            </button>`;
                 
+            const linkChamados = MAPA_LINKS_CHAMADOS[r.ID_CLIENTE];
+            const temChamados = window.chamadosValidos && window.chamadosValidos[r.ID_CLIENTE];
+            let btnChamados = '';
+            if (temChamados && linkChamados) {
+                btnChamados = `<a href="${linkChamados}" target="_blank"
+                               class="btn btn-sm btn-outline-success fw-bold ms-1"
+                               title="Abrir Link Chamados"
+                               style="font-size: 0.72rem; white-space: nowrap; padding:3px 8px; border-radius:7px;">
+                                <i class="bi bi-headset me-1"></i> Chamados
+                            </a>`;
+            }
+
             return `
             <tr>
                 <td class="py-3" style="padding-left:1.5rem">
                     <div class="d-flex align-items-center gap-2">
                         <div style="min-width:0; flex:1;">
-                            <div style="font-weight:600;color:var(--text-dark);font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.FANTASIA || r.RAZAOSOCIAL || '—'}</div>
+                            <div style="font-weight:600;color:var(--text-dark);font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${nomeCliente || '—'}</div>
                             <div style="font-size:.72rem;color:var(--text-muted)">${r.SERIAL || ''}</div>
                         </div>
                         ${btnLink}
@@ -253,11 +315,12 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
                 <td>${badgeStatus(r.STATUS_IMPLANTACAO)}</td>
                 <td style="font-size:.82rem">${nomeConsultor(r)}</td>
                 <td><span style="font-size:.78rem;font-family:monospace;background:var(--bg-body);padding:2px 8px;border-radius:6px">${r.SERVIDOR || '—'}</span></td>
-                <td style="text-align:center">${chipDDU(r.DDU ?? 0)}</td>
-                <td style="text-align:center;font-weight:600;color:var(--text-dark)">${r.QTD_FOLLOW_UP ?? 0}</td>
-                <td style="font-size:.82rem">${fmtData(r.ULTIMO_TREINAMENTO)}</td>
-                <td style="font-size:.82rem">${fmtData(r.TREINAMENTO_AGENDADO)}</td>
-                <td style="text-align:center">${iconeNuvem(r.NUVEM)}</td>
+                <td style="text-align:center">
+                    <div class="d-flex justify-content-center align-items-center flex-nowrap">
+                        ${btnAgendar}
+                        ${btnChamados}
+                    </div>
+                </td>
             </tr>
             `;
         }).join('');
@@ -317,14 +380,26 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise';
 
         const url = forcar ? 'api_gestaopro_bridge.php?forcar=1' : 'api_gestaopro_bridge.php';
+        const urlChamados = forcar ? 'api_gestaopro_bridge.php?endpoint=chamados&forcar=1' : 'api_gestaopro_bridge.php?endpoint=chamados';
 
-        fetch(url)
-            .then(r => r.json())
-            .then(resp => {
-                if (!resp.sucesso) throw new Error(resp.erro || 'Erro desconhecido');
+        Promise.all([
+            fetch(url).then(r => r.json()),
+            fetch(urlChamados).then(r => r.json())
+        ])
+            .then(([resp, respChamados]) => {
+                if (!resp.sucesso) throw new Error(resp.erro || 'Erro desconhecido em implantações');
+                if (!respChamados.sucesso) throw new Error(respChamados.erro || 'Erro desconhecido em chamados');
 
                 const clientes = resp.dados.clientes || resp.dados || [];
                 todosRegistros = clientes;
+
+                window.chamadosValidos = {};
+                const chamadosList = respChamados.dados.chamados || respChamados.dados || [];
+                chamadosList.forEach(ch => {
+                    if (['Aguardando Desenvolvimento', 'Aguardando Suporte', 'Aguardando Testes'].includes(ch.CHAMADO_STATUS)) {
+                        window.chamadosValidos[ch.ID_CLIENTE] = true;
+                    }
+                });
 
                 popularFiltroVendedor(clientes);
                 aplicarFiltros();
@@ -354,7 +429,10 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         this.disabled = true;
         document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise spin';
         // Invalida cache deletando arquivo via parâmetro
-        fetch('api_gestaopro_bridge.php?forcar=1').then(()=>carregarDados(false));
+        Promise.all([
+            fetch('api_gestaopro_bridge.php?forcar=1'),
+            fetch('api_gestaopro_bridge.php?endpoint=chamados&forcar=1')
+        ]).then(()=>carregarDados(false));
     });
 
     ['filtro-busca','filtro-vendedor','filtro-nuvem'].forEach(id => {
@@ -409,6 +487,86 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
 @keyframes spin { to { transform:rotate(360deg); } }
 .spin { animation:spin .7s linear infinite; display:inline-block; }
 </style>
+
+<!-- Modal Novo Agendamento (GestãoPro) -->
+<div class="modal fade" id="modalAgendamentoGP" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="salvar_treinamento.php" class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden;">
+            <input type="hidden" name="id_cliente" id="gp_id_cliente">
+            <input type="hidden" name="redirect_to" value="monitoramento_gestaopro.php">
+            <div class="modal-header p-4 border-0" style="background: linear-gradient(135deg, #7c3aed, #4361ee);">
+                <div>
+                    <h5 class="modal-title fw-bold text-white d-flex align-items-center gap-2">
+                        <i class="bi bi-calendar-plus fs-4"></i> Agendar Treinamento
+                    </h5>
+                    <p class="mb-0 text-white opacity-75 small" id="gp_cliente_label">Cliente</p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Cliente</label>
+                    <div class="input-group">
+                        <span class="input-group-text" style="background:rgba(124,58,237,0.1); border-color:rgba(124,58,237,0.3);"><i class="bi bi-building" style="color:#7c3aed"></i></span>
+                        <input type="text" class="form-control fw-bold" id="gp_cliente_display" readonly
+                               style="background:rgba(124,58,237,0.05); border-color:rgba(124,58,237,0.3); cursor:default;">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Contato / Interlocutor</label>
+                    <input type="text" name="nome_contato" id="gp_nome_contato" class="form-control" placeholder="Digite o nome do contato..." required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Módulo / Tema</label>
+                    <select name="tema" id="gp_tema" class="form-select" required>
+                        <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
+                        <option value="CADASTROS/ESTOQUE">CADASTROS/ESTOQUE</option>
+                        <option value="VENDAS">VENDAS</option>
+                        <option value="COMPRAS">COMPRAS</option>
+                        <option value="FATURAMENTO/NF">FATURAMENTO/NF</option>
+                        <option value="FINANCEIRO/CAIXA">FINANCEIRO/CAIXA</option>
+                        <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
+                        <option value="RELATÓRIOS">RELATÓRIOS</option>
+                        <option value="ATENDIMENTOS">ATENDIMENTOS</option>
+                        <option value="DUVIDAS">DUVIDAS</option>
+                    </select>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-7">
+                        <label class="form-label small fw-bold text-muted">Data e Horário</label>
+                        <input type="datetime-local" name="data_treinamento" id="gp_data_treinamento" class="form-control" required>
+                    </div>
+                    <div class="col-5">
+                        <label class="form-label small fw-bold text-muted">Status</label>
+                        <select name="status" id="gp_status" class="form-select">
+                            <option value="PENDENTE">PENDENTE</option>
+                            <option value="AGENDADO">AGENDADO</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-4">
+                <button type="button" class="btn btn-link text-muted fw-bold text-decoration-none me-auto" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary px-5 fw-bold" style="border-radius: 12px; height: 46px;">
+                    <i class="bi bi-check-lg me-2"></i> Agendar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function abrirModalAgendamento(idCliente, nomeCliente) {
+    document.getElementById('gp_id_cliente').value = idCliente;
+    document.getElementById('gp_cliente_label').textContent = nomeCliente;
+    document.getElementById('gp_cliente_display').value = nomeCliente;
+    document.getElementById('gp_nome_contato').value = '';
+    document.getElementById('gp_tema').selectedIndex = 0;
+    document.getElementById('gp_status').value = 'PENDENTE';
+    document.getElementById('gp_data_treinamento').value = '';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAgendamentoGP')).show();
+}
+</script>
 
 <?php
 $js_extra = '';

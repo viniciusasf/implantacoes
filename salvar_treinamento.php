@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     $redirect_to = $_POST['redirect_to'] ?? '';
     // Valida o redirect para aceitar apenas páginas do sistema
-    $paginas_permitidas = ['clientes.php', 'treinamentos_cliente.php', 'treinamentos.php'];
+    $paginas_permitidas = ['clientes.php', 'treinamentos_cliente.php', 'treinamentos.php', 'monitoramento_gestaopro.php', 'chamados_gestaopro.php'];
     $redirect_base = basename($redirect_to);
     if (!in_array($redirect_base, $paginas_permitidas)) {
         $redirect_base = 'treinamentos_cliente.php';
@@ -84,6 +84,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     if ($redirect_base === 'clientes.php') {
         header("Location: clientes.php?msg=" . urlencode($msg));
+    } elseif (in_array($redirect_base, ['monitoramento_gestaopro.php', 'chamados_gestaopro.php'])) {
+        header("Location: " . $redirect_base . "?msg=" . urlencode($msg));
     } else {
         header("Location: treinamentos_cliente.php?id_cliente=" . $id_cliente . "&msg=" . urlencode($msg));
     }
