@@ -3,10 +3,18 @@ require_once 'config.php';
 require_once 'header.php'; 
 
 // Buscar mapeamento de clientes
-$stmt_map = $pdo->query("SELECT id_cliente, id_cliente_api FROM clientes WHERE id_cliente_api IS NOT NULL AND id_cliente_api != ''");
-$mapa_clientes_local = [];
-while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
-    $mapa_clientes_local[$row_map['id_cliente_api']] = $row_map['id_cliente'];
+$stmt_map = $pdo->query("SELECT id_cliente, id_cliente_api, servidor FROM clientes WHERE id_cliente_api IS NOT NULL AND id_cliente_api != ''");
+    $mapa_clientes_local = [];
+    $mapa_servidor_local = [];
+    while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
+        $mapa_clientes_local[$row_map['id_cliente_api']] = $row_map['id_cliente'];
+        $mapa_servidor_local[$row_map['id_cliente_api']] = $row_map['servidor'];
+    }
+
+$stmt_retornos = $pdo->query("SELECT id_chamado FROM chamados_retornos");
+$chamados_retornos_local = [];
+while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
+    $chamados_retornos_local[] = (int)$row_retorno['id_chamado'];
 }
 ?>
 <div class="container-fluid px-0">
@@ -115,12 +123,9 @@ while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
                             <th class="px-4 py-3 sortable" data-col="ID">#ID</th>
                             <th class="py-3 sortable" data-col="FANTASIA">Cliente</th>
                             <th class="py-3 sortable" data-col="CHAMADO_STATUS">Status</th>
-                            <th class="py-3 sortable" data-col="TIPOACOMP">Tipo</th>
-                            <th class="py-3 sortable" data-col="RESPONSAVEL">Responsável</th>
-                            <th class="py-3 sortable" data-col="PESO" style="text-align:center">Peso</th>
-                            <th class="py-3 sortable" data-col="DATA">Abertura</th>
+                            <th class="py-3 sortable" data-col="SERVIDOR">SRV</th>
+                            <th class="py-3 sortable" data-col="DESCRICAO">Descrição</th>
                             <th class="py-3 sortable" data-col="DATAPREV_RETORNO">Prev. Retorno</th>
-                            <th class="py-3 sortable" data-col="EXCEDIDO" style="text-align:center">Excedido</th>
                             <th class="py-3 text-center">Ações</th>
                         </tr>
                     </thead>
@@ -141,9 +146,36 @@ while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
 
 <script>
 const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
+    const MAPA_SERVIDOR_LOCAL = <?php echo json_encode($mapa_servidor_local); ?>;
 
 (function(){
-    let todos=[], sortCol='DATA', sortAsc=false;
+    let todos=[], sortCol='DATAPREV_RETORNO', sortAsc=true;
+    let chamadosBaixados = <?php echo json_encode($chamados_retornos_local); ?>;
+
+    window.alternarBaixa = function(id_chamado, acao) {
+        const fd = new FormData();
+        fd.append('id_chamado', id_chamado);
+        fd.append('acao', acao);
+        
+        fetch('salvar_chamado_retorno.php', {
+            method: 'POST',
+            body: fd
+        }).then(res => res.json()).then(resp => {
+            if (resp.sucesso) {
+                if (acao === 'dar_baixa') {
+                    if (!chamadosBaixados.includes(id_chamado)) chamadosBaixados.push(id_chamado);
+                } else {
+                    chamadosBaixados = chamadosBaixados.filter(id => id !== id_chamado);
+                }
+                aplicarFiltros();
+            } else {
+                alert('Erro ao atualizar: ' + (resp.erro || 'Erro desconhecido.'));
+            }
+        }).catch(err => {
+            console.error(err);
+            alert('Erro de rede ao atualizar baixa.');
+        });
+    };
 
     function fmtData(iso){
         if(!iso) return '<span style="color:var(--text-muted)">—</span>';
@@ -163,6 +195,58 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         if(!s) return '—';
         const [bg,fg] = STATUS_COR[s] || ['var(--primary-light)','var(--primary)'];
         return `<span class="badge-ch" style="background:${bg};color:${fg}">${s}</span>`;
+    }
+
+    function escapeHtmlAttribute(text){
+        return String(text||'')
+            .replace(/&/g,'&amp;')
+            .replace(/"/g,'&quot;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;');
+    }
+
+    function criarMensagemWhatsapp(chamado){
+        const servidor = chamado.SERVIDOR || chamado.SERVIDORNUVEM || MAPA_SERVIDOR_LOCAL[chamado.ID_CLIENTE] || '—';
+        const usuario = chamado.CHAMADO_USUARIO || chamado.USUARIO || 'cliente';
+        const descricao = String(chamado.DESCRICAO || 'Sem descrição')
+            .replace(/\r?\n/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        const resumo = descricao.length > 220 ? descricao.slice(0, 220) + '...' : descricao;
+        return `Olá, ${usuario} 👋\n\n` +
+            `Seu chamado *#${chamado.ID}* foi aberto com sucesso ✅\n\n` +
+            `*Status:* ${chamado.CHAMADO_STATUS || 'Não informado'}\n` +
+            `*Tipo:* ${chamado.TIPOACOMP || 'Não informado'}\n` +
+            `*Servidor:* ${servidor}\n` +
+            `*Responsável:* ${chamado.RESPONSAVEL || 'Não informado'}\n` +
+            `*Resumo:* ${resumo}\n` +
+            `*Previsão de retorno:* ${fmtData(chamado.DATAPREV_RETORNO)}\n\n` +
+            `Sigo acompanhando por aqui e, assim que houver novidade, te aviso.`;
+    }
+
+    function copiarTextoAreaTransferencia(texto, mensagemSucesso){
+        if(navigator.clipboard && window.isSecureContext){
+            navigator.clipboard.writeText(texto).then(()=>alert(mensagemSucesso)).catch(()=>fallbackCopy(texto, mensagemSucesso));
+        } else {
+            fallbackCopy(texto, mensagemSucesso);
+        }
+    }
+
+    function fallbackCopy(texto, mensagemSucesso){
+        const textarea = document.createElement('textarea');
+        textarea.value = texto;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            alert(mensagemSucesso);
+        } catch (e) {
+            alert('Erro ao copiar mensagem para o WhatsApp.');
+        }
+        document.body.removeChild(textarea);
     }
 
     function chipPeso(v){
@@ -226,40 +310,64 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             return;
         }
         lista.sort((a,b)=>{
+            const statusOrder = {
+                'Aguardando Suporte': 1,
+                'Aguardando Testes': 2,
+                'Aguardando Desenvolvimento': 3
+            };
+            const wA = statusOrder[a.CHAMADO_STATUS] || 99;
+            const wB = statusOrder[b.CHAMADO_STATUS] || 99;
+            
+            if (wA !== wB) {
+                return wA - wB;
+            } else if (a.CHAMADO_STATUS !== b.CHAMADO_STATUS) {
+                return String(a.CHAMADO_STATUS).localeCompare(String(b.CHAMADO_STATUS), 'pt-BR');
+            }
+
             let va=a[sortCol]??'', vb=b[sortCol]??'';
+            
+            if (sortCol === 'DATAPREV_RETORNO' || sortCol === 'DATA') {
+                const ta = va ? new Date(va).getTime() : Infinity;
+                const tb = vb ? new Date(vb).getTime() : Infinity;
+                return sortAsc ? ta - tb : tb - ta;
+            }
+
             if(typeof va==='number') return sortAsc?va-vb:vb-va;
             return sortAsc?String(va).localeCompare(String(vb),'pt-BR'):String(vb).localeCompare(String(va),'pt-BR');
         });
         tbody.innerHTML=lista.map(r=>{
-            const isVinculado = MAPA_CLIENTES_LOCAL[r.ID_CLIENTE];
-            const btnLink = isVinculado ? 
-                `<a href="clientes.php?busca=${encodeURIComponent(r.FANTASIA || r.RAZAOSOCIAL || '')}" target="_blank" class="btn btn-sm btn-outline-primary ms-auto" style="padding:2px 6px; font-size:.7rem; margin-top:2px;" title="Acessar Cliente Local"><i class="bi bi-link-45deg"></i> Vinculado</a>` : '';
+            const idChamado = parseInt(r.ID);
+            const isBaixado = chamadosBaixados.includes(idChamado);
                 
+            const btnBaixa = isBaixado ?
+                `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Desfazer baixa" onclick="alternarBaixa(${idChamado}, 'remover_baixa')"><i class="bi bi-check-all"></i> VALIDADO</button>` :
+                `<button type="button" class="btn btn-sm btn-outline-success fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Dar baixa" onclick="alternarBaixa(${idChamado}, 'dar_baixa')"><i class="bi bi-check2"></i> BAIXAR</button>`;
+
+            const rowClass = isBaixado ? 'linha-baixada' : '';
+            const servidor = (r.SERVIDOR || r.SERVIDORNUVEM || MAPA_SERVIDOR_LOCAL[r.ID_CLIENTE] || '—');
+            const mensagemWhatsapp = criarMensagemWhatsapp(r);
+            const msgAttr = escapeHtmlAttribute(mensagemWhatsapp);
             return `
-        <tr>
+        <tr class="${rowClass}">
             <td class="px-4 py-3" style="font-size:.78rem;font-family:monospace;color:var(--text-muted)">#${r.ID}</td>
             <td>
-                <div class="d-flex align-items-start gap-2">
-                    <div style="min-width:0; flex:1;">
-                        <div style="font-weight:600;font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.FANTASIA||'—'}</div>
-                        <div style="font-size:.72rem;color:var(--text-muted)">${r.SERIAL||''}</div>
-                    </div>
-                    ${btnLink}
-                </div>
+                <div style="font-weight:600;font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.FANTASIA||'—'}</div>
+                <div style="font-size:.72rem;color:var(--text-muted)">${r.SERIAL||''}</div>
             </td>
             <td>${badgeStatus(r.CHAMADO_STATUS)}</td>
-            <td style="font-size:.82rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.TIPOACOMP||''}">${r.TIPOACOMP||'—'}</td>
-            <td style="font-size:.82rem">${r.RESPONSAVEL||'—'}</td>
-            <td style="text-align:center">${chipPeso(r.PESO)}</td>
-            <td style="font-size:.82rem">${fmtData(r.DATA)}</td>
+            <td style="font-size:.75rem;background:var(--bg-body);padding:2px 7px;border-radius:6px;white-space:nowrap">${servidor}</td>
+            <td style="font-size:.82rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.DESCRICAO||''}">${r.DESCRICAO||'—'}</td>
             <td style="font-size:.82rem">${fmtData(r.DATAPREV_RETORNO)}</td>
             <td style="text-align:center">
-                ${r.EXCEDIDO?'<i class="bi bi-alarm-fill" style="color:var(--danger)" title="Prazo excedido"></i>':'<span style="color:var(--text-muted)">—</span>'}
-            </td>
-            <td style="text-align:center">
-                <a href="https://interno.gestaopro.srv.br/chamados/${r.ID}" target="_blank" class="btn btn-sm btn-primary fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Abrir chamado">
-                    <i class="bi bi-box-arrow-up-right"></i> Abrir
-                </a>
+                <div class="d-flex gap-1 justify-content-center">
+                    <button type="button" class="btn btn-sm btn-outline-success copy-whatsapp-message" data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp" data-message="${msgAttr}" title="Copiar WhatsApp">
+                        <i class="bi bi-whatsapp"></i>
+                    </button>
+                    <a href="https://interno.gestaopro.srv.br/chamados/${r.ID}" target="_blank" class="btn btn-sm btn-primary fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Abrir chamado">
+                        <i class="bi bi-box-arrow-up-right"></i> ABRIR
+                    </a>
+                    ${btnBaixa}
+                </div>
             </td>
         </tr>`;
         }).join('');
@@ -351,6 +459,15 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         });
     });
 
+    document.addEventListener('click', function(event){
+        const btn = event.target.closest('.copy-whatsapp-message');
+        if (!btn) return;
+        const msg = btn.dataset.message;
+        if (msg) {
+            copiarTextoAreaTransferencia(msg, 'Mensagem WhatsApp copiada!');
+        }
+    });
+
     carregarDados();
 })();
 </script>
@@ -358,6 +475,16 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
 <style>
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{animation:spin .7s linear infinite;display:inline-block}
+
+/* Linha com cor verde suave quando tem baixa/retorno dado */
+tr.linha-baixada > td {
+    background-color: var(--success-light) !important;
+}
+
+/* Modo escuro: verde mais visível */
+[data-theme="dark"] tr.linha-baixada > td {
+    background-color: rgba(16, 185, 129, 0.18) !important;
+}
 </style>
 
 <?php $js_extra=''; include 'footer.php'; ?>
