@@ -182,6 +182,13 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         return new Date(iso).toLocaleDateString('pt-BR');
     }
 
+    function fmtDataTexto(iso){
+        if(iso) return new Date(iso).toLocaleDateString('pt-BR');
+        const semPrevisaoDesenvolvimento = todos.filter(r => r.CHAMADO_STATUS === 'Em Desenvolvimento' && !r.DATAPREV_RETORNO).length;
+        if(semPrevisaoDesenvolvimento > 3) return 'Mais de 3 chamados em desenvolvimento, sem previsão de retorno';
+        return 'Sem previsão de retorno';
+    }
+
     const STATUS_COR = {
         'Aguardando Desenvolvimento': ['var(--warning-light)','var(--warning)'],
         'Em Desenvolvimento':          ['var(--info-light)',   'var(--info)'],
@@ -202,26 +209,29 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             .replace(/&/g,'&amp;')
             .replace(/"/g,'&quot;')
             .replace(/</g,'&lt;')
-            .replace(/>/g,'&gt;');
+            .replace(/>/g,'&gt;')
+            .replace(/\r?\n/g,'&#13;&#10;');
     }
 
     function criarMensagemWhatsapp(chamado){
         const servidor = chamado.SERVIDOR || chamado.SERVIDORNUVEM || MAPA_SERVIDOR_LOCAL[chamado.ID_CLIENTE] || '—';
         const usuario = chamado.CHAMADO_USUARIO || chamado.USUARIO || 'cliente';
         const descricao = String(chamado.DESCRICAO || 'Sem descrição')
-            .replace(/\r?\n/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-        const resumo = descricao.length > 220 ? descricao.slice(0, 220) + '...' : descricao;
-        return `Olá, ${usuario} 👋\n\n` +
-            `Seu chamado *#${chamado.ID}* foi aberto com sucesso ✅\n\n` +
-            `*Status:* ${chamado.CHAMADO_STATUS || 'Não informado'}\n` +
-            `*Tipo:* ${chamado.TIPOACOMP || 'Não informado'}\n` +
-            `*Servidor:* ${servidor}\n` +
-            `*Responsável:* ${chamado.RESPONSAVEL || 'Não informado'}\n` +
-            `*Resumo:* ${resumo}\n` +
-            `*Previsão de retorno:* ${fmtData(chamado.DATAPREV_RETORNO)}\n\n` +
-            `Sigo acompanhando por aqui e, assim que houver novidade, te aviso.`;
+            .replace(/\r\n/g,'\n')
+            .replace(/\r/g,'\n')
+            .split('\n')
+            .map(line => line.trim())
+            .join('\r\n');
+        const resumo = descricao.length > 500 ? descricao.slice(0, 500) + '...' : descricao;
+        return `Olá, ${usuario} 👋\r\n\r\n` +
+            `Seu chamado *#${chamado.ID}* foi aberto com sucesso ✅\r\n\r\n` +
+            `*Status:* ${chamado.CHAMADO_STATUS || 'Não informado'} ⏳\r\n` +
+            `*Tipo:* ${chamado.TIPOACOMP || 'Não informado'} 📄\r\n` +
+            `*Servidor:* ${servidor} 🖥️\r\n` +
+            `*Responsável:* ${chamado.RESPONSAVEL || 'Não informado'} 👤\r\n` +
+            `*Resumo:* ${resumo} 🔍\r\n` +
+            `*Previsão de retorno:* ${fmtDataTexto(chamado.DATAPREV_RETORNO)} 📅\r\n\r\n` +
+            `Sigo acompanhando por aqui e, assim que houver novidade, te aviso. 🚀`;
     }
 
     function copiarTextoAreaTransferencia(texto, mensagemSucesso){
@@ -341,7 +351,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
                 
             const btnBaixa = isBaixado ?
                 `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Desfazer baixa" onclick="alternarBaixa(${idChamado}, 'remover_baixa')"><i class="bi bi-check-all"></i> VALIDADO</button>` :
-                `<button type="button" class="btn btn-sm btn-outline-success fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Dar baixa" onclick="alternarBaixa(${idChamado}, 'dar_baixa')"><i class="bi bi-check2"></i> BAIXAR</button>`;
+                `<button type="button" class="btn btn-sm btn-outline-success fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Dar baixa" onclick="alternarBaixa(${idChamado}, 'dar_baixa')"><i class="bi bi-check2"></i> VALIDAR</button>`;
 
             const rowClass = isBaixado ? 'linha-baixada' : '';
             const servidor = (r.SERVIDOR || r.SERVIDORNUVEM || MAPA_SERVIDOR_LOCAL[r.ID_CLIENTE] || '—');

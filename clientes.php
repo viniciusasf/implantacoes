@@ -166,7 +166,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $recursos,
         ]);
     }
-    header("Location: clientes.php?msg=Dados+atualizados&view=" . $view_mode);
+
+    $redirect_to = 'clientes.php';
+    if (!empty($_POST['redirect_to'])) {
+        $candidate = basename($_POST['redirect_to']);
+        $allowed = ['clientes.php', 'monitoramento_gestaopro.php', 'chamados_gestaopro.php'];
+        if (in_array($candidate, $allowed, true)) {
+            $redirect_to = $candidate;
+        }
+    }
+
+    header("Location: {$redirect_to}?msg=Dados+atualizados&view=" . $view_mode);
     exit;
 }
 
@@ -700,7 +710,7 @@ body, html {
                                     data-inicio="<?= $c['data_inicio'] ?>" 
                                     data-fim="<?= $c['data_fim'] ?>" 
                                     data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
-                                    data-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '') ?>" 
+                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '') ?>" 
                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                     data-cfg="<?= $c['configurado'] ?>" 
                                     data-licencas="<?= $c['num_licencas'] ?>" 
@@ -834,6 +844,7 @@ body, html {
                                                     data-inicio="<?= $c['data_inicio'] ?>" 
                                                     data-fim="<?= $c['data_fim'] ?>" 
                                                     data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
+                                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '') ?>" 
                                                     data-obs="<?= htmlspecialchars($c['observacao']) ?>" 
                                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                                     data-cfg="<?= $c['configurado'] ?>" 
@@ -1175,7 +1186,7 @@ body, html {
         document.getElementById('data_inicio').value = d.inicio || '';
         document.getElementById('id_data_fim').value = d.fim || '';
         document.getElementById('data_previsao_encerramento').value = d.previsaoEncerramento || '';
-        document.getElementById('id_cliente_api').value = d.api || '';
+        document.getElementById('id_cliente_api').value = d.idClienteApi || d.api || button.getAttribute('data-id-cliente-api') || '';
         document.getElementById('emitir_nf').value = d.nf || 'Não';
         document.getElementById('configurado').value = d.cfg || 'Não';
         document.getElementById('num_licencas').value = d.licencas || 0;

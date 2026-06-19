@@ -150,6 +150,7 @@ while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
                             <th class="py-3 sortable" data-col="STATUS_IMPLANTACAO">Status <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3 sortable" data-col="VENDEDOR">Consultor <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3 sortable" data-col="SERVIDOR">Servidor <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3" style="text-align:center">Chamados</th>
                             <th class="py-3" style="text-align:center">Ações</th>
                         </tr>
                     </thead>
@@ -208,6 +209,7 @@ while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
 <script>
 const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
 const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
+const CHAMADOS_STATUS_WHATSAPP = ['Aguardando Desenvolvimento','Aguardando Fila','Aguardando Cliente','Aguardando Testes','Resolvido','Encerrado'];
 
 (function(){
     let todosRegistros = [];
@@ -218,6 +220,45 @@ const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
         if (!iso) return '<span style="color:var(--text-muted)">—</span>';
         const d = new Date(iso);
         return d.toLocaleDateString('pt-BR');
+    }
+
+    function fmtDataTexto(iso){
+        if (!iso) return 'Sem previsão de retorno';
+        return new Date(iso).toLocaleDateString('pt-BR');
+    }
+
+    function escapeHtmlAttribute(text){
+        return String(text||'')
+            .replace(/&/g,'&amp;')
+            .replace(/"/g,'&quot;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/\r?\n/g,'&#13;&#10;');
+    }
+
+    function copiarTextoAreaTransferencia(texto, mensagemSucesso){
+        if(navigator.clipboard && window.isSecureContext){
+            navigator.clipboard.writeText(texto).then(()=>alert(mensagemSucesso)).catch(()=>fallbackCopy(texto, mensagemSucesso));
+        } else {
+            fallbackCopy(texto, mensagemSucesso);
+        }
+    }
+
+    function fallbackCopy(texto, mensagemSucesso){
+        const textarea = document.createElement('textarea');
+        textarea.value = texto;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            alert(mensagemSucesso);
+        } catch (e) {
+            alert('Erro ao copiar mensagem para o WhatsApp.');
+        }
+        document.body.removeChild(textarea);
     }
 
     function badgeStatus(s){
@@ -284,10 +325,19 @@ const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
             
             const localId = MAPA_CLIENTES_LOCAL[r.ID_CLIENTE] || 0;
             const nomeCliente = r.FANTASIA || r.RAZAOSOCIAL || '';
-            const btnAgendar = `<button class="btn btn-sm btn-agendar-gp" onclick="abrirModalAgendamento(${localId}, '${nomeCliente.replace(/'/g, "\\'")}')"
+            const vendedorCliente = r.VENDEDOR || r.RESPONSAVEL || '';
+            const servidorCliente = r.SERVIDOR || r.SERVIDORNUVEM || '';
+            const dataInicioPadrao = r.DATA_INICIO || r.INICIO || r.DATAINICIO || '';
+            const licencasCliente = r.NUM_LICENCAS || r.LICENCAS || r.NUM_LICENCIAS || 0;
+
+            const btnAgendar = isVinculado ? `<button class="btn btn-sm btn-agendar-gp" onclick='abrirModalAgendamento(${localId}, ${JSON.stringify(nomeCliente)})'
                 title="Novo Agendamento">
                 <i class="bi bi-calendar-plus me-1"></i>Agendar
-            </button>`;
+            </button>` : '';
+
+            const btnCadastrar = !isVinculado ? `<button class="btn btn-sm btn-success fw-bold btn-cadastrar-gp" data-nome="${escapeHtmlAttribute(nomeCliente)}" data-vendedor="${escapeHtmlAttribute(vendedorCliente)}" data-servidor="${escapeHtmlAttribute(servidorCliente)}" data-id-cliente-api="${escapeHtmlAttribute(String(r.ID_CLIENTE || ''))}" data-data-inicio="${escapeHtmlAttribute(dataInicioPadrao)}" data-licencas="${escapeHtmlAttribute(String(licencasCliente))}" title="Cadastrar cliente local">
+                    <i class="bi bi-plus-circle me-1"></i>Cadastrar
+                </button>` : '';
                 
             const linkChamados = MAPA_LINKS_CHAMADOS[r.ID_CLIENTE];
             const temChamados = window.chamadosValidos && window.chamadosValidos[r.ID_CLIENTE];
@@ -299,6 +349,21 @@ const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
                                style="font-size: 0.72rem; white-space: nowrap; padding:3px 8px; border-radius:7px;">
                                 <i class="bi bi-headset me-1"></i> Chamados
                             </a>`;
+            }
+
+            const chamadosSuporte = (window.chamadosByCliente && window.chamadosByCliente[r.ID_CLIENTE]) || [];
+            const totalChamados = chamadosSuporte.length;
+            const chamadosSuporteValidos = chamadosSuporte.filter(ch => CHAMADOS_STATUS_WHATSAPP.includes(ch.CHAMADO_STATUS));
+            let btnWhatsapp = '';
+            if (chamadosSuporteValidos.length > 0) {
+                const mensagem = criarMensagemWhatsappChamados(r.FANTASIA || r.RAZAOSOCIAL, chamadosSuporteValidos);
+                btnWhatsapp = `<button type="button" class="btn btn-sm btn-outline-success fw-bold copy-chamados-whatsapp ms-1"
+                        style="font-size: 0.72rem; white-space: nowrap; padding:3px 8px; border-radius:7px;"
+                        data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp"
+                        data-message="${escapeHtmlAttribute(mensagem)}"
+                        title="Copiar WhatsApp">
+                    <i class="bi bi-whatsapp"></i>
+                </button>`;
             }
 
             return `
@@ -315,10 +380,15 @@ const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
                 <td>${badgeStatus(r.STATUS_IMPLANTACAO)}</td>
                 <td style="font-size:.82rem">${nomeConsultor(r)}</td>
                 <td><span style="font-size:.78rem;font-family:monospace;background:var(--bg-body);padding:2px 8px;border-radius:6px">${r.SERVIDOR || '—'}</span></td>
+                <td style="text-align:center;font-size:.82rem;font-weight:600;color:var(--primary);">
+                    ${totalChamados}
+                </td>
                 <td style="text-align:center">
-                    <div class="d-flex justify-content-center align-items-center flex-nowrap">
+                    <div class="d-flex justify-content-center align-items-center flex-nowrap gap-1">
+                        ${btnCadastrar}
                         ${btnAgendar}
                         ${btnChamados}
+                        ${btnWhatsapp}
                     </div>
                 </td>
             </tr>
@@ -372,6 +442,26 @@ const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
         document.getElementById('kpi-encerrado').textContent = todosRegistros.filter(r=>r.STATUS_IMPLANTACAO==='ENCERRADA' && r.VENDEDOR2 === 'VINICIUS').length;
     }
 
+    function criarMensagemWhatsappChamados(nomeCliente, chamados){
+        const cliente = nomeCliente ? `"${nomeCliente.replace(/"/g,'\"')}"` : 'o cliente';
+        const linhas = chamados.map(ch => {
+            const descricao = String(ch.DESCRICAO || 'Sem descrição')
+                .replace(/\r\n/g,'\n')
+                .replace(/\r/g,'\n')
+                .split('\n')
+                .map(line => line.trim())
+                .join(' ');
+            const resumo = descricao.length > 100 ? descricao.slice(0, 100).trim() + '...' : descricao;
+            return `📋 Chamado #${ch.ID}\r\n` +
+                   `⏳ Status: ${ch.CHAMADO_STATUS || 'Não informado'}\r\n` +
+                   `📅 Previsão de Retorno: ${fmtDataTexto(ch.DATAPREV_RETORNO)}\r\n` +
+                   `📝 Descrição: ${resumo}`;
+        });
+        return `Olá! Gostaria de informar todos os chamados que estão em aberto para a empresa ${cliente}:\r\n\r\n` +
+               linhas.join('\r\n\r\n') +
+               `\r\n\r\nQualquer dúvida, estou à disposição! 🚀`;
+    }
+
     // ── carregar dados ─────────────────────────────────────────────────────────
     function carregarDados(forcar){
         document.getElementById('estado-carregando').classList.remove('d-none');
@@ -394,9 +484,14 @@ const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
                 todosRegistros = clientes;
 
                 window.chamadosValidos = {};
+                window.chamadosByCliente = {};
                 const chamadosList = respChamados.dados.chamados || respChamados.dados || [];
                 chamadosList.forEach(ch => {
-                    if (['Aguardando Desenvolvimento', 'Aguardando Suporte', 'Aguardando Testes'].includes(ch.CHAMADO_STATUS)) {
+                    if (!window.chamadosByCliente[ch.ID_CLIENTE]) {
+                        window.chamadosByCliente[ch.ID_CLIENTE] = [];
+                    }
+                    window.chamadosByCliente[ch.ID_CLIENTE].push(ch);
+                    if (CHAMADOS_STATUS_WHATSAPP.includes(ch.CHAMADO_STATUS)) {
                         window.chamadosValidos[ch.ID_CLIENTE] = true;
                     }
                 });
@@ -478,6 +573,31 @@ const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
         });
     });
 
+    document.addEventListener('click', function(event){
+        const btn = event.target.closest('.copy-chamados-whatsapp');
+        if (btn) {
+            const msg = btn.dataset.message;
+            if (msg) {
+                copiarTextoAreaTransferencia(msg, 'Mensagem WhatsApp copiada!');
+            }
+            return;
+        }
+
+        const cadastrarBtn = event.target.closest('.btn-cadastrar-gp');
+        if (cadastrarBtn) {
+            event.preventDefault();
+            abrirModalCadastroCliente(
+                cadastrarBtn.dataset.nome,
+                cadastrarBtn.dataset.vendedor,
+                cadastrarBtn.dataset.servidor,
+                cadastrarBtn.dataset.idClienteApi,
+                cadastrarBtn.dataset.dataInicio,
+                cadastrarBtn.dataset.licencas
+            );
+            return;
+        }
+    });
+
     // Init
     carregarDados(false);
 })();
@@ -487,6 +607,75 @@ const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
 @keyframes spin { to { transform:rotate(360deg); } }
 .spin { animation:spin .7s linear infinite; display:inline-block; }
 </style>
+
+<!-- Modal Cadastro de Cliente (GestãoPro) -->
+<div class="modal fade" id="modalCadastroClienteGP" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" action="clientes.php" class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden;">
+            <input type="hidden" name="redirect_to" value="monitoramento_gestaopro.php">
+            <div class="modal-header p-4 border-0" style="background: linear-gradient(135deg, #16a34a, #22c55e);">
+                <div>
+                    <h5 class="modal-title fw-bold text-white d-flex align-items-center gap-2">
+                        <i class="bi bi-person-plus fs-4"></i> Cadastrar Cliente
+                    </h5>
+                    <p class="mb-0 text-white opacity-75 small">Cliente novo na API</p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Nome Fantasia / Empresa</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-building text-success"></i></span>
+                        <input type="text" name="fantasia" id="cadastroNomeFantasia" class="form-control border-start-0 ps-0" required placeholder="Ex: V.M MATÉRIAS DE LIMPEZA">
+                    </div>
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-muted">Vendedor</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-end-0"><i class="bi bi-person-badge text-success"></i></span>
+                            <input type="text" name="vendedor" id="cadastroVendedor" class="form-control border-start-0 ps-0" placeholder="Nome do vendedor">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-muted">Servidor</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-end-0"><i class="bi bi-server text-success"></i></span>
+                            <input type="text" name="servidor" id="cadastroServidor" class="form-control border-start-0 ps-0" placeholder="Ex: LOCAL / NUVEM">
+                        </div>
+                    </div>
+                </div>
+                <div class="row g-3 mt-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-muted">Data de Início</label>
+                        <input type="date" name="data_inicio" id="cadastroDataInicio" class="form-control" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold text-muted">Nº de Licenças</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white border-end-0"><i class="bi bi-key text-success"></i></span>
+                            <input type="number" name="num_licencas" id="cadastroNumLicencas" class="form-control border-start-0 ps-0" placeholder="0">
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3 mt-3">
+                    <label class="form-label small fw-bold text-muted">ID Cliente API (GestãoPro)</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-braces-asterisk text-success"></i></span>
+                        <input type="number" name="id_cliente_api" id="cadastroIdClienteApi" class="form-control border-start-0 ps-0" placeholder="Ex: 6547" required>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-0 p-4">
+                <button type="button" class="btn btn-link text-muted fw-bold text-decoration-none me-auto" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-success px-5 fw-bold" style="border-radius: 12px; height: 46px;">
+                    <i class="bi bi-check-lg me-2"></i> Cadastrar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <!-- Modal Novo Agendamento (GestãoPro) -->
 <div class="modal fade" id="modalAgendamentoGP" tabindex="-1" aria-hidden="true">
@@ -565,6 +754,16 @@ function abrirModalAgendamento(idCliente, nomeCliente) {
     document.getElementById('gp_status').value = 'PENDENTE';
     document.getElementById('gp_data_treinamento').value = '';
     bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAgendamentoGP')).show();
+}
+
+function abrirModalCadastroCliente(nome, vendedor, servidor, idClienteApi, dataInicio, numLicencas) {
+    document.getElementById('cadastroNomeFantasia').value = nome || '';
+    document.getElementById('cadastroVendedor').value = vendedor || '';
+    document.getElementById('cadastroServidor').value = servidor || '';
+    document.getElementById('cadastroDataInicio').value = dataInicio || new Date().toISOString().slice(0, 10);
+    document.getElementById('cadastroNumLicencas').value = numLicencas ? Number(numLicencas) : 0;
+    document.getElementById('cadastroIdClienteApi').value = idClienteApi ? String(idClienteApi).trim() : '';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCadastroClienteGP')).show();
 }
 </script>
 
