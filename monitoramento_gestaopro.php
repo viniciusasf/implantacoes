@@ -148,6 +148,7 @@ while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
                         <tr style="background:var(--bg-body);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">
                             <th class="px-4 py-3 sortable" data-col="FANTASIA">Cliente <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3 sortable" data-col="STATUS_IMPLANTACAO">Status <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3 sortable" data-col="TIPOACOMP">TIPOACOMP <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3 sortable" data-col="VENDEDOR">Consultor <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3 sortable" data-col="SERVIDOR">Servidor <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3" style="text-align:center">Chamados</th>
@@ -210,6 +211,7 @@ while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
 const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
 const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
 const CHAMADOS_STATUS_WHATSAPP = ['Aguardando Desenvolvimento','Aguardando Fila','Aguardando Cliente','Aguardando Testes','Resolvido','Encerrado'];
+const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
 
 (function(){
     let todosRegistros = [];
@@ -226,7 +228,14 @@ const CHAMADOS_STATUS_WHATSAPP = ['Aguardando Desenvolvimento','Aguardando Fila'
         if (!iso) return 'Sem previsão de retorno';
         return new Date(iso).toLocaleDateString('pt-BR');
     }
-
+    function escapeHtml(text){
+        return String(text||'')
+            .replace(/&/g,'&amp;')
+            .replace(/"/g,'&quot;')
+            .replace(/'/g,'&#39;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;');
+    }
     function escapeHtmlAttribute(text){
         return String(text||'')
             .replace(/&/g,'&amp;')
@@ -298,7 +307,7 @@ const CHAMADOS_STATUS_WHATSAPP = ['Aguardando Desenvolvimento','Aguardando Fila'
     function renderTabela(lista){
         const tbody = document.getElementById('tbody-gp');
         if (!lista.length){
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-5" style="color:var(--text-muted)">Nenhum registro encontrado.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-5" style="color:var(--text-muted)">Nenhum registro encontrado.</td></tr>`;
             document.getElementById('lbl-contagem').textContent = '0 registros';
             return;
         }
@@ -352,7 +361,8 @@ const CHAMADOS_STATUS_WHATSAPP = ['Aguardando Desenvolvimento','Aguardando Fila'
             }
 
             const chamadosSuporte = (window.chamadosByCliente && window.chamadosByCliente[r.ID_CLIENTE]) || [];
-            const totalChamados = chamadosSuporte.length;
+            const chamadosEmAberto = chamadosSuporte.filter(ch => !CHAMADOS_STATUS_FECHADOS.includes(ch.CHAMADO_STATUS));
+            const totalChamados = chamadosEmAberto.length;
             const chamadosSuporteValidos = chamadosSuporte.filter(ch => CHAMADOS_STATUS_WHATSAPP.includes(ch.CHAMADO_STATUS));
             let btnWhatsapp = '';
             if (chamadosSuporteValidos.length > 0) {
@@ -378,6 +388,7 @@ const CHAMADOS_STATUS_WHATSAPP = ['Aguardando Desenvolvimento','Aguardando Fila'
                     </div>
                 </td>
                 <td>${badgeStatus(r.STATUS_IMPLANTACAO)}</td>
+                <td style="font-size:.82rem">${escapeHtml(r.TIPOACOMP || '—')}</td>
                 <td style="font-size:.82rem">${nomeConsultor(r)}</td>
                 <td><span style="font-size:.78rem;font-family:monospace;background:var(--bg-body);padding:2px 8px;border-radius:6px">${r.SERVIDOR || '—'}</span></td>
                 <td style="text-align:center;font-size:.82rem;font-weight:600;color:var(--primary);">
@@ -454,6 +465,7 @@ const CHAMADOS_STATUS_WHATSAPP = ['Aguardando Desenvolvimento','Aguardando Fila'
             const resumo = descricao.length > 100 ? descricao.slice(0, 100).trim() + '...' : descricao;
             return `📋 Chamado #${ch.ID}\r\n` +
                    `⏳ Status: ${ch.CHAMADO_STATUS || 'Não informado'}\r\n` +
+                   `🏷️ Tipo: ${ch.TIPOACOMP || 'Não informado'}\r\n` +
                    `📅 Previsão de Retorno: ${fmtDataTexto(ch.DATAPREV_RETORNO)}\r\n` +
                    `📝 Descrição: ${resumo}`;
         });
@@ -494,6 +506,12 @@ const CHAMADOS_STATUS_WHATSAPP = ['Aguardando Desenvolvimento','Aguardando Fila'
                     if (CHAMADOS_STATUS_WHATSAPP.includes(ch.CHAMADO_STATUS)) {
                         window.chamadosValidos[ch.ID_CLIENTE] = true;
                     }
+                });
+
+                clientes.forEach(c => {
+                    const chamadosDoCliente = window.chamadosByCliente[c.ID_CLIENTE] || [];
+                    const tipos = [...new Set(chamadosDoCliente.map(ch => (ch.TIPOACOMP || '').trim()).filter(Boolean))];
+                    c.TIPOACOMP = tipos.join(' / ');
                 });
 
                 popularFiltroVendedor(clientes);

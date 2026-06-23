@@ -119,12 +119,37 @@ try {
         exit;
     }
 
-    // 3. Buscar dados
+    // 3. Buscar dados (com suporte a paginação para chamados)
     $dados = buscarEndpoint("/api/{$endpoint}", $cookieStr);
     if (!$dados) {
         http_response_code(502);
         echo json_encode(['sucesso' => false, 'erro' => "Endpoint /api/{$endpoint} retornou resposta inválida."]);
         exit;
+    }
+
+    // Se o endpoint retorna dados paginados, buscar todas as páginas
+    if (isset($dados['totalPages']) && $dados['totalPages'] > 1) {
+        // Identificar a chave dos dados (ex: 'chamados', 'clientes')
+        $chavesDados = array_diff(array_keys($dados), ['total', 'page', 'count', 'totalPages']);
+        $chavePrincipal = reset($chavesDados);
+
+        if ($chavePrincipal && is_array($dados[$chavePrincipal])) {
+            $todosRegistros = $dados[$chavePrincipal];
+            $totalPages = (int) $dados['totalPages'];
+
+            for ($pg = 2; $pg <= $totalPages; $pg++) {
+                $dadosPg = buscarEndpoint("/api/{$endpoint}?page={$pg}", $cookieStr);
+                if ($dadosPg && isset($dadosPg[$chavePrincipal]) && is_array($dadosPg[$chavePrincipal])) {
+                    $todosRegistros = array_merge($todosRegistros, $dadosPg[$chavePrincipal]);
+                }
+            }
+
+            // Substituir array parcial pelo completo
+            $dados[$chavePrincipal] = $todosRegistros;
+            $dados['count'] = count($todosRegistros);
+            $dados['page'] = 'all';
+            $dados['totalPages'] = 1;
+        }
     }
 
     // 4. Cache + retorno

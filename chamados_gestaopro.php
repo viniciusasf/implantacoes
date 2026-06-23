@@ -225,8 +225,8 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         const resumo = descricao.length > 500 ? descricao.slice(0, 500) + '...' : descricao;
         return `Olá, ${usuario} 👋\r\n\r\n` +
             `Seu chamado *#${chamado.ID}* foi aberto com sucesso ✅\r\n\r\n` +
-            `*Status:* ${chamado.CHAMADO_STATUS || 'Não informado'} ⏳\r\n` +
             `*Tipo:* ${chamado.TIPOACOMP || 'Não informado'} 📄\r\n` +
+            `*Status:* ${chamado.CHAMADO_STATUS || 'Não informado'} ⏳\r\n` +
             `*Servidor:* ${servidor} 🖥️\r\n` +
             `*Responsável:* ${chamado.RESPONSAVEL || 'Não informado'} 👤\r\n` +
             `*Resumo:* ${resumo} 🔍\r\n` +
