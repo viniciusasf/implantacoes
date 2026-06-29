@@ -20,6 +20,12 @@ while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
         $mapa_links_chamados[$row_map['id_cliente_api']] = $link;
     }
 }
+
+$stmt_retornos = $pdo->query("SELECT id_chamado FROM chamados_retornos");
+$chamados_retornos_local = [];
+while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
+    $chamados_retornos_local[] = (int)$row_retorno['id_chamado'];
+}
 ?>
 
 <div class="container-fluid px-0">
@@ -210,6 +216,7 @@ while ($row_map = $stmt_map->fetch(PDO::FETCH_ASSOC)) {
 <script>
 const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
 const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
+const CHAMADOS_BAIXADOS = <?php echo json_encode($chamados_retornos_local); ?>;
 const CHAMADOS_STATUS_WHATSAPP = ['Aguardando Desenvolvimento','Aguardando Fila','Aguardando Cliente','Aguardando Testes','Resolvido','Encerrado'];
 const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
 
@@ -339,10 +346,6 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
             const dataInicioPadrao = r.DATA_INICIO || r.INICIO || r.DATAINICIO || '';
             const licencasCliente = r.NUM_LICENCAS || r.LICENCAS || r.NUM_LICENCIAS || 0;
 
-            const btnAgendar = isVinculado ? `<button class="btn btn-sm btn-agendar-gp" onclick='abrirModalAgendamento(${localId}, ${JSON.stringify(nomeCliente)})'
-                title="Novo Agendamento">
-                <i class="bi bi-calendar-plus me-1"></i>Agendar
-            </button>` : '';
 
             const btnCadastrar = !isVinculado ? `<button class="btn btn-sm btn-success fw-bold btn-cadastrar-gp" data-nome="${escapeHtmlAttribute(nomeCliente)}" data-vendedor="${escapeHtmlAttribute(vendedorCliente)}" data-servidor="${escapeHtmlAttribute(servidorCliente)}" data-id-cliente-api="${escapeHtmlAttribute(String(r.ID_CLIENTE || ''))}" data-data-inicio="${escapeHtmlAttribute(dataInicioPadrao)}" data-licencas="${escapeHtmlAttribute(String(licencasCliente))}" title="Cadastrar cliente local">
                     <i class="bi bi-plus-circle me-1"></i>Cadastrar
@@ -371,8 +374,23 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                         style="font-size: 0.72rem; white-space: nowrap; padding:3px 8px; border-radius:7px;"
                         data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp"
                         data-message="${escapeHtmlAttribute(mensagem)}"
+                        data-cliente="${escapeHtmlAttribute(r.FANTASIA || r.RAZAOSOCIAL)}"
                         title="Copiar WhatsApp">
                     <i class="bi bi-whatsapp"></i>
+                </button>`;
+            }
+
+            const chamadosAguardandoTesteValidados = chamadosSuporte.filter(ch => ch.CHAMADO_STATUS === 'Aguardando Testes' && CHAMADOS_BAIXADOS.includes(parseInt(ch.ID)));
+            let btnEnviarResolvidos = '';
+            if (chamadosAguardandoTesteValidados.length > 0) {
+                const msgResolvidos = criarMensagemWhatsappResolvidos(r.FANTASIA || r.RAZAOSOCIAL, chamadosAguardandoTesteValidados);
+                btnEnviarResolvidos = `<button type="button" class="btn btn-sm btn-outline-info fw-bold copy-chamados-whatsapp ms-1"
+                        style="font-size: 0.72rem; white-space: nowrap; padding:3px 8px; border-radius:7px;"
+                        data-bs-toggle="tooltip" data-bs-title="Enviar Chamados Resolvidos"
+                        data-message="${escapeHtmlAttribute(msgResolvidos)}"
+                        data-cliente="${escapeHtmlAttribute(r.FANTASIA || r.RAZAOSOCIAL)}"
+                        title="Enviar Chamados Resolvidos">
+                    <i class="bi bi-send"></i>
                 </button>`;
             }
 
@@ -396,10 +414,10 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                 </td>
                 <td style="text-align:center">
                     <div class="d-flex justify-content-center align-items-center flex-nowrap gap-1">
-                        ${btnCadastrar}
-                        ${btnAgendar}
+                        ${btnCadastrar}                        
                         ${btnChamados}
                         ${btnWhatsapp}
+                        ${btnEnviarResolvidos}
                     </div>
                 </td>
             </tr>
@@ -462,7 +480,7 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                 .split('\n')
                 .map(line => line.trim())
                 .join(' ');
-            const resumo = descricao.length > 100 ? descricao.slice(0, 100).trim() + '...' : descricao;
+            const resumo = descricao;
             return `📋 Chamado #${ch.ID}\r\n` +
                    `⏳ Status: ${ch.CHAMADO_STATUS || 'Não informado'}\r\n` +
                    `🏷️ Tipo: ${ch.TIPOACOMP || 'Não informado'}\r\n` +
@@ -472,6 +490,24 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
         return `Olá! Gostaria de informar todos os chamados que estão em aberto para a empresa ${cliente}:\r\n\r\n` +
                linhas.join('\r\n\r\n') +
                `\r\n\r\nQualquer dúvida, estou à disposição! 🚀`;
+    }
+
+    function criarMensagemWhatsappResolvidos(nomeCliente, chamados){
+        const cliente = nomeCliente ? `"${nomeCliente.replace(/"/g,'\"')}"` : 'o cliente';
+        const linhas = chamados.map(ch => {
+            const descricao = String(ch.DESCRICAO || 'Sem descrição')
+                .replace(/\r\n/g,'\n')
+                .replace(/\r/g,'\n')
+                .split('\n')
+                .map(line => line.trim())
+                .join(' ');
+            return `📋 Chamado #${ch.ID}\r\n` +
+                   `🏷️ Tipo: ${ch.TIPOACOMP || 'Não informado'}\r\n` +
+                   `📝 Descrição: ${descricao}`;
+        });
+        return `Olá! Gostaria de informar os chamados que estão *RESOLVIDOS* para a empresa ${cliente}:\r\n\r\n` +
+               linhas.join('\r\n\r\n') +
+               `\r\n\r\nE para que receba essa atualização, *deslogue do sistema e logue novamente.*`;
     }
 
     // ── carregar dados ─────────────────────────────────────────────────────────
@@ -596,7 +632,20 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
         if (btn) {
             const msg = btn.dataset.message;
             if (msg) {
-                copiarTextoAreaTransferencia(msg, 'Mensagem WhatsApp copiada!');
+                copiarTextoAreaTransferencia(msg, 'Mensagem copiada e arquivo TXT gerado com sucesso!');
+                
+                const clienteNome = btn.dataset.cliente ? btn.dataset.cliente.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'cliente';
+                const blob = new Blob([msg], { type: 'text/plain;charset=utf-8' });
+                const urlObj = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = urlObj;
+                a.download = `chamados_${clienteNome}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(urlObj);
+                }, 100);
             }
             return;
         }
@@ -753,26 +802,13 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                 </div>
             </div>
             <div class="modal-footer border-0 p-4">
-                <button type="button" class="btn btn-link text-muted fw-bold text-decoration-none me-auto" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-primary px-5 fw-bold" style="border-radius: 12px; height: 46px;">
-                    <i class="bi bi-check-lg me-2"></i> Agendar
-                </button>
+                <button type="button" class="btn btn-link text-muted fw-bold text-decoration-none me-auto" data-bs-dismiss="modal">Cancelar</button>                
             </div>
         </form>
     </div>
 </div>
 
 <script>
-function abrirModalAgendamento(idCliente, nomeCliente) {
-    document.getElementById('gp_id_cliente').value = idCliente;
-    document.getElementById('gp_cliente_label').textContent = nomeCliente;
-    document.getElementById('gp_cliente_display').value = nomeCliente;
-    document.getElementById('gp_nome_contato').value = '';
-    document.getElementById('gp_tema').selectedIndex = 0;
-    document.getElementById('gp_status').value = 'PENDENTE';
-    document.getElementById('gp_data_treinamento').value = '';
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAgendamentoGP')).show();
-}
 
 function abrirModalCadastroCliente(nome, vendedor, servidor, idClienteApi, dataInicio, numLicencas) {
     document.getElementById('cadastroNomeFantasia').value = nome || '';
