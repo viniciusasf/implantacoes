@@ -30,6 +30,9 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
         </p>
     </div>
     <div class="d-flex gap-2 align-items-center">
+        <a href="chamados_acumulados.php" class="btn btn-success btn-sm fw-bold">
+            <i class="bi bi-inbox"></i> Acumulados
+        </a>
         <span id="badge-origem" class="badge rounded-pill" style="font-size:.75rem;background:var(--primary-light);color:var(--primary)">—</span>
         <span id="badge-hora" style="font-size:.75rem;color:var(--text-muted)"></span>
         <button id="btn-refresh" class="btn btn-primary btn-sm">
@@ -351,12 +354,19 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
                 
             const btnBaixa = isBaixado ?
                 `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Desfazer baixa" onclick="alternarBaixa(${idChamado}, 'remover_baixa')"><i class="bi bi-check-all"></i> VALIDADO</button>` :
-                `<button type="button" class="btn btn-sm btn-outline-success fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Dar baixa" onclick="alternarBaixa(${idChamado}, 'dar_baixa')"><i class="bi bi-check2"></i> VALIDAR</button>`;
+                (r.CHAMADO_STATUS === 'Aguardando Testes' ?
+                    `<button type="button" class="btn btn-sm btn-outline-success fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Dar baixa" onclick="alternarBaixa(${idChamado}, 'dar_baixa')"><i class="bi bi-check2"></i> VALIDAR</button>` :
+                    '');
 
             const rowClass = isBaixado ? 'linha-baixada' : '';
             const servidor = (r.SERVIDOR || r.SERVIDORNUVEM || MAPA_SERVIDOR_LOCAL[r.ID_CLIENTE] || '—');
             const mensagemWhatsapp = criarMensagemWhatsapp(r);
             const msgAttr = escapeHtmlAttribute(mensagemWhatsapp);
+            const isSalvo = window.chamadosLocais && window.chamadosLocais[idChamado] !== undefined;
+            const btnSalvar = isSalvo ? 
+                `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Salvo Localmente"><i class="bi bi-cloud-check"></i> SALVO</button>` :
+                `<button type="button" class="btn btn-sm btn-outline-secondary fw-bold shadow-sm btn-salvar-local" data-id="${idChamado}" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Salvar para envio"><i class="bi bi-cloud-arrow-down"></i> SALVAR</button>`;
+
             return `
         <tr class="${rowClass}">
             <td class="px-4 py-3" style="font-size:.78rem;font-family:monospace;color:var(--text-muted)">#${r.ID}</td>
@@ -369,8 +379,9 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             <td style="font-size:.82rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.DESCRICAO||''}">${r.DESCRICAO||'—'}</td>
             <td style="font-size:.82rem">${fmtData(r.DATAPREV_RETORNO)}</td>
             <td style="text-align:center">
-                <div class="d-flex gap-1 justify-content-center">
-                    <button type="button" class="btn btn-sm btn-outline-success copy-whatsapp-message" data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp" data-message="${msgAttr}" title="Copiar WhatsApp">
+                <div class="d-flex gap-1 justify-content-center align-items-center flex-nowrap">
+                    ${btnSalvar}
+                    <button type="button" class="btn btn-sm btn-outline-success shadow-sm copy-whatsapp-message" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp" data-message="${msgAttr}" title="Copiar WhatsApp">
                         <i class="bi bi-whatsapp"></i>
                     </button>
                     <a href="https://interno.gestaopro.srv.br/chamados/${r.ID}" target="_blank" class="btn btn-sm btn-primary fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Abrir chamado">
@@ -417,10 +428,15 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         const forcar=window._forcar||false; window._forcar=false;
         const url='api_gestaopro_bridge.php?endpoint=chamados'+(forcar?'&forcar=1':'');
 
-        fetch(url).then(r=>r.json()).then(resp=>{
+        Promise.all([
+            fetch(url).then(r=>r.json()),
+            fetch('get_chamados_espelho.php').then(r=>r.json())
+        ]).then(([resp, respLocais])=>{
             if(!resp.sucesso) throw new Error(resp.erro||'Erro desconhecido');
             const lista=resp.dados.chamados||[];
             todos=lista;
+            
+            window.chamadosLocais = respLocais.sucesso ? (respLocais.dados || {}) : {};
 
             populaDropdownCheckboxes('filtro-status-menu', 'filtro-status-label', 'filtro-status-cb', lista.map(r=>r.CHAMADO_STATUS), ['Aguardando Desenvolvimento', 'Aguardando Suporte', 'Aguardando Testes'], 'Todos os status');
             populaDropdownCheckboxes('filtro-tipo-menu', 'filtro-tipo-label', 'filtro-tipo-cb', lista.map(r=>r.TIPOACOMP), [], 'Todos os tipos');
@@ -470,6 +486,43 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
     });
 
     document.addEventListener('click', function(event){
+        const btnSalvar = event.target.closest('.btn-salvar-local');
+        if (btnSalvar) {
+            const id = parseInt(btnSalvar.dataset.id);
+            const chamado = todos.find(c => c.ID == id);
+            if (!chamado) return;
+            
+            const payload = {
+                id: chamado.ID,
+                id_cliente: chamado.ID_CLIENTE,
+                fantasia: chamado.FANTASIA || chamado.RAZAOSOCIAL,
+                status: chamado.CHAMADO_STATUS,
+                tipo: chamado.TIPOACOMP,
+                descricao: chamado.DESCRICAO,
+                dataprev: chamado.DATAPREV_RETORNO,
+                responsavel: chamado.RESPONSAVEL
+            };
+
+            btnSalvar.disabled = true;
+            btnSalvar.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+            fetch('salvar_chamado_espelho.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(r=>r.json()).then(res=>{
+                if (res.sucesso) {
+                    window.chamadosLocais[id] = 0;
+                    aplicarFiltros();
+                } else {
+                    alert('Erro ao salvar localmente: ' + res.erro);
+                    btnSalvar.disabled = false;
+                    btnSalvar.innerHTML = '<i class="bi bi-cloud-arrow-down"></i> SALVAR';
+                }
+            });
+            return;
+        }
+
         const btn = event.target.closest('.copy-whatsapp-message');
         if (!btn) return;
         const msg = btn.dataset.message;

@@ -794,9 +794,31 @@ if (isset($_GET['enviar_pendencia'])) {
 // Lógica para Deletar
 if (isset($_GET['delete'])) {
     $id = (int) $_GET['delete'];
+
+    // Deletar também no Google Agenda (se existir)
+    try {
+        $stmt_google = $pdo->prepare("SELECT google_event_id FROM treinamentos WHERE id_treinamento = ?");
+        $stmt_google->execute([$id]);
+        $treinamento_google = $stmt_google->fetch(PDO::FETCH_ASSOC);
+
+        if ($treinamento_google && !empty($treinamento_google['google_event_id'])) {
+            $google_event_id = $treinamento_google['google_event_id'];
+            [$service, $erro] = criarServicoGoogleCalendarStatus();
+            if ($service) {
+                try {
+                    $service->events->delete('primary', $google_event_id);
+                } catch (Throwable $e) {
+                    // Ignora erro caso o evento já tenha sido excluído ou ocorra outro problema
+                }
+            }
+        }
+    } catch (Throwable $e) {
+        // Continua a exclusão local mesmo se houver erro ao conectar ou consultar
+    }
+
     $stmt = $pdo->prepare("DELETE FROM treinamentos WHERE id_treinamento = ?");
     $stmt->execute([$id]);
-    header("Location: treinamentos.php?msg=Removido com sucesso");
+    header("Location: treinamentos.php?msg=" . urlencode("Removido com sucesso"));
     exit;
 }
 
