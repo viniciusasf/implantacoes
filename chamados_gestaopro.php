@@ -145,6 +145,26 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
 .sortable{cursor:pointer;user-select:none}.sortable:hover{color:var(--primary)!important}
 .badge-ch{font-size:.68rem;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.03em;white-space:nowrap}
 .peso-chip{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;font-weight:700;font-size:.8rem}
+.btn-action {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.3rem !important;
+    height: 28px !important;
+    padding: 0 0.55rem !important;
+    font-size: 0.72rem !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    vertical-align: middle !important;
+}
+.btn-action-icon {
+    width: 28px !important;
+    padding: 0 !important;
+}
+.btn-action i {
+    font-size: 0.85rem;
+    line-height: 1;
+}
 </style>
 
 <script>
@@ -353,9 +373,9 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             const isBaixado = chamadosBaixados.includes(idChamado);
                 
             const btnBaixa = isBaixado ?
-                `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Desfazer baixa" onclick="alternarBaixa(${idChamado}, 'remover_baixa')"><i class="bi bi-check-all"></i> VALIDADO</button>` :
+                `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm btn-action" title="Desfazer baixa" onclick="alternarBaixa(${idChamado}, 'remover_baixa')"><i class="bi bi-check-all"></i> VALIDADO</button>` :
                 (r.CHAMADO_STATUS === 'Aguardando Testes' ?
-                    `<button type="button" class="btn btn-sm btn-outline-success fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Dar baixa" onclick="alternarBaixa(${idChamado}, 'dar_baixa')"><i class="bi bi-check2"></i> VALIDAR</button>` :
+                    `<button type="button" class="btn btn-sm btn-outline-success fw-bold shadow-sm btn-action" title="Dar baixa" onclick="alternarBaixa(${idChamado}, 'dar_baixa')"><i class="bi bi-check2"></i> VALIDAR</button>` :
                     '');
 
             const rowClass = isBaixado ? 'linha-baixada' : '';
@@ -364,8 +384,8 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             const msgAttr = escapeHtmlAttribute(mensagemWhatsapp);
             const isSalvo = window.chamadosLocais && window.chamadosLocais[idChamado] !== undefined;
             const btnSalvar = isSalvo ? 
-                `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Salvo Localmente"><i class="bi bi-cloud-check"></i> SALVO</button>` :
-                `<button type="button" class="btn btn-sm btn-outline-secondary fw-bold shadow-sm btn-salvar-local" data-id="${idChamado}" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Salvar para envio"><i class="bi bi-cloud-arrow-down"></i> SALVAR</button>`;
+                `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm btn-action" title="Salvo Localmente"><i class="bi bi-cloud-check"></i> SALVO</button>` :
+                `<button type="button" class="btn btn-sm btn-outline-secondary fw-bold shadow-sm btn-salvar-local btn-action" data-id="${idChamado}" title="Salvar para envio"><i class="bi bi-cloud-arrow-down"></i> SALVAR</button>`;
 
             return `
         <tr class="${rowClass}">
@@ -378,13 +398,13 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             <td style="font-size:.75rem;background:var(--bg-body);padding:2px 7px;border-radius:6px;white-space:nowrap">${servidor}</td>
             <td style="font-size:.82rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.DESCRICAO||''}">${r.DESCRICAO||'—'}</td>
             <td style="font-size:.82rem">${fmtData(r.DATAPREV_RETORNO)}</td>
-            <td style="text-align:center">
+            <td class="text-center align-middle" style="white-space:nowrap">
                 <div class="d-flex gap-1 justify-content-center align-items-center flex-nowrap">
                     ${btnSalvar}
-                    <button type="button" class="btn btn-sm btn-outline-success shadow-sm copy-whatsapp-message" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp" data-message="${msgAttr}" title="Copiar WhatsApp">
+                    <button type="button" class="btn btn-sm btn-outline-success shadow-sm copy-whatsapp-message btn-action btn-action-icon" data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp" data-message="${msgAttr}" title="Copiar WhatsApp">
                         <i class="bi bi-whatsapp"></i>
                     </button>
-                    <a href="https://interno.gestaopro.srv.br/chamados/${r.ID}" target="_blank" class="btn btn-sm btn-primary fw-bold shadow-sm" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" title="Abrir chamado">
+                    <a href="https://interno.gestaopro.srv.br/chamados/${r.ID}" target="_blank" class="btn btn-sm btn-primary fw-bold shadow-sm btn-action" title="Abrir chamado">
                         <i class="bi bi-box-arrow-up-right"></i> ABRIR
                     </a>
                     ${btnBaixa}

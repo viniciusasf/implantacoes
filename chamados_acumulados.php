@@ -2,14 +2,58 @@
 require_once 'config.php';
 require_once 'header.php'; 
 
+// Buscar IDs de API e nomes de clientes com status Encerrado (data_fim preenchida ou status CONCLUIDA/CANCELADA)
+$stmt_encerrados = $pdo->query("
+    SELECT id_cliente_api, fantasia, razao_social 
+    FROM clientes 
+    WHERE (data_fim IS NOT NULL AND data_fim != '0000-00-00') 
+       OR status IN ('CONCLUIDA', 'CANCELADA')
+");
+
+$encerrados_ids = [];
+$encerrados_nomes = [];
+while ($row = $stmt_encerrados->fetch(PDO::FETCH_ASSOC)) {
+    if (!empty($row['id_cliente_api'])) {
+        $encerrados_ids[] = (string)$row['id_cliente_api'];
+    }
+    if (!empty($row['fantasia'])) {
+        $encerrados_nomes[] = mb_strtoupper(trim($row['fantasia']));
+    }
+    if (!empty($row['razao_social'])) {
+        $encerrados_nomes[] = mb_strtoupper(trim($row['razao_social']));
+    }
+}
+
 // Busca chamados não notificados
 $stmt = $pdo->query("SELECT * FROM chamados_espelho_local WHERE notificado = 0 ORDER BY nome_fantasia ASC");
 $chamados = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Agrupar por cliente
+// Agrupar por cliente (desconsiderando TECHSOLUS e clientes encerrados)
 $agrupados = [];
 foreach ($chamados as $ch) {
-    $cliente = $ch['nome_fantasia'] ?: 'Cliente Desconhecido';
+    $cliente = trim($ch['nome_fantasia'] ?: 'Cliente Desconhecido');
+    $clienteUpper = mb_strtoupper($cliente);
+    $idClienteApi = (string)($ch['id_cliente_api'] ?? '');
+
+    // 1. Não trazer TECHSOLUS
+    if (strpos($clienteUpper, 'TECHSOLUS') !== false) {
+        continue;
+    }
+
+    // 2. Não trazer clientes com STATUS Encerrado (ex: PASETO MATERIAIS ELETRICOS)
+    if (
+        ($idClienteApi !== '' && in_array($idClienteApi, $encerrados_ids, true)) ||
+        in_array($clienteUpper, $encerrados_nomes, true)
+    ) {
+        continue;
+    }
+
+    // 3. Não trazer chamados com status encerrado ou cancelado
+    $statusChamadoUpper = mb_strtoupper(trim($ch['status_chamado'] ?? ''));
+    if (in_array($statusChamadoUpper, ['ENCERRADO', 'ENCERRADA', 'CANCELADO', 'CANCELADA'])) {
+        continue;
+    }
+
     if (!isset($agrupados[$cliente])) {
         $agrupados[$cliente] = [];
     }
