@@ -533,7 +533,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             }).then(r=>r.json()).then(res=>{
                 if (res.sucesso) {
                     window.chamadosLocais[id] = 0;
-                    aplicarFiltros();
+                    btnSalvar.outerHTML = `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm btn-action" title="Salvo Localmente"><i class="bi bi-cloud-check"></i> SALVO</button>`;
                 } else {
                     alert('Erro ao salvar localmente: ' + res.erro);
                     btnSalvar.disabled = false;
