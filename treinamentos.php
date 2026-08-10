@@ -193,6 +193,23 @@ function obterConvidadosCliente(PDO $pdo, $idCliente)
     return $convidados;
 }
 
+function formatarNomeClienteExibicao(string $nomeCliente, ?string $statusCliente, ?string $dataFimCliente): string
+{
+    $nomeCliente = trim($nomeCliente);
+    $statusCliente = trim((string) $statusCliente);
+    $dataFimCliente = trim((string) $dataFimCliente);
+
+    $statusUpper = strtoupper($statusCliente);
+    $statusEncerrado = in_array($statusUpper, ['ENCERRADO', 'CONCLUIDA'], true);
+    $dataFimPreenchido = $dataFimCliente !== ''
+        && $dataFimCliente !== '0000-00-00'
+        && $dataFimCliente !== '0000-00-00 00:00:00';
+
+    $clienteEncerrado = $statusEncerrado && $dataFimPreenchido;
+
+    return $clienteEncerrado ? $nomeCliente . ' - Encerrado' : $nomeCliente;
+}
+
 function garantirColunaGoogleAgenda(PDO $pdo)
 {
     if (treinamentosTemColuna($pdo, 'google_agenda_link')) {
@@ -1113,7 +1130,7 @@ if (isset($_GET['get_observations']) && isset($_GET['id_cliente'])) {
 if (isset($_GET['api_calendario'])) {
     $sql_cal = "SELECT t.id_treinamento as id, t.tema, t.data_treinamento as start, 
                        DATE_ADD(t.data_treinamento, INTERVAL 1 HOUR) as end,
-                       t.status, c.fantasia as cliente, co.nome as contato, co.telefone_ddd as telefone 
+                       t.status, c.fantasia as cliente, c.status as cliente_status, c.data_fim as cliente_data_fim, co.nome as contato, co.telefone_ddd as telefone 
                 FROM treinamentos t 
                 LEFT JOIN clientes c ON t.id_cliente = c.id_cliente 
                 LEFT JOIN contatos co ON t.id_contato = co.id_contato
@@ -1136,8 +1153,10 @@ if (isset($_GET['api_calendario'])) {
         // Cores do sistema: verde para resolvido, azul para pendente
         $color = $isResolvido ? '#10b981' : '#4361ee';
 
+        $cliente_exibicao_cal = formatarNomeClienteExibicao($row['cliente'] ?? '', $row['cliente_status'] ?? null, $row['cliente_data_fim'] ?? null);
+
         // Forçamos o cliente em caixa alta para o título
-        $title = mb_convert_case($row['cliente'], MB_CASE_UPPER, "UTF-8");
+        $title = mb_convert_case($cliente_exibicao_cal, MB_CASE_UPPER, "UTF-8");
 
         $events[] = [
             'id' => $row['id'],
@@ -1152,7 +1171,7 @@ if (isset($_GET['api_calendario'])) {
                 'contato' => $row['contato'],
                 'telefone' => $row['telefone'],
                 'status' => $row['status'],
-                'cliente' => $row['cliente']
+                'cliente' => $cliente_exibicao_cal
             ]
         ];
     }
@@ -1205,7 +1224,7 @@ $offset = ($pagina - 1) * $por_pagina;
 
 // Query principal com contagem para paginação
 $sql_base = "
-    SELECT t.*, c.fantasia as cliente_nome, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim, c.recursos, c.anexo, c.chamados
+    SELECT t.*, c.fantasia as cliente_nome, c.status as cliente_status, c.data_fim as cliente_data_fim, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim, c.recursos, c.anexo, c.chamados
     FROM treinamentos t
     LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
     LEFT JOIN contatos co ON t.id_contato = co.id_contato
@@ -1588,6 +1607,7 @@ include 'header.php';
                             foreach ($treinamentos as $t):
                                 $link_google_agenda = trim((string) ($t['google_agenda_link'] ?? ''));
                                 $link_google_agenda_exibicao = $link_google_agenda !== '' ? $link_google_agenda : trim((string) ($t['google_event_link'] ?? ''));
+                                $cliente_exibicao = formatarNomeClienteExibicao($t['cliente_nome'] ?? '', $t['cliente_status'] ?? null, $t['cliente_data_fim'] ?? null);
                                 // LÓGICA CORRIGIDA PARA VERIFICAR VENCIMENTO
                                 $isVencido = false;
 
@@ -1643,7 +1663,7 @@ include 'header.php';
                                         ?>
                                         <div class="d-flex align-items-center gap-2">
                                             <span
-                                                style="color: var(--text-main);"><?= htmlspecialchars($t['cliente_nome']) ?></span>
+                                                style="color: var(--text-main);"><?= htmlspecialchars($cliente_exibicao) ?></span>
                                             <?php if ($numLics > 0): ?>
                                                 <span class="badge-license <?= $badgeClass ?>" title="<?= $numLics ?> licença(s)">
                                                     <?= $numLics ?> <i class="bi bi-pc-display"></i>
@@ -1710,7 +1730,7 @@ include 'header.php';
                                             <button class="btn btn-sm btn-outline-primary btn-history-client"
                                                 data-bs-toggle="tooltip" data-bs-title="Ver Histórico/CRM"
                                                 data-id="<?= $t['id_cliente'] ?>"
-                                                data-nome="<?= htmlspecialchars($t['cliente_nome']) ?>">
+                                                data-nome="<?= htmlspecialchars($cliente_exibicao) ?>">
                                                 <i class="bi bi-journal-text"></i>
                                             </button>
 
@@ -1719,7 +1739,7 @@ include 'header.php';
                                                 <button class="btn btn-sm btn-outline-info view-obs-btn" data-bs-toggle="tooltip"
                                                     data-bs-title="Ver Obs. Agendamento"
                                                     data-obs="<?= htmlspecialchars($t['observacoes']) ?>"
-                                                    data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>">
+                                                    data-cliente="<?= htmlspecialchars($cliente_exibicao) ?>">
                                                     <i class="bi bi-search"></i>
                                                 </button>
                                             <?php endif; ?>
@@ -1764,7 +1784,7 @@ include 'header.php';
                                             <!-- 3. FINALIZAR -->
                                             <?php if (strtoupper($t['status']) == 'PENDENTE'): ?>
                                                 <button class="btn btn-sm btn-outline-success open-finish-modal" data-id="<?= $id_tr ?>"
-                                                    data-cliente="<?= htmlspecialchars($t['cliente_nome']) ?>"
+                                                    data-cliente="<?= htmlspecialchars($cliente_exibicao) ?>"
                                                     data-tema="<?= htmlspecialchars($t['tema']) ?>" title="Finalizar"
                                                     data-bs-toggle="tooltip">
                                                     <i class="bi bi-check-lg"></i>
