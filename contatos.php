@@ -84,7 +84,6 @@ $stmt->execute($params);
 $contatos = $stmt->fetchAll();
 
 $clientes = $pdo->query("SELECT id_cliente, fantasia FROM clientes 
-                         WHERE (data_fim IS NULL OR data_fim = '0000-00-00' OR data_fim > NOW())
                          ORDER BY fantasia ASC")->fetchAll();
 
 include 'header.php';

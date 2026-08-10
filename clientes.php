@@ -1038,7 +1038,7 @@ body, html {
                                 <label class="form-label small fw-bold text-muted">Recursos Utilizados</label>
                                 <div class="p-2 border rounded bg-white">
                                     <?php 
-                                    $lista_recursos = ['ORÇAMENTO', 'CATÁLOGO', 'GESTAOWEB', 'SERVIÇO/OS', 'PRODUÇÃO/OS', 'PDV'];
+                                    $lista_recursos = ['ORÇAMENTO', 'CATÁLOGO', 'GESTAOGPT', 'SERVIÇO/OS', 'PRODUÇÃO/OS', 'PDV'];
                                     foreach($lista_recursos as $rec): ?>
                                     <div class="form-check mb-1">
                                       <input class="form-check-input recurso-checkbox" type="checkbox" name="recursos[]" value="<?= $rec ?>" id="rec_<?= md5($rec) ?>">

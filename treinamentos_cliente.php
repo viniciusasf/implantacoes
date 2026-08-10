@@ -161,6 +161,7 @@ try {
     $stmtContatos->execute([$id_cliente]);
     $contatos = $stmtContatos->fetchAll();
 }
+$tem_contatos = !empty($contatos);
 
 // 3. Busca todos os treinamentos
 $stmt = $pdo->prepare("SELECT * FROM treinamentos WHERE id_cliente = ? ORDER BY data_treinamento DESC");
@@ -719,12 +720,23 @@ body {
                 </div>
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted">Selecione o Contato</label>
-                    <select name="id_contato" id="id_contato" class="form-select" required>
-                        <option value="">Buscar contato...</option>
+                    <?php if ($tem_contatos): ?>
+                    <select name="id_contato" id="id_contato" class="form-select">
+                        <option value="">Selecione o contato...</option>
                         <?php foreach($contatos as $cx): ?>
                             <option value="<?= $cx['id_contato'] ?>"><?= htmlspecialchars($cx['nome'] ?? '---') ?> (<?= ($cx['celular'] ?? '') ?: ($cx['telefone'] ?? '') ?: 'S/ Tel' ?>)</option>
                         <?php endforeach; ?>
                     </select>
+                    <?php else: ?>
+                    <div class="alert alert-warning d-flex align-items-center gap-2 mb-0" style="border-radius: 14px; font-size: 0.85rem;">
+                        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+                        <div>
+                            <strong>Sem contatos cadastrados</strong> para este cliente.<br>
+                            <a href="contatos.php" class="alert-link" target="_blank">Cadastrar contato agora</a> ou continue sem selecionar.
+                        </div>
+                    </div>
+                    <input type="hidden" name="id_contato" id="id_contato" value="">
+                    <?php endif; ?>
                 </div>
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted">Módulo/Tema</label>
