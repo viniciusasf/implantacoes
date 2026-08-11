@@ -1,7 +1,7 @@
 <?php
 /**
  * google_auth_reset.php
- * Script auxiliar para resetar e reautorizar o token OAuth do Google Agenda.
+ * Script auxiliar para resetar e reautorizar o token OAuth do Google Agenda e Drive.
  * Acesse via: http://localhost/implanta/google_auth_reset.php
  */
 session_start();
@@ -20,7 +20,7 @@ function makeClient(): Google\Client
 {
     $client = new Google\Client();
     $client->setAuthConfig(__DIR__ . '/credentials.json');
-    $client->addScope(Google\Service\Calendar::CALENDAR);
+    $client->addScope([Google\Service\Calendar::CALENDAR, Google\Service\Drive::DRIVE_FILE]);
     $client->setAccessType('offline');
     $client->setPrompt('consent');
     $client->setRedirectUri(buildRedirectUri());
@@ -114,14 +114,14 @@ $authUrl = $client->createAuthUrl();
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Reautorizar Google Agenda</title>
+    <title>Reautorizar Google Agenda e Drive</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 </head>
 <body class="bg-light py-5">
 <div class="container" style="max-width:620px">
     <div class="card shadow-sm">
         <div class="card-header bg-primary text-white">
-            <h5 class="mb-0">🔑 Gerenciador de Token — Google Agenda</h5>
+            <h5 class="mb-0">🔑 Gerenciador de Token — Google Agenda e Drive</h5>
         </div>
         <div class="card-body">
 
@@ -136,9 +136,9 @@ $authUrl = $client->createAuthUrl();
             <hr>
 
             <?php if (!$tokenValid): ?>
-                <p class="mb-3">Clique no botão abaixo para autorizar o acesso ao Google Agenda:</p>
+                <p class="mb-3">Clique no botão abaixo para autorizar o acesso ao Google Agenda e Drive:</p>
                 <a href="<?= htmlspecialchars($authUrl) ?>" class="btn btn-success w-100 mb-3">
-                    🔓 Autorizar acesso ao Google Agenda
+                    🔓 Autorizar acesso ao Google Agenda e Drive
                 </a>
             <?php else: ?>
                 <p class="text-success fw-bold">✔ Sistema autorizado. Nenhuma ação necessária.</p>

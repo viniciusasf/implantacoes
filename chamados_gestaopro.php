@@ -200,16 +200,42 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         });
     };
 
+    function parseDateOnly(iso){
+        if(!iso) return null;
+        const s = String(iso).split('T')[0].split(' ')[0];
+        let m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if(m) return new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10));
+        m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if(m) return new Date(parseInt(m[3],10), parseInt(m[2],10)-1, parseInt(m[1],10));
+        // fallback
+        const d = new Date(iso);
+        if(Number.isNaN(d.getTime())) return null;
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    }
+
     function fmtData(iso){
         if(!iso) return '<span style="color:var(--text-muted)">—</span>';
-        return new Date(iso).toLocaleDateString('pt-BR');
+        const d = parseDateOnly(iso);
+        if(!d) return '<span style="color:var(--text-muted)">—</span>';
+        return d.toLocaleDateString('pt-BR');
     }
 
     function fmtDataTexto(iso){
-        if(iso) return new Date(iso).toLocaleDateString('pt-BR');
+        if(iso) return fmtData(iso);
         const semPrevisaoDesenvolvimento = todos.filter(r => r.CHAMADO_STATUS === 'Em Desenvolvimento' && !r.DATAPREV_RETORNO).length;
         if(semPrevisaoDesenvolvimento > 3) return 'Mais de 3 chamados em desenvolvimento, sem previsão de retorno';
         return 'Sem previsão de retorno';
+    }
+
+    function getRetornoDataStatus(iso){
+        if(!iso) return null;
+        const retorno = parseDateOnly(iso);
+        if(!retorno) return null;
+        const hoje = new Date(); hoje.setHours(0,0,0,0);
+        const amanha = new Date(hoje); amanha.setDate(hoje.getDate() + 1);
+        if(retorno.getTime() === hoje.getTime()) return {label:'Hoje', color:'var(--danger)', bg:'var(--danger-light)'};
+        if(retorno.getTime() === amanha.getTime()) return {label:'Amanhã', color:'var(--warning)', bg:'var(--warning-light)'};
+        return null;
     }
 
     const STATUS_COR = {
@@ -251,8 +277,8 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             `*Tipo:* ${chamado.TIPOACOMP || 'Não informado'} 📄\r\n` +
             `*Status:* ${chamado.CHAMADO_STATUS || 'Não informado'} ⏳\r\n` +
             `*Servidor:* ${servidor} 🖥️\r\n` +
-            `*Responsável:* ${chamado.RESPONSAVEL || 'Não informado'} 👤\r\n` +
-            `*Resumo:* ${resumo} 🔍\r\n` +
+            `*Responsável:* ${chamado.RESPONSAVEL || 'Não informado'} 👤\r\n\r\n` +
+            `*Resumo:* ${resumo} 🔍\r\n\r\n` +
             `*Previsão de retorno:* ${fmtDataTexto(chamado.DATAPREV_RETORNO)} 📅\r\n\r\n` +
             `Sigo acompanhando por aqui e, assim que houver novidade, te aviso. 🚀`;
     }
@@ -342,7 +368,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             tbody.innerHTML='<tr><td colspan="10" class="text-center py-5" style="color:var(--text-muted)">Nenhum chamado encontrado.</td></tr>';
             return;
         }
-        lista.sort((a,b)=>{
+            lista.sort((a,b)=>{
             const statusOrder = {
                 'Aguardando Suporte': 1,
                 'Aguardando Testes': 2,
@@ -360,8 +386,10 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             let va=a[sortCol]??'', vb=b[sortCol]??'';
             
             if (sortCol === 'DATAPREV_RETORNO' || sortCol === 'DATA') {
-                const ta = va ? new Date(va).getTime() : Infinity;
-                const tb = vb ? new Date(vb).getTime() : Infinity;
+                const da = va ? parseDateOnly(va) : null;
+                const db = vb ? parseDateOnly(vb) : null;
+                const ta = da ? da.getTime() : Infinity;
+                const tb = db ? db.getTime() : Infinity;
                 return sortAsc ? ta - tb : tb - ta;
             }
 
@@ -380,6 +408,9 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
 
             const rowClass = isBaixado ? 'linha-baixada' : '';
             const servidor = (r.SERVIDOR || r.SERVIDORNUVEM || MAPA_SERVIDOR_LOCAL[r.ID_CLIENTE] || '—');
+            const retornoStatus = getRetornoDataStatus(r.DATAPREV_RETORNO);
+            const retornoStyle = retornoStatus ? `background:${retornoStatus.bg};color:${retornoStatus.color};border-radius:8px;padding:0.45rem 0.6rem;` : '';
+            const retornoBadge = retornoStatus ? `<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${retornoStatus.color};margin-top:.22rem">${retornoStatus.label}</div>` : '';
             const mensagemWhatsapp = criarMensagemWhatsapp(r);
             const msgAttr = escapeHtmlAttribute(mensagemWhatsapp);
             const isSalvo = window.chamadosLocais && window.chamadosLocais[idChamado] !== undefined;
@@ -397,10 +428,13 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             <td>${badgeStatus(r.CHAMADO_STATUS)}</td>
             <td style="font-size:.75rem;background:var(--bg-body);padding:2px 7px;border-radius:6px;white-space:nowrap">${servidor}</td>
             <td style="font-size:.82rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.DESCRICAO||''}">${r.DESCRICAO||'—'}</td>
-            <td style="font-size:.82rem">${fmtData(r.DATAPREV_RETORNO)}</td>
+            <td style="font-size:.82rem;${retornoStyle}">${fmtData(r.DATAPREV_RETORNO)}${retornoBadge}</td>
             <td class="text-center align-middle" style="white-space:nowrap">
                 <div class="d-flex gap-1 justify-content-center align-items-center flex-nowrap">
                     ${btnSalvar}
+                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold shadow-sm btn-action btn-copy-pdf-link" data-id="${idChamado}" title="Gerar / copiar link do PDF">
+                        <i class="bi bi-file-earmark-pdf"></i>
+                    </button>
                     <button type="button" class="btn btn-sm btn-outline-success shadow-sm copy-whatsapp-message btn-action btn-action-icon" data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp" data-message="${msgAttr}" title="Copiar WhatsApp">
                         <i class="bi bi-whatsapp"></i>
                     </button>
@@ -421,7 +455,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         const resp=document.getElementById('filtro-responsavel').value;
 
         const fil=todos.filter(r=>{
-            const txt=`${r.FANTASIA} ${r.SERIAL} ${r.DESCRICAO} ${r.RESPONSAVEL} ${r.CHAMADO_USUARIO}`.toLowerCase();
+            const txt=`${r.FANTASIA} ${r.SERIAL} ${r.DESCRICAO} ${r.RESPONSAVEL} ${r.CHAMADO_USUARIO} #${r.ID}`.toLowerCase();
             if(busca&&!txt.includes(busca)) return false;
             if(statusList.length > 0 && !statusList.includes(r.CHAMADO_STATUS)) return false;
             if(tipoList.length > 0 && !tipoList.includes(r.TIPOACOMP)) return false;
@@ -505,6 +539,19 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         });
     });
 
+    function copiarTextoAreaTransferencia(text, message = 'Copiado para a área de transferência!'){
+        if (!text) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert(message);
+            }).catch(() => {
+                prompt('Copie este link manualmente:', text);
+            });
+            return;
+        }
+        prompt('Copie este link manualmente:', text);
+    }
+
     document.addEventListener('click', function(event){
         const btnSalvar = event.target.closest('.btn-salvar-local');
         if (btnSalvar) {
@@ -540,6 +587,38 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
                     btnSalvar.innerHTML = '<i class="bi bi-cloud-arrow-down"></i> SALVAR';
                 }
             });
+            return;
+        }
+
+        const btnPdf = event.target.closest('.btn-copy-pdf-link');
+        if (btnPdf) {
+            const id = parseInt(btnPdf.dataset.id);
+            const chamado = todos.find(c => c.ID == id);
+            if (!chamado) return;
+
+            const originalHtml = btnPdf.innerHTML;
+            btnPdf.disabled = true;
+            btnPdf.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+            fetch('gerar_pdf_chamado.php?id=' + encodeURIComponent(id))
+                .then(r => r.json())
+                .then(res => {
+                    if (res.sucesso && res.link) {
+                        const cliente = chamado.FANTASIA || chamado.RAZAOSOCIAL || '';
+                        const mensagem = `Olá ${cliente}, segue o PDF do chamado #${id}.\nStatus: ${chamado.CHAMADO_STATUS || ''}\nLink para o PDF: ${res.link}`;
+                        copiarTextoAreaTransferencia(mensagem, 'Link e mensagem do PDF copiados!');
+                    } else {
+                        alert('Erro ao gerar link do PDF: ' + (res.erro || 'Erro desconhecido'));
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Erro de rede ao gerar link do PDF.');
+                })
+                .finally(() => {
+                    btnPdf.disabled = false;
+                    btnPdf.innerHTML = originalHtml;
+                });
             return;
         }
 
