@@ -19,7 +19,7 @@ define('GP_CACHE_TTL', 300); // 5 minutos
 
 $ENDPOINTS_VALIDOS = ['implantacoes', 'chamados'];
 $endpoint = $_GET['endpoint'] ?? 'implantacoes';
-$base_endpoint = explode('?', $endpoint)[0];
+$base_endpoint = explode('/', explode('?', $endpoint)[0])[0];
 
 if (!in_array($base_endpoint, $ENDPOINTS_VALIDOS, true)) {
     http_response_code(400);

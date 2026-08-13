@@ -432,8 +432,8 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             <td class="text-center align-middle" style="white-space:nowrap">
                 <div class="d-flex gap-1 justify-content-center align-items-center flex-nowrap">
                     ${btnSalvar}
-                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold shadow-sm btn-action btn-copy-pdf-link" data-id="${idChamado}" title="Gerar / copiar link do PDF">
-                        <i class="bi bi-file-earmark-pdf"></i>
+                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold shadow-sm btn-action btn-copy-pdf-link" data-id="${idChamado}" title="Gerar / copiar link do comprovante">
+                        <i class="bi bi-file-earmark-richtext"></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-success shadow-sm copy-whatsapp-message btn-action btn-action-icon" data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp" data-message="${msgAttr}" title="Copiar WhatsApp">
                         <i class="bi bi-whatsapp"></i>
@@ -603,17 +603,22 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             fetch('gerar_pdf_chamado.php?id=' + encodeURIComponent(id))
                 .then(r => r.json())
                 .then(res => {
-                    if (res.sucesso && res.link) {
-                        const cliente = chamado.FANTASIA || chamado.RAZAOSOCIAL || '';
-                        const mensagem = `Olá ${cliente}, segue o PDF do chamado #${id}.\nStatus: ${chamado.CHAMADO_STATUS || ''}\nLink para o PDF: ${res.link}`;
-                        copiarTextoAreaTransferencia(mensagem, 'Link e mensagem do PDF copiados!');
+                    if (res.sucesso) {
+                        const usuario = chamado.CHAMADO_USUARIO || chamado.USUARIO || chamado.FANTASIA || chamado.RAZAOSOCIAL || '';
+                        const mensagem = `Olá ${usuario}, segue o comprovante do chamado #${id}.\nStatus: ${chamado.CHAMADO_STATUS || ''}`;
+                        
+                        copiarTextoAreaTransferencia(mensagem, 'Mensagem padrão copiada e pasta do Drive aberta!');
+                        
+                        if (res.folder_link) {
+                            window.open(res.folder_link, '_blank');
+                        }
                     } else {
-                        alert('Erro ao gerar link do PDF: ' + (res.erro || 'Erro desconhecido'));
+                        alert('Erro ao gerar comprovante: ' + (res.erro || 'Erro desconhecido'));
                     }
                 })
                 .catch(err => {
                     console.error(err);
-                    alert('Erro de rede ao gerar link do PDF.');
+                    alert('Erro de rede ao gerar link do comprovante.');
                 })
                 .finally(() => {
                     btnPdf.disabled = false;

@@ -27,7 +27,7 @@ function driveGetClient()
 
     $client = new Google\Client();
     $client->setAuthConfig($credentialsPath);
-    $client->addScope(Google\Service\Drive::DRIVE_FILE);
+    $client->addScope(Google\Service\Drive::DRIVE);
     $client->setAccessType('offline');
     $client->setPrompt('consent');
 
@@ -80,7 +80,7 @@ function driveGetAuthStartUrl()
 
     $client = new Google\Client();
     $client->setAuthConfig($credentialsPath);
-    $client->addScope(Google\Service\Drive::DRIVE_FILE);
+    $client->addScope(Google\Service\Drive::DRIVE);
     $client->setAccessType('offline');
     $client->setPrompt('consent');
     $client->setRedirectUri($redirectUri);
@@ -152,6 +152,27 @@ function driveUpdateExistingFile(Google\Service\Drive $service, $fileId, $fileNa
     ]);
 }
 
+function driveMoveFileToFolder(Google\Service\Drive $service, string $fileId, string $folderId): void
+{
+    $file = $service->files->get($fileId, ['fields' => 'parents']);
+    $parents = $file->getParents();
+    $previousParents = is_array($parents) ? implode(',', $parents) : '';
+
+    if ($previousParents === $folderId) {
+        return;
+    }
+
+    $options = [
+        'fields' => 'id,parents',
+        'addParents' => $folderId,
+    ];
+    if ($previousParents !== '') {
+        $options['removeParents'] = $previousParents;
+    }
+
+    $service->files->update($fileId, new Google\Service\Drive\DriveFile(), $options);
+}
+
 function driveEnsureAnyoneLink(Google\Service\Drive $service, $fileId)
 {
     try {
@@ -167,6 +188,24 @@ function driveEnsureAnyoneLink(Google\Service\Drive $service, $fileId)
         }
         throw $e;
     }
+}
+
+function driveFindFileInFolder(Google\Service\Drive $service, string $folderId, string $fileName, string $mimeType = 'application/pdf'): ?string
+{
+    $mimeQuery = $mimeType === 'text/html' ? "mimeType='text/html'" : "mimeType='application/pdf'";
+    $query = sprintf("%s and name='%s' and '%s' in parents and trashed=false", $mimeQuery, driveSanitizeQueryValue($fileName), driveSanitizeQueryValue($folderId));
+    $response = $service->files->listFiles([
+        'q' => $query,
+        'spaces' => 'drive',
+        'fields' => 'files(id,name)',
+        'pageSize' => 1,
+    ]);
+
+    if (!empty($response->files) && count($response->files) > 0) {
+        return $response->files[0]->id;
+    }
+
+    return null;
 }
 
 function driveGetFileLink(Google\Service\Drive $service, $fileId)
