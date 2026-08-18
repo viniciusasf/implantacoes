@@ -11,3 +11,13 @@ debug_find_api.php
 debug_login.php
 treinamentos-.php
 treinamentoss.php
+
+# Perfis temporários do Puppeteer
+tmp_puppeteer_profile*/
+tmp_puppeteer_profiles/
+
+# Arquivos de teste temporários
+test_*.php
+
+# Pasta de PDFs gerados
+pdfs/
