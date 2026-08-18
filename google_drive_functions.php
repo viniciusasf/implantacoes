@@ -211,11 +211,14 @@ function driveFindFileInFolder(Google\Service\Drive $service, string $folderId, 
 function driveGetFileLink(Google\Service\Drive $service, $fileId)
 {
     $file = $service->files->get($fileId, ['fields' => 'webViewLink,webContentLink']);
-    if (!empty($file->getWebViewLink())) {
-        return $file->getWebViewLink();
-    }
+
     if (!empty($file->getWebContentLink())) {
         return $file->getWebContentLink();
     }
-    return 'https://drive.google.com/file/d/' . $fileId . '/view?usp=sharing';
+
+    if (!empty($file->getWebViewLink())) {
+        return $file->getWebViewLink();
+    }
+
+    return 'https://drive.google.com/uc?export=download&id=' . urlencode($fileId);
 }

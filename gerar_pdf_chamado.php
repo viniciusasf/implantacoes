@@ -6,7 +6,25 @@ require_once 'google_drive_functions.php';
 header('Content-Type: application/json; charset=utf-8');
 date_default_timezone_set('America/Sao_Paulo');
 
+// Sistema de logging robusto - escreve direto no arquivo
+$logFile = __DIR__ . '/logs/pdf_generator.log';
+$logDir = dirname($logFile);
+if (!is_dir($logDir)) {
+    @mkdir($logDir, 0777, true);
+}
+
+function logDebug($message) {
+    global $logFile;
+    $timestamp = date('Y-m-d H:i:s');
+    $line = "[{$timestamp}] {$message}\n";
+    @file_put_contents($logFile, $line, FILE_APPEND);
+}
+
+logDebug('=== INICIANDO GERAÇÃO DE PDF ===');
+logDebug('GET params: ' . json_encode($_GET));
+
 if (empty($_GET['id']) || !is_numeric($_GET['id'])) {
+    logDebug('ERRO: ID inválido');
     http_response_code(400);
     echo json_encode(['sucesso' => false, 'erro' => 'ID do chamado inválido.']);
     exit;
@@ -54,6 +72,10 @@ try {
                     $chamado['status_chamado'] = (string) $apiStatus;
                 }
 
+                if (isset($apiDados['status']) && is_string($apiDados['status']) && trim($apiDados['status']) !== '' && !isset($apiDados['CHAMADO_STATUS'])) {
+                    $chamado['status_chamado'] = trim($apiDados['status']);
+                }
+
                 $apiTipo = $apiDados['TIPOACOMP'] ?? $apiDados['TIPO_ACOMPANHAMENTO'] ?? $apiDados['tipo'] ?? null;
                 if ($apiTipo !== null && trim((string) $apiTipo) !== '') {
                     $chamado['tipo_acompanhamento'] = (string) $apiTipo;
@@ -91,29 +113,12 @@ try {
 
     $html = gerarHtmlComprovanteChamado($chamado);
 
-    // Salva o HTML temporariamente e gera o PDF via Puppeteer
-    $tempHtmlFile = __DIR__ . '/pdfs/temp_chamado_' . $idChamado . '_' . uniqid() . '.html';
-    $tempPdfFile  = __DIR__ . '/pdfs/temp_chamado_' . $idChamado . '_' . uniqid() . '.pdf';
-    
-    file_put_contents($tempHtmlFile, $html);
-    
-    $nodeScript = __DIR__ . '/js/html_to_pdf.js';
-    $cacheDir = __DIR__ . DIRECTORY_SEPARATOR . '.cache' . DIRECTORY_SEPARATOR . 'puppeteer';
-    putenv('PUPPETEER_CACHE_DIR=' . $cacheDir);
-    putenv('HOME=' . __DIR__);
-    putenv('USERPROFILE=' . __DIR__);
+    // O comprovante passa a ser persistido como HTML, preservando o CSS do layout.
+    $htmlContent = $html;
 
-    $command = 'node ' . escapeshellarg($nodeScript) . ' ' . escapeshellarg($tempHtmlFile) . ' ' . escapeshellarg($tempPdfFile);
-    exec($command . ' 2>&1', $cmdOutput, $returnVar);
-    
-    if ($returnVar !== 0 || !file_exists($tempPdfFile)) {
-        @unlink($tempHtmlFile);
-        throw new Exception("Falha ao gerar PDF via Puppeteer. " . implode("\n", $cmdOutput));
+    if ($htmlContent === '') {
+        throw new RuntimeException('HTML do comprovante gerado vazio ou inválido.');
     }
-    
-    $pdfContent = file_get_contents($tempPdfFile);
-    @unlink($tempHtmlFile);
-    @unlink($tempPdfFile);
 
     $clienteNome = trim((string) ($chamado['nome_fantasia'] ?? ''));
     $clienteId = !empty($chamado['id_cliente_api']) ? (int) $chamado['id_cliente_api'] : null;
@@ -124,62 +129,120 @@ try {
         $folderName .= '_' . $clienteId;
     }
 
-    $service = driveGetService();
-    $clientFolderId = driveFindOrCreateFolder($service, $folderName, GOOGLE_DRIVE_PDF_ROOT_FOLDER_ID);
+    logDebug('HTML gerado com sucesso');
 
-    $fileName = sprintf('chamado_suporte_%d.pdf', $idChamado);
-    $fileId = null;
+    $service = null;
+    $fileLink = null;
+    $folderLink = null;
 
-    if (!empty($chamado['drive_file_id'])) {
-        try {
-            $updatedFile = driveUpdateExistingFile($service, $chamado['drive_file_id'], $fileName, $pdfContent, 'application/pdf');
-            $fileId = $updatedFile->id;
+    try {
+        logDebug('Iniciando upload Google Drive');
+        set_time_limit(60);
+        
+        $service = driveGetService();
+        $clientFolderId = driveFindOrCreateFolder($service, $folderName, GOOGLE_DRIVE_PDF_ROOT_FOLDER_ID);
+
+        $fileName = sprintf('chamado_suporte_%d.html', $idChamado);
+        $fileId = null;
+
+        if (!empty($chamado['drive_file_id'])) {
+            try {
+                $updatedFile = driveUpdateExistingFile($service, $chamado['drive_file_id'], $fileName, $htmlContent, 'text/html');
+                $fileId = $updatedFile->id;
+                driveMoveFileToFolder($service, $fileId, $clientFolderId);
+                logDebug('Arquivo atualizado no Drive');
+            } catch (Throwable $e) {
+                logDebug('Erro ao atualizar arquivo: ' . $e->getMessage());
+                $fileId = null;
+            }
+        }
+
+        if (empty($fileId)) {
+            $existingFileId = driveFindFileInFolder($service, $clientFolderId, $fileName, 'text/html');
+            if ($existingFileId) {
+                $updatedFile = driveUpdateExistingFile($service, $existingFileId, $fileName, $htmlContent, 'text/html');
+                $fileId = $updatedFile->id;
+                logDebug('Arquivo existente atualizado');
+            }
+        }
+
+        if (empty($fileId)) {
+            $createdFile = driveUploadNewFile($service, $clientFolderId, $fileName, $htmlContent, 'text/html');
+            $fileId = $createdFile->id;
+            logDebug('Novo arquivo criado no Drive');
+        }
+
+        if (!empty($fileId)) {
             driveMoveFileToFolder($service, $fileId, $clientFolderId);
-        } catch (Throwable $e) {
-            $fileId = null;
+            driveEnsureAnyoneLink($service, $fileId);
+            $fileLink = driveGetFileLink($service, $fileId);
+            logDebug('Link gerado: ' . substr($fileLink, 0, 50) . '...');
+        }
+        
+        $folderLink = 'https://drive.google.com/drive/folders/' . $clientFolderId;
+        logDebug('Folder link: ' . $folderLink);
+
+    } catch (Throwable $e) {
+        logDebug('Erro ao fazer upload no Drive: ' . $e->getMessage());
+        // Fallback: sem link do Drive
+        $fileLink = null;
+        $folderLink = null;
+    }
+
+    // Se conseguiu gerar o PDF mas não conseguiu colocar no Drive, tenta apenas retornar sucesso
+    // (o usuário pode regenerar se necessário)
+    if (empty($fileLink) && !empty($htmlContent)) {
+        logDebug('Fallback: gerando link local como backup');
+        // Gera um link de download direto como fallback
+        $pdfDir = __DIR__ . '/pdfs';
+        if (!is_dir($pdfDir)) {
+            @mkdir($pdfDir, 0777, true);
+        }
+        $htmlFile = $pdfDir . '/chamado_' . $idChamado . '_' . time() . '.html';
+        if (file_put_contents($htmlFile, $htmlContent)) {
+            $fileLink = 'pdfs/' . basename($htmlFile);
+            logDebug('Link local gerado: ' . $fileLink);
         }
     }
 
-    if (empty($fileId)) {
-        $existingFileId = driveFindFileInFolder($service, $clientFolderId, $fileName, 'application/pdf');
-        if ($existingFileId) {
-            $updatedFile = driveUpdateExistingFile($service, $existingFileId, $fileName, $pdfContent, 'application/pdf');
-            $fileId = $updatedFile->id;
+    // Tenta atualizar o banco mesmo se o Drive falhou
+    try {
+        $columnsToAdd = [
+            'drive_file_id' => 'VARCHAR(255) NULL',
+            'drive_file_name' => 'VARCHAR(255) NULL',
+            'drive_pdf_link' => 'VARCHAR(500) NULL',
+            'drive_pdf_gerado_em' => 'DATETIME NULL',
+        ];
+
+        foreach ($columnsToAdd as $column => $definition) {
+            $columnName = $column;
+            $checkColumn = $pdo->query("SHOW COLUMNS FROM chamados_espelho_local LIKE '{$columnName}'");
+            if (!$checkColumn->fetch(PDO::FETCH_ASSOC)) {
+                $pdo->exec("ALTER TABLE chamados_espelho_local ADD COLUMN {$columnName} {$definition}");
+            }
         }
-    }
 
-    if (empty($fileId)) {
-        $createdFile = driveUploadNewFile($service, $clientFolderId, $fileName, $pdfContent, 'application/pdf');
-        $fileId = $createdFile->id;
-    }
-
-    driveMoveFileToFolder($service, $fileId, $clientFolderId);
-    driveEnsureAnyoneLink($service, $fileId);
-    $fileLink = driveGetFileLink($service, $fileId);
-
-    $columnsToAdd = [
-        'drive_file_id' => 'VARCHAR(255) NULL',
-        'drive_file_name' => 'VARCHAR(255) NULL',
-        'drive_pdf_link' => 'VARCHAR(500) NULL',
-        'drive_pdf_gerado_em' => 'DATETIME NULL',
-    ];
-
-    foreach ($columnsToAdd as $column => $definition) {
-        $columnName = $column;
-        $checkColumn = $pdo->query("SHOW COLUMNS FROM chamados_espelho_local LIKE '{$columnName}'");
-        if (!$checkColumn->fetch(PDO::FETCH_ASSOC)) {
-            $pdo->exec("ALTER TABLE chamados_espelho_local ADD COLUMN {$columnName} {$definition}");
+        if (!empty($fileLink)) {
+            $stmtUpdate = $pdo->prepare('UPDATE chamados_espelho_local SET drive_pdf_link = ?, drive_pdf_gerado_em = NOW() WHERE id_chamado_api = ?');
+            $stmtUpdate->execute([$fileLink, $idChamado]);
+            logDebug('Banco de dados atualizado');
         }
+    } catch (Throwable $e) {
+        logDebug('Erro ao atualizar banco: ' . $e->getMessage());
     }
 
-    $stmtUpdate = $pdo->prepare('UPDATE chamados_espelho_local SET drive_file_id = ?, drive_file_name = ?, drive_pdf_link = ?, drive_pdf_gerado_em = NOW() WHERE id_chamado_api = ?');
-    $stmtUpdate->execute([$fileId, $fileName, $fileLink, $idChamado]);
-    
-    $folderLink = 'https://drive.google.com/drive/folders/' . $clientFolderId;
+    logDebug('Finalizando com sucesso');
 
-    echo json_encode(['sucesso' => true, 'link' => $fileLink, 'html' => $html, 'filename' => $fileName, 'folder_link' => $folderLink]);
+    echo json_encode([
+        'sucesso' => true,
+        'link' => $fileLink ?: '',
+        'html' => $html,
+        'filename' => 'chamado_suporte_' . $idChamado . '.html',
+        'folder_link' => $folderLink ?: ''
+    ]);
     exit;
 } catch (Throwable $e) {
+    logDebug('ERRO FATAL: ' . $e->getMessage() . ' - ' . $e->getFile() . ':' . $e->getLine());
     http_response_code(500);
     echo json_encode(['sucesso' => false, 'erro' => 'Erro ao gerar comprovante: ' . $e->getMessage()]);
     exit;
@@ -218,113 +281,366 @@ function gerarHtmlComprovanteChamado(array $chamado)
     if (!empty($chamado['data_prev_retorno'])) {
         $dtPrev = new DateTime($chamado['data_prev_retorno']);
         $dtPrev->setTime(0, 0, 0);
-        
+
         $dtImp = !empty($chamado['data_importacao']) ? new DateTime($chamado['data_importacao']) : new DateTime();
         $dtImp->setTime(0, 0, 0);
-        
+
         $diff = $dtImp->diff($dtPrev);
         $dias = $diff->days;
-        
+
         if ($diff->invert && $dias > 0) {
-            $textoPrazo = "atrasado " . $dias . ($dias == 1 ? " dia" : " dias");
+            $textoPrazo = 'atrasado ' . $dias . ($dias == 1 ? ' dia' : ' dias');
         } elseif ($dias == 0) {
-            $textoPrazo = "hoje";
+            $textoPrazo = 'hoje';
         } else {
-            $textoPrazo = "em " . $dias . ($dias == 1 ? " dia útil" : " dias úteis");
+            $textoPrazo = 'em ' . $dias . ($dias == 1 ? ' dia útil' : ' dias úteis');
         }
     }
 
-    $html = '<!DOCTYPE html>
+    $clienteEsc = htmlspecialchars($cliente, ENT_QUOTES, 'UTF-8');
+    $statusEsc = htmlspecialchars($status, ENT_QUOTES, 'UTF-8');
+    $tipoEsc = htmlspecialchars($tipo, ENT_QUOTES, 'UTF-8');
+    $responsavelEsc = htmlspecialchars($responsavel, ENT_QUOTES, 'UTF-8');
+    $responsavelInicialEsc = htmlspecialchars($responsavelInicial, ENT_QUOTES, 'UTF-8');
+    $descricaoEsc = htmlspecialchars($descricao, ENT_QUOTES, 'UTF-8');
+    $dataPrevEsc = htmlspecialchars($dataPrev, ENT_QUOTES, 'UTF-8');
+    $dataImportacaoEsc = htmlspecialchars($dataImportacao, ENT_QUOTES, 'UTF-8');
+    $idChamadoEsc = htmlspecialchars((string) $idChamado, ENT_QUOTES, 'UTF-8');
+    $textoPrazoEsc = $textoPrazo !== '' ? '<div class="eta-note">' . htmlspecialchars($textoPrazo, ENT_QUOTES, 'UTF-8') . '</div>' : '';
+
+    $html = <<<HTML
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chamado #' . htmlspecialchars($idChamado) . ' · GestãoPro</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <title>Chamado #{$idChamadoEsc} · GestãoPro</title>
   <style>
-    :root{--navy-950:#0b1220;--navy-900:#101a2e;--navy-700:#1e2b47;--blue-600:#2f6fed;--blue-500:#4a86ff;--blue-100:#e8f0ff;--amber-500:#f5a524;--amber-100:#fff2da;--amber-700:#8a5a06;--slate-50:#f6f7fb;--slate-100:#eef1f6;--slate-200:#e2e6ee;--slate-400:#8892a6;--slate-500:#5c667c;--slate-700:#334059;--ink:#0f1626;--white:#ffffff;--radius:14px;}
-    *{box-sizing:border-box;} body{margin:0;background:radial-gradient(1100px 500px at 15% -10%, rgba(47,111,237,0.10), transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(245,165,36,0.08), transparent 55%), var(--slate-50);font-family:"Inter", -apple-system, BlinkMacSystemFont, sans-serif;color:var(--ink);padding:40px 20px 60px;display:flex;justify-content:center;line-height:1.5;} .sheet{width:100%;max-width:760px;} .top-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap;} .brand{display:flex;align-items:center;gap:10px;} .brand-mark{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg, var(--blue-600), #1c4fd6);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px -4px rgba(47,111,237,0.55);} .brand-mark svg{width:20px;height:20px;} .brand-name{font-family:"Space Grotesk", sans-serif;font-weight:700;font-size:17px;color:var(--navy-900);letter-spacing:-0.02em;} .brand-name span{color:var(--blue-600);} .ticket-id{font-family:"JetBrains Mono", monospace;font-size:13px;color:var(--slate-500);background:var(--white);border:1px solid var(--slate-200);padding:6px 12px;border-radius:999px;} .ticket-id b{color:var(--navy-900);font-weight:600;} .card{background:var(--white);border-radius:20px;border:1px solid var(--slate-200);box-shadow:0 1px 2px rgba(15,22,38,0.04), 0 20px 40px -24px rgba(15,22,38,0.15);overflow:hidden;} .card-head{padding:28px 32px 24px;border-bottom:1px solid var(--slate-100);display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;} .card-head h1{font-family:"Space Grotesk", sans-serif;font-size:24px;font-weight:700;margin:0 0 6px;letter-spacing:-0.02em;color:var(--navy-900);} .card-head .meta-line{font-size:13px;color:var(--slate-500);} .type-chip{display:inline-flex;align-items:center;gap:6px;background:var(--blue-100);color:var(--blue-600);font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:999px;margin-top:10px;} .type-chip svg{width:13px;height:13px;} .status-badge{display:inline-flex;align-items:center;gap:8px;background:var(--amber-100);border:1px solid #f0d18f;color:var(--amber-700);font-weight:600;font-size:13px;padding:9px 14px 9px 10px;border-radius:999px;white-space:nowrap;} .status-dot{width:8px;height:8px;border-radius:50%;background:var(--amber-500);box-shadow:0 0 0 4px rgba(245,165,36,0.25);animation:pulse 2.2s ease-in-out infinite;flex-shrink:0;} @keyframes pulse{0%,100%{box-shadow:0 0 0 4px rgba(245,165,36,0.25);}50%{box-shadow:0 0 0 7px rgba(245,165,36,0.12);}} .info-grid{display:grid;grid-template-columns:repeat(3, 1fr);gap:1px;background:var(--slate-100);border-bottom:1px solid var(--slate-100);} .info-cell{background:var(--white);padding:20px 22px;} .info-cell .label{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--slate-400);margin-bottom:8px;} .info-cell .label svg{width:13px;height:13px;flex-shrink:0;} .info-cell .value{font-size:15.5px;font-weight:600;color:var(--navy-900);} .avatar-chip{display:inline-flex;align-items:center;gap:8px;} .avatar-chip .dot{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#4a86ff,#1c4fd6);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:"Space Grotesk",sans-serif;} .eta-cell{grid-column:1 / -1;background:linear-gradient(90deg, #fff8ec, #fffdf8);border-top:1px solid var(--slate-100);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;} .eta-left{display:flex;align-items:center;gap:14px;} .eta-icon{width:42px;height:42px;border-radius:12px;background:var(--amber-100);border:1px solid #f0d18f;display:flex;align-items:center;justify-content:center;flex-shrink:0;} .eta-icon svg{width:20px;height:20px;color:var(--amber-700);} .eta-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--amber-700);margin-bottom:3px;} .eta-value{font-family:"Space Grotesk",sans-serif;font-size:19px;font-weight:700;color:var(--navy-900);} .eta-countdown{font-size:12.5px;font-weight:600;color:var(--amber-700);background:var(--white);border:1px solid #f0d18f;padding:6px 12px;border-radius:999px;} .desc-section{padding:26px 32px 30px;} .desc-heading{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--blue-600);margin-bottom:14px;} .desc-heading svg{width:14px;height:14px;} .path-trail{font-family:"JetBrains Mono", monospace;font-size:12.5px;color:var(--slate-500);background:var(--slate-50);border:1px solid var(--slate-200);display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;margin-bottom:16px;} .path-trail .seg-strong{color:var(--navy-900);font-weight:600;background:var(--blue-100);padding:2px 6px;border-radius:5px;color:var(--blue-600);} .request-box{background:var(--slate-50);border:1px solid var(--slate-200);border-left:4px solid var(--blue-600);border-radius:0 12px 12px 0;padding:18px 20px;font-size:15px;color:var(--navy-900);line-height:1.65;} .request-box b{color:var(--blue-600);} .footer{margin-top:22px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:var(--slate-400);flex-wrap:wrap;} .footer a{color:var(--slate-500);text-decoration:none;font-weight:500;} .footer a:hover{color:var(--blue-600);} @media (max-width:640px){body{padding:20px 12px 40px;} .card-head{padding:22px 20px 20px;} .card-head h1{font-size:20px;} .info-grid{grid-template-columns:1fr 1fr;} .desc-section{padding:22px 20px 26px;} .eta-cell{padding:16px 20px;} .status-badge{font-size:12px;}} @media (max-width:420px){.info-grid{grid-template-columns:1fr;} .eta-cell{flex-direction:column;align-items:flex-start;}}</style>
+    :root {
+      --navy-900: #10213d;
+      --blue-600: #2d6df6;
+      --blue-100: #eaf1ff;
+      --amber-600: #f4b942;
+      --amber-100: #fff4d6;
+      --amber-700: #8d5a05;
+      --slate-100: #f3f6fb;
+      --slate-200: #e7edf6;
+      --slate-500: #5d6980;
+      --slate-700: #2d3a53;
+      --ink: #132238;
+      --white: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+      background: linear-gradient(180deg, #eef3fb 0%, #f8faff 100%);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+    body { padding: 12px 12px 14px; }
+    .pdf-shell { max-width: 820px; margin: 0 auto; }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      width: 42px; height: 42px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, var(--blue-600), #1a4ec9);
+      box-shadow: 0 12px 22px -14px rgba(45, 109, 246, 0.9);
+    }
+    .brand-mark svg { width: 22px; height: 22px; display: block; }
+    .brand-name { font-size: 18px; font-weight: 800; letter-spacing: -0.04em; color: var(--navy-900); }
+    .brand-name span { color: var(--blue-600); }
+    .ticket-tag {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid var(--slate-200);
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 10px;
+      color: var(--slate-500);
+      letter-spacing: 0.02em;
+    }
+    .ticket-tag strong { color: var(--navy-900); font-weight: 700; }
+    .card {
+      background: var(--white);
+      border: 1px solid var(--slate-200);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 18px 42px -30px rgba(16, 33, 61, 0.18);
+    }
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px 8px;
+      background: linear-gradient(135deg, #f9fbff 0%, #eef4ff 100%);
+      border-bottom: 1px solid var(--slate-200);
+    }
+    .eyebrow {
+      display: inline-block;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--slate-500);
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .card-header h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.2;
+      letter-spacing: -0.04em;
+      font-weight: 800;
+      color: var(--navy-900);
+    }
+    .meta-line { margin-top: 4px; font-size: 10px; color: var(--slate-500); }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+      background: var(--blue-100);
+      color: var(--blue-600);
+      border-radius: 999px;
+      padding: 3px 7px;
+      font-size: 9px;
+      font-weight: 700;
+    }
+    .pill svg { width: 14px; height: 14px; }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: var(--amber-100);
+      border: 1px solid rgba(244, 185, 66, 0.6);
+      color: var(--amber-700);
+      font-size: 9px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--amber-600);
+      box-shadow: 0 0 0 4px rgba(244, 185, 66, 0.18);
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      padding: 6px 10px 2px;
+    }
+    .info-card {
+      background: linear-gradient(180deg, #fbfcff, #f4f7fc);
+      border: 1px solid var(--slate-200);
+      border-radius: 10px;
+      min-height: 56px;
+      padding: 6px 8px;
+    }
+    .info-label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 7px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--slate-500);
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .info-label svg { width: 10px; height: 10px; color: var(--blue-600); }
+    .info-value {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--navy-900);
+      line-height: 1.2;
+    }
+    .person-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      max-width: 100%;
+    }
+    .person-avatar {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--blue-600), #477ef7);
+      color: var(--white);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .eta-card {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      background: linear-gradient(135deg, rgba(244,185,66,0.12), rgba(45,109,246,0.06));
+      border: 1px solid rgba(244,185,66,0.38);
+      border-radius: 10px;
+      padding: 8px 10px;
+    }
+    .eta-left { display: flex; align-items: flex-start; gap: 6px; }
+    .eta-icon {
+      width: 24px; height: 24px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--amber-600), #f0aa2d);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--white);
+      box-shadow: 0 12px 14px -12px rgba(244,185,66,0.9);
+    }
+    .eta-icon svg { width: 12px; height: 12px; }
+    .eta-label {
+      font-size: 7px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--slate-500);
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .eta-value {
+      font-size: 16px;
+      letter-spacing: -0.04em;
+      color: var(--navy-900);
+      font-weight: 800;
+      line-height: 1.1;
+    }
+    .eta-note {
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid rgba(244, 185, 66, 0.5);
+      color: var(--amber-700);
+      padding: 4px 7px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .request-box { padding: 0 10px 10px; }
+    .section-title {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 7px; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--slate-500); font-weight: 800; margin: 7px 0 5px;
+    }
+    .section-title svg { width: 12px; height: 12px; color: var(--blue-600); }
+    .request-path {
+      font-size: 10px;
+      color: var(--slate-500);
+      margin-bottom: 6px;
+    }
+    .request-path strong { color: var(--navy-900); }
+    .request-body {
+      background: linear-gradient(180deg, #f8faff, #f3f7fd);
+      border: 1px solid var(--slate-200);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 11px;
+      color: var(--navy-900);
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .footer {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 8px 10px 0;
+      color: var(--slate-500); font-size: 9px;
+    }
+    .footer a { color: var(--blue-600); text-decoration: none; font-weight: 700; }
+    @media (max-width: 640px) {
+      body { padding: 16px 14px 24px; }
+      .topbar, .card-header, .footer { flex-direction: column; align-items: flex-start; }
+      .status-badge { width: 100%; justify-content: center; }
+      .summary-grid { grid-template-columns: 1fr; }
+      .eta-card { flex-direction: column; align-items: flex-start; }
+      .eta-value { font-size: 22px; }
+      .ticket-tag { width: 100%; text-align: left; }
+    }
+  </style>
 </head>
 <body>
-<div class="sheet">
-  <div class="top-bar">
-    <div></div>
-    <div class="ticket-id">Chamado <b>#' . htmlspecialchars($idChamado) . '</b> · gerado em ' . htmlspecialchars($dataImportacao) . '</div>
-  </div>
+  <div class="pdf-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">{$logoSvg}</div>
+        <div class="brand-name">Gestão<span>Pro</span></div>
+      </div>
+      <div class="ticket-tag">Chamado <strong>#{$idChamadoEsc}</strong> · gerado em {$dataImportacaoEsc}</div>
+    </header>
 
-  <div class="card">
-    <div class="card-head">
-      <div>
-        <h1>' . htmlspecialchars($cliente) . '</h1>
-        <div class="meta-line">Solicitação registrada no painel de suporte GestãoPro</div>
-        <div class="type-chip">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          ' . htmlspecialchars($tipo) . '
-        </div>
-      </div>
-      <div class="status-badge"><span class="status-dot"></span>' . htmlspecialchars($status) . '</div>
-    </div>
-
-    <div class="info-grid">
-      <div class="info-cell">
-        <div class="label">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/></svg>
-          Responsável
-        </div>
-        <div class="value"><span class="avatar-chip"><span class="dot">' . htmlspecialchars($responsavelInicial) . '</span>' . htmlspecialchars($responsavel) . '</span></div>
-      </div>
-      <div class="info-cell">
-        <div class="label">
-          <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16" stroke="currentColor" stroke-width="1.8"/></svg>
-          Tipo de Chamado
-        </div>
-        <div class="value">' . htmlspecialchars($tipo) . '</div>
-      </div>
-      <div class="info-cell">
-        <div class="label">
-          <svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 8.5h17" stroke="currentColor" stroke-width="1.8"/></svg>
-          ID do Chamado
-        </div>
-        <div class="value">#' . htmlspecialchars($idChamado) . '</div>
-      </div>
-
-      <div class="eta-cell">
-        <div class="eta-left">
-          <div class="eta-icon">
-            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          </div>
-          <div>
-            <div class="eta-label">Previsão de Retorno</div>
-            <div class="eta-value">' . htmlspecialchars($dataPrev) . '</div>
+    <main class="card">
+      <div class="card-header">
+        <div>
+          <div class="eyebrow">Cliente</div>
+          <h1>{$clienteEsc}</h1>
+          <div class="meta-line">Solicitação registrada no painel de suporte GestãoPro</div>
+          <div class="pill">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            {$tipoEsc}
           </div>
         </div>
-        ' . ($textoPrazo ? '<div class="eta-countdown">' . htmlspecialchars($textoPrazo) . '</div>' : '') . '
-      </div>
-    </div>
-
-    <div class="desc-section">
-      <div class="desc-heading">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M7 8h10M7 12h10M7 16h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        Descrição da Solicitação
+        <div class="status-badge"><span class="status-dot"></span>{$statusEsc}</div>
       </div>
 
-      <div class="path-trail">
-        Suporte <span>›</span> Chamado <span>›</span> <span class="seg-strong">#' . htmlspecialchars($idChamado) . '</span>
+      <div class="summary-grid">
+        <div class="info-card">
+          <div class="info-label">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16" stroke="currentColor" stroke-width="1.8"/></svg>
+            Tipo
+          </div>
+          <div class="info-value">{$tipoEsc}</div>
+        </div>
+
+        <div class="info-card">
+          <div class="info-label">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/></svg>
+            Status
+          </div>
+          <div class="info-value">{$statusEsc}</div>
+        </div>
+
+        <div class="eta-card">
+          <div class="eta-left">
+            <div class="eta-icon">
+              <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
+            <div>
+              <div class="eta-label">Previsão de retorno</div>
+              <div class="eta-value">{$dataPrevEsc}</div>
+            </div>
+          </div>
+          {$textoPrazoEsc}
+        </div>
       </div>
 
-      <div class="request-box">' . nl2br(htmlspecialchars($descricao)) . '</div>
-    </div>
+      <div class="request-box">
+        <div class="section-title">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M7 8h10M7 12h10M7 16h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          Descrição da solicitação
+        </div>
+        <div class="request-path">Suporte <span>›</span> Chamado <span>›</span> <strong>#{$idChamadoEsc}</strong></div>
+        <div class="request-body">{$descricaoEsc}</div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>Documento gerado por GestãoPro</span>
+      <a href="https://gestaopro.com.br/" target="_blank" rel="noopener">gestaopro.com.br</a>
+    </footer>
   </div>
-
-  <div class="footer">
-    <span>Documento gerado por Gestaopro</span>
-    <a href="https://gestaopro.com.br/" target="_blank" rel="noopener">gestaopro.com.br</a>
-  </div>
-</div>
 </body>
-</html>';
+</html>
+HTML;
 
     return $html;
 }

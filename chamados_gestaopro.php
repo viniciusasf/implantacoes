@@ -243,14 +243,38 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         'Em Desenvolvimento':          ['var(--info-light)',   'var(--info)'],
         'Aguardando Cliente':          ['var(--purple-light)', 'var(--purple)'],
         'Aguardando Testes':           ['var(--success-light)','var(--success)'],
+        'Enviado Atualização':         ['var(--primary-light)','var(--primary)'],
         'Resolvido':                   ['var(--success-light)','var(--success)'],
         'Cancelado':                   ['#f1f5f9',             'var(--text-muted)'],
     };
 
+    function normalizarStatus(status){
+        if(!status && status !== 0) return '';
+        const valor = String(status).trim();
+        if(!valor) return '';
+
+        const mapa = {
+            'aguardando desenvolvimento': 'Aguardando Desenvolvimento',
+            'em desenvolvimento': 'Em Desenvolvimento',
+            'aguardando cliente': 'Aguardando Cliente',
+            'aguardando testes': 'Aguardando Testes',
+            'enviado atualizacao': 'Enviado Atualização',
+            'enviado atualização': 'Enviado Atualização',
+            'enviado atualização': 'Enviado Atualização',
+            'enviado atualizaçao': 'Enviado Atualização',
+            'resolvido': 'Resolvido',
+            'cancelado': 'Cancelado'
+        };
+
+        const chave = valor.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return mapa[chave] || valor;
+    }
+
     function badgeStatus(s){
         if(!s) return '—';
-        const [bg,fg] = STATUS_COR[s] || ['var(--primary-light)','var(--primary)'];
-        return `<span class="badge-ch" style="background:${bg};color:${fg}">${s}</span>`;
+        const statusNormalizado = normalizarStatus(s);
+        const [bg,fg] = STATUS_COR[statusNormalizado] || ['var(--primary-light)','var(--primary)'];
+        return `<span class="badge-ch" style="background:${bg};color:${fg}">${statusNormalizado}</span>`;
     }
 
     function escapeHtmlAttribute(text){
@@ -371,16 +395,19 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             lista.sort((a,b)=>{
             const statusOrder = {
                 'Aguardando Suporte': 1,
-                'Aguardando Testes': 2,
-                'Aguardando Desenvolvimento': 3
+                'Enviado Atualização': 2,
+                'Aguardando Testes': 3,
+                'Aguardando Desenvolvimento': 4
             };
-            const wA = statusOrder[a.CHAMADO_STATUS] || 99;
-            const wB = statusOrder[b.CHAMADO_STATUS] || 99;
+            const statusA = normalizarStatus(a.CHAMADO_STATUS);
+            const statusB = normalizarStatus(b.CHAMADO_STATUS);
+            const wA = statusOrder[statusA] || 99;
+            const wB = statusOrder[statusB] || 99;
             
             if (wA !== wB) {
                 return wA - wB;
-            } else if (a.CHAMADO_STATUS !== b.CHAMADO_STATUS) {
-                return String(a.CHAMADO_STATUS).localeCompare(String(b.CHAMADO_STATUS), 'pt-BR');
+            } else if (statusA !== statusB) {
+                return String(statusA).localeCompare(String(statusB), 'pt-BR');
             }
 
             let va=a[sortCol]??'', vb=b[sortCol]??'';
@@ -432,7 +459,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             <td class="text-center align-middle" style="white-space:nowrap">
                 <div class="d-flex gap-1 justify-content-center align-items-center flex-nowrap">
                     ${btnSalvar}
-                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold shadow-sm btn-action btn-copy-pdf-link" data-id="${idChamado}" title="Gerar / copiar link do comprovante">
+                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold shadow-sm btn-action btn-copy-comprovante-link" data-id="${idChamado}" title="Gerar / copiar link do comprovante HTML">
                         <i class="bi bi-file-earmark-richtext"></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-success shadow-sm copy-whatsapp-message btn-action btn-action-icon" data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp" data-message="${msgAttr}" title="Copiar WhatsApp">
@@ -455,9 +482,10 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         const resp=document.getElementById('filtro-responsavel').value;
 
         const fil=todos.filter(r=>{
+            const statusNormalizado = normalizarStatus(r.CHAMADO_STATUS);
             const txt=`${r.FANTASIA} ${r.SERIAL} ${r.DESCRICAO} ${r.RESPONSAVEL} ${r.CHAMADO_USUARIO} #${r.ID}`.toLowerCase();
             if(busca&&!txt.includes(busca)) return false;
-            if(statusList.length > 0 && !statusList.includes(r.CHAMADO_STATUS)) return false;
+            if(statusList.length > 0 && !statusList.includes(statusNormalizado)) return false;
             if(tipoList.length > 0 && !tipoList.includes(r.TIPOACOMP)) return false;
             if(resp&&r.RESPONSAVEL!==resp) return false;
             return true;
@@ -467,9 +495,9 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
     }
 
     function atualizarKPIs(lista){
-        document.getElementById('kpi-aguard-dev').textContent=lista.filter(r=>r.CHAMADO_STATUS==='Aguardando Desenvolvimento').length;
-        document.getElementById('kpi-aguard-testes').textContent=lista.filter(r=>r.CHAMADO_STATUS==='Aguardando Testes').length;
-        document.getElementById('kpi-aguard-suporte').textContent=lista.filter(r=>r.CHAMADO_STATUS==='Aguardando Suporte').length;
+        document.getElementById('kpi-aguard-dev').textContent=lista.filter(r=>normalizarStatus(r.CHAMADO_STATUS)==='Aguardando Desenvolvimento').length;
+        document.getElementById('kpi-aguard-testes').textContent=lista.filter(r=>['Aguardando Testes','Enviado Atualização'].includes(normalizarStatus(r.CHAMADO_STATUS))).length;
+        document.getElementById('kpi-aguard-suporte').textContent=lista.filter(r=>normalizarStatus(r.CHAMADO_STATUS)==='Aguardando Suporte').length;
         document.getElementById('kpi-total').textContent=lista.length;
     }
 
@@ -492,7 +520,8 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             
             window.chamadosLocais = respLocais.sucesso ? (respLocais.dados || {}) : {};
 
-            populaDropdownCheckboxes('filtro-status-menu', 'filtro-status-label', 'filtro-status-cb', lista.map(r=>r.CHAMADO_STATUS), ['Aguardando Desenvolvimento', 'Aguardando Suporte', 'Aguardando Testes'], 'Todos os status');
+            const statusValores = [...new Set(lista.map(r => normalizarStatus(r.CHAMADO_STATUS)).filter(Boolean))].sort();
+            populaDropdownCheckboxes('filtro-status-menu', 'filtro-status-label', 'filtro-status-cb', statusValores, ['Aguardando Desenvolvimento', 'Aguardando Suporte', 'Aguardando Testes', 'Enviado Atualização'], 'Todos os status');
             populaDropdownCheckboxes('filtro-tipo-menu', 'filtro-tipo-label', 'filtro-tipo-cb', lista.map(r=>r.TIPOACOMP), [], 'Todos os tipos');
             populaSelect('filtro-responsavel', lista.map(r=>r.RESPONSAVEL), 'VINICIUS');
             aplicarFiltros();
@@ -590,39 +619,96 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             return;
         }
 
-        const btnPdf = event.target.closest('.btn-copy-pdf-link');
-        if (btnPdf) {
-            const id = parseInt(btnPdf.dataset.id);
+        const btnComprovante = event.target.closest('.btn-copy-comprovante-link');
+        if (btnComprovante) {
+            const id = parseInt(btnComprovante.dataset.id);
             const chamado = todos.find(c => c.ID == id);
             if (!chamado) return;
 
-            const originalHtml = btnPdf.innerHTML;
-            btnPdf.disabled = true;
-            btnPdf.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+            const originalHtml = btnComprovante.innerHTML;
+            btnComprovante.disabled = true;
+            btnComprovante.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
 
             fetch('gerar_pdf_chamado.php?id=' + encodeURIComponent(id))
-                .then(r => r.json())
+                .then(async response => {
+                    const rawText = await response.text();
+                    let res = null;
+
+                    try {
+                        res = rawText ? JSON.parse(rawText) : null;
+                    } catch (e) {
+                        throw new Error(rawText || 'Resposta do servidor inválida.');
+                    }
+
+                    if (!response.ok || !res || res.sucesso === false) {
+                        throw new Error(res && res.erro ? res.erro : 'Erro ao gerar comprovante.');
+                    }
+
+                    return res;
+                })
                 .then(res => {
-                    if (res.sucesso) {
-                        const usuario = chamado.CHAMADO_USUARIO || chamado.USUARIO || chamado.FANTASIA || chamado.RAZAOSOCIAL || '';
-                        const mensagem = `Olá ${usuario}, segue o comprovante do chamado #${id}.\nStatus: ${chamado.CHAMADO_STATUS || ''}`;
-                        
-                        copiarTextoAreaTransferencia(mensagem, 'Mensagem padrão copiada e pasta do Drive aberta!');
-                        
-                        if (res.folder_link) {
-                            window.open(res.folder_link, '_blank');
+                    const usuario = chamado.CHAMADO_USUARIO || chamado.USUARIO || chamado.FANTASIA || chamado.RAZAOSOCIAL || '';
+                    const linkArquivo = res && res.link ? res.link : '';
+
+                    console.log('=== PDF Response ===');
+                    console.log('Response object:', res);
+                    console.log('Link value:', linkArquivo);
+                    console.log('Link is empty?', !linkArquivo || linkArquivo.trim() === '');
+                    console.log('Success flag:', res?.sucesso);
+
+                    if (linkArquivo && linkArquivo.trim() !== '') {
+                        try {
+                            console.log('Tentando abrir link:', linkArquivo);
+                            copiarTextoAreaTransferencia(linkArquivo, 'Link do comprovante copiado!');
+                            
+                            // Extrai fileId do link do Google Drive se necessário
+                            let comprovanteLink = linkArquivo;
+                            const googleDriveMatch = linkArquivo.match(/[?&]id=([^&]+)/);
+                            if (googleDriveMatch && googleDriveMatch[1]) {
+                                // Usa endpoint local para servir o HTML com o tipo de conteúdo correto.
+                                const fileId = googleDriveMatch[1];
+                                comprovanteLink = 'visualizar_comprovante_chamado.php?id=' + encodeURIComponent(fileId);
+                                console.log('Usando link local:', comprovanteLink);
+                            }
+                            
+                            // Tenta abrir direto
+                            const novaJanela = window.open(comprovanteLink, '_blank');
+                            console.log('Janela aberta:', novaJanela);
+                            
+                            if (novaJanela) {
+                                novaJanela.focus();
+                                console.log('✓ PDF aberto com sucesso');
+                            } else {
+                                // Se popup foi bloqueado, tenta usar location
+                                console.warn('Popup bloqueado, tentando com location...');
+                                setTimeout(() => {
+                                    window.location.href = comprovanteLink;
+                                }, 500);
+                            }
+                            return;
+                        } catch (err) {
+                            console.error('Erro ao abrir janela:', err);
+                            alert('Erro ao abrir PDF: ' + err.message);
                         }
                     } else {
-                        alert('Erro ao gerar comprovante: ' + (res.erro || 'Erro desconhecido'));
+                        console.warn('❌ Link do arquivo está vazio ou ausente:', res);
+                        alert('❌ Link do comprovante não foi gerado corretamente. Verifique os logs.');
+                    }
+
+                    const mensagemFallback = `Olá ${usuario}, segue o comprovante do chamado #${id}.\nStatus: ${chamado.CHAMADO_STATUS || ''}`;
+                    copiarTextoAreaTransferencia(mensagemFallback, 'Mensagem padrão copiada!');
+
+                    if (res && res.folder_link) {
+                        window.open(res.folder_link, '_blank');
                     }
                 })
                 .catch(err => {
                     console.error(err);
-                    alert('Erro de rede ao gerar link do comprovante.');
+                    alert(err && err.message ? err.message : 'Erro de rede ao gerar link do comprovante.');
                 })
                 .finally(() => {
-                    btnPdf.disabled = false;
-                    btnPdf.innerHTML = originalHtml;
+                    btnComprovante.disabled = false;
+                    btnComprovante.innerHTML = originalHtml;
                 });
             return;
         }
