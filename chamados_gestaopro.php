@@ -111,7 +111,7 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
     <div class="card-body p-0">
         <div id="estado-carregando" class="text-center py-5">
             <div class="spinner-border" style="color:var(--danger)" role="status"></div>
-            <p class="mt-3 mb-0" style="color:var(--text-muted)">Buscando chamados da API...</p>
+            <p id="msg-carregando" class="mt-3 mb-0" style="color:var(--text-muted)">Carregando chamados...</p>
         </div>
         <div id="estado-erro" class="d-none text-center py-5">
             <i class="bi bi-exclamation-triangle-fill" style="font-size:2.5rem;color:var(--danger)"></i>
@@ -501,14 +501,15 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         document.getElementById('kpi-total').textContent=lista.length;
     }
 
-    function carregarDados(){
+    function carregarDados(forcar){
+        forcar = !!forcar;
         document.getElementById('estado-carregando').classList.remove('d-none');
         document.getElementById('estado-erro').classList.add('d-none');
         document.getElementById('wrapper-tabela').classList.add('d-none');
         document.getElementById('btn-refresh').disabled=true;
+        document.getElementById('msg-carregando').textContent = forcar ? 'Buscando chamados da API...' : 'Carregando última leitura...';
 
-        const forcar=window._forcar||false; window._forcar=false;
-        const url='api_gestaopro_bridge.php?endpoint=chamados'+(forcar?'&forcar=1':'');
+        const url='api_gestaopro_bridge.php?endpoint=chamados'+(forcar ? '&forcar=1' : '&somente_cache=1');
 
         Promise.all([
             fetch(url).then(r=>r.json()),
@@ -545,9 +546,8 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
     }
 
     document.getElementById('btn-refresh').addEventListener('click',function(){
-        window._forcar=true;
         document.getElementById('ico-refresh').className='bi bi-arrow-clockwise spin';
-        carregarDados();
+        carregarDados(true);
     });
 
     ['filtro-busca','filtro-responsavel'].forEach(id=>{
@@ -629,7 +629,39 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             btnComprovante.disabled = true;
             btnComprovante.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
 
-            fetch('gerar_pdf_chamado.php?id=' + encodeURIComponent(id))
+            const isSalvo = window.chamadosLocais && window.chamadosLocais[id] !== undefined;
+            let p = Promise.resolve();
+
+            if (!isSalvo) {
+                const payload = {
+                    id: chamado.ID,
+                    id_cliente: chamado.ID_CLIENTE,
+                    fantasia: chamado.FANTASIA || chamado.RAZAOSOCIAL,
+                    status: chamado.CHAMADO_STATUS,
+                    tipo: chamado.TIPOACOMP,
+                    descricao: chamado.DESCRICAO,
+                    dataprev: chamado.DATAPREV_RETORNO,
+                    responsavel: chamado.RESPONSAVEL
+                };
+                p = fetch('salvar_chamado_espelho.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).then(r=>r.json()).then(res=>{
+                    if (res.sucesso) {
+                        if(!window.chamadosLocais) window.chamadosLocais = {};
+                        window.chamadosLocais[id] = 0;
+                        const btnSalvar = document.querySelector(`.btn-salvar-local[data-id="${id}"]`);
+                        if (btnSalvar) {
+                            btnSalvar.outerHTML = `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm btn-action" title="Salvo Localmente"><i class="bi bi-cloud-check"></i> SALVO</button>`;
+                        }
+                    } else {
+                        throw new Error('Falha ao salvar chamado antes de gerar comprovante.');
+                    }
+                });
+            }
+
+            p.then(() => fetch('gerar_pdf_chamado.php?id=' + encodeURIComponent(id)))
                 .then(async response => {
                     const rawText = await response.text();
                     let res = null;
@@ -721,7 +753,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         }
     });
 
-    carregarDados();
+    carregarDados(false);
 })();
 </script>
 
