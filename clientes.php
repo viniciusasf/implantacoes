@@ -49,7 +49,9 @@ function encerrarImplantacaoCliente(PDO $pdo, $idCliente, $cancelada = false)
             $stmtCliente->execute([$dataAtual, $idCliente]);
         }
 
-        // Fecha treinamentos pendentes para remover o cliente dos fluxos de atendimento.
+        // Fecha APENAS treinamentos pendentes já passados (sem data futura).
+        // Treinamentos agendados para hoje ou para o futuro permanecem PENDENTE,
+        // pois ainda precisam ser realizados mesmo com a implantação encerrada.
         $observacaoFechamento = $cancelada
             ? '[Encerrado automaticamente por cancelamento da implantacao em ' . $dataAtual . ']'
             : '[Encerrado automaticamente por conclusao da implantacao em ' . $dataAtual . ']';
@@ -60,7 +62,8 @@ function encerrarImplantacaoCliente(PDO $pdo, $idCliente, $cancelada = false)
                  data_treinamento_encerrado = ?,
                  observacoes = CONCAT(IFNULL(observacoes, ''), CASE WHEN IFNULL(observacoes, '') = '' THEN '' ELSE ' ' END, ?)
              WHERE id_cliente = ?
-               AND status = 'PENDENTE'"
+               AND UPPER(status) = 'PENDENTE'
+               AND (data_treinamento IS NULL OR data_treinamento < NOW())"
         );
         $stmtTreinamentos->execute([$dataHoraAtual, $observacaoFechamento, $idCliente]);
 
@@ -518,7 +521,7 @@ body, html {
         </div>
         <div class="d-flex align-items-center gap-2">
             <a href="clientes.php?mostrar_encerrados=<?= $mostrar_encerrados == '1' ? '0' : '1' ?>&view=<?= urlencode($view_mode) ?>&busca=<?= urlencode($busca) ?>&estagio="
-               class="btn btn-outline-secondary btn-modern px-3">
+               class="btn btn-outline-primary btn-modern px-3">
                 <i class="bi <?= $mostrar_encerrados == '1' ? 'bi-eye-slash text-danger' : 'bi-eye text-success' ?>"></i>
                 Ver Ativos/Encerrados
             </a>
@@ -1186,7 +1189,7 @@ body, html {
         document.getElementById('data_inicio').value = d.inicio || '';
         document.getElementById('id_data_fim').value = d.fim || '';
         document.getElementById('data_previsao_encerramento').value = d.previsaoEncerramento || '';
-        document.getElementById('id_cliente_api').value = d.idClienteApi || d.api || button.getAttribute('data-id-cliente-api') || '';
+        document.getElementById('id_cliente_api').value = button.getAttribute('data-id-cliente-api') || '';
         document.getElementById('emitir_nf').value = d.nf || 'Não';
         document.getElementById('configurado').value = d.cfg || 'Não';
         document.getElementById('num_licencas').value = d.licencas || 0;
