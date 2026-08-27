@@ -317,7 +317,7 @@ function gerarHtmlComprovanteChamado(array $chamado)
     if ($logoBase64 !== '') {
         $logoHtml = '<img src="' . $logoBase64 . '" alt="GestãoPro" class="brand-logo">';
     } else {
-        $logoHtml = '<div class="brand-name">Gestão<span>Pro</span></div>';
+        $logoHtml = '<span class="brand-name">GestãoPro</span>';
     }
 
     $html = <<<HTML
