@@ -274,7 +274,12 @@ function gerarHtmlComprovanteChamado(array $chamado)
     $dataPrev = $chamado['data_prev_retorno'] ? (new DateTime($chamado['data_prev_retorno']))->format('d/m/Y') : '—';
     $dataImportacao = $chamado['data_importacao'] ? (new DateTime($chamado['data_importacao']))->format('d/m/Y H:i') : date('d/m/Y H:i');
 
-    $logoSvg = '<svg viewBox="0 0 24 24" fill="none"><path d="M4 17V9.5L12 4l8 5.5V17l-8 3-8-3Z" stroke="white" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 9.5 12 13l8-3.5" stroke="white" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 13v7" stroke="white" stroke-width="1.8"/></svg>';
+    // Carrega o logotipo real da empresa em base64 para ficar embutido no HTML
+    $logoPath = __DIR__ . '/css/pics/logo.webp';
+    $logoBase64 = '';
+    if (file_exists($logoPath)) {
+        $logoBase64 = 'data:image/webp;base64,' . base64_encode(file_get_contents($logoPath));
+    }
     $responsavelInicial = strtoupper(mb_substr($responsavel === '—' ? 'V' : $responsavel, 0, 1, 'UTF-8'));
 
     $textoPrazo = '';
@@ -307,6 +312,13 @@ function gerarHtmlComprovanteChamado(array $chamado)
     $dataImportacaoEsc = htmlspecialchars($dataImportacao, ENT_QUOTES, 'UTF-8');
     $idChamadoEsc = htmlspecialchars((string) $idChamado, ENT_QUOTES, 'UTF-8');
     $textoPrazoEsc = $textoPrazo !== '' ? '<div class="eta-note">' . htmlspecialchars($textoPrazo, ENT_QUOTES, 'UTF-8') . '</div>' : '';
+
+    // Tag HTML do logo pré-computada (ternário não funciona dentro de heredoc)
+    if ($logoBase64 !== '') {
+        $logoHtml = '<img src="' . $logoBase64 . '" alt="GestãoPro" class="brand-logo">';
+    } else {
+        $logoHtml = '<span class="brand-name">GestãoPro</span>';
+    }
 
     $html = <<<HTML
 <!DOCTYPE html>
@@ -350,14 +362,12 @@ function gerarHtmlComprovanteChamado(array $chamado)
       flex-wrap: wrap;
     }
     .brand { display: flex; align-items: center; gap: 12px; }
-    .brand-mark {
-      width: 42px; height: 42px;
-      border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, var(--blue-600), #1a4ec9);
-      box-shadow: 0 12px 22px -14px rgba(45, 109, 246, 0.9);
+    .brand-logo {
+      height: 42px;
+      width: auto;
+      display: block;
+      object-fit: contain;
     }
-    .brand-mark svg { width: 22px; height: 22px; display: block; }
     .brand-name { font-size: 18px; font-weight: 800; letter-spacing: -0.04em; color: var(--navy-900); }
     .brand-name span { color: var(--blue-600); }
     .ticket-tag {
@@ -572,8 +582,7 @@ function gerarHtmlComprovanteChamado(array $chamado)
   <div class="pdf-shell">
     <header class="topbar">
       <div class="brand">
-        <div class="brand-mark">{$logoSvg}</div>
-        <div class="brand-name">Gestão<span>Pro</span></div>
+        {$logoHtml}
       </div>
       <div class="ticket-tag">Chamado <strong>#{$idChamadoEsc}</strong> · gerado em {$dataImportacaoEsc}</div>
     </header>

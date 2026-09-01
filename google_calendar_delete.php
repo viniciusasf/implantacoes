@@ -30,19 +30,19 @@ try {
 
     // 2. Configura o Cliente Google
     $client = new Google\Client();
-    $client->setAuthConfig('credentials.json');
+    $client->setAuthConfig(appGoogleCredentialsPath());
     $client->addScope(Google\Service\Calendar::CALENDAR);
 
-    if (!file_exists('token.json')) {
+    if (!file_exists(appGoogleTokenPath())) {
         returnResponse(false, "Token não encontrado. Faça login sincronizando um evento primeiro.");
     }
 
-    $client->setAccessToken(json_decode(file_get_contents('token.json'), true));
+    $client->setAccessToken(json_decode(file_get_contents(appGoogleTokenPath()), true));
 
     if ($client->isAccessTokenExpired()) {
         if ($client->getRefreshToken()) {
             $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
-            file_put_contents('token.json', json_encode($client->getAccessToken()));
+            file_put_contents(appGoogleTokenPath(), json_encode($client->getAccessToken()));
         } else {
             returnResponse(false, "Sessão expirada. Reautentique sincronizando um evento.");
         }

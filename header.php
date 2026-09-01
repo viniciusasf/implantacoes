@@ -52,7 +52,7 @@ $total_orientacoes = $pdo->query("SELECT COUNT(*) FROM orientacoes")->fetchColum
 // 9. STATUS DO TOKEN GOOGLE AGENDA
 $google_token_status = 'none'; // 'ok' | 'expired' | 'none'
 try {
-    if (file_exists(__DIR__ . '/google_oauth_token_helper.php') && file_exists(__DIR__ . '/token.json')) {
+    if (file_exists(__DIR__ . '/google_oauth_token_helper.php') && file_exists(appGoogleTokenPath())) {
         require_once __DIR__ . '/google_oauth_token_helper.php';
         $_gt = googleLoadTokenData();
         if ($_gt && !empty($_gt['refresh_token'])) {
@@ -85,7 +85,8 @@ try {
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="css/dark-mode.css">
+    <link rel="stylesheet" href="css/dark-mode.css?v=<?= time() ?>">
+    <link rel="stylesheet" href="css/premium-base.css?v=<?= time() ?>">
     
     <!-- Script FOUC Prevention para Modo Escuro -->
     <script>
@@ -303,26 +304,207 @@ try {
         .badge-notify {
             font-family: var(--font-body);
             font-size: 0.75rem;
+            --success-light: rgba(16, 185, 129, 0.1);
+            
+            --warning: #f59e0b;
+            --warning-light: rgba(245, 158, 11, 0.1);
+            
+            --danger: #ef4444;
+            --danger-light: rgba(239, 68, 68, 0.1);
+            
+            --info: #0ea5e9;
+            --info-light: rgba(14, 165, 233, 0.1);
+            
+            --purple: #8b5cf6;
+            --purple-light: rgba(139, 92, 246, 0.1);
+
+            --bg-body: #f1f4f9;       
+            --bg-card: #ffffff;
+            --border-color: #e2e8f0;
+            
+            --sidebar-bg: #0b1437;    
+            --sidebar-text: #a3aedd;  
+            --sidebar-text-hover: #ffffff;
+            --sidebar-active-bg: rgba(67, 97, 238, 0.15);
+            --sidebar-active-border: #4361ee;
+            
+            --text-main: #2b3674;     
+            --text-muted: #8899a6;    
+            --text-dark: #1b2559;
+
+            --font-heading: 'Poppins', sans-serif;
+            --font-body: 'Inter', sans-serif;
+
+            --sidebar-width: 270px;
+            
+            --shadow-sm: 0px 4px 6px rgba(0, 0, 0, 0.04);
+            --shadow-card: 0px 10px 30px rgba(112, 144, 176, 0.12);
+            --shadow-hover: 0px 15px 35px rgba(112, 144, 176, 0.18);
+            
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 24px;
+        }
+
+        /* // Dark Mode Contrast Enhancement (Clean Modern) */
+        [data-theme="dark"] {
+            --bg-body: #0d0e12;
+            --bg-card: #16171d;
+            --border-color: #2b2e35;
+            --text-main: #f1f5f9;
+            --text-muted: #cbd5e1;
+            --text-dark: #ffffff;
+            
+            --sidebar-bg: #090a0f;
+            --sidebar-text: #94a3b8;
+            --sidebar-active-bg: rgba(67, 97, 238, 0.2);
+            
+            --primary-light: rgba(67, 97, 238, 0.2);
+            --success-light: rgba(16, 185, 129, 0.2);
+            --warning-light: rgba(245, 158, 11, 0.2);
+            --danger-light: rgba(239, 68, 68, 0.2);
+            --info-light: rgba(6, 182, 212, 0.2);
+        }
+
+        /* // global resets */
+        body {
+            font-family: var(--font-body);
+            background-color: var(--bg-body);
+            color: var(--text-dark);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            letter-spacing: -0.01em;
+        }
+
+        h1, h2, h3, h4, h5, h6, .navbar-brand {
+            font-family: var(--font-heading);
+            color: var(--text-dark);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        /* // sidebar */
+        #sidebar {
+            width: var(--sidebar-width);
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background: var(--sidebar-bg);
+            color: var(--sidebar-text);
+            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            z-index: 1000;
+            overflow-y: auto;
+            border-right: 1px solid rgba(255,255,255,0.05);
+        }
+
+        #sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+        #sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+        }
+
+        .sidebar-header {
+            padding: 2.2rem 1.8rem 1.2rem;
+            display: flex;
+            align-items: center;
+        }
+
+        .sidebar-header h4 {
+            font-weight: 800;
+            font-size: 1.4rem;
+            margin: 0;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .sidebar-header h4 i {
+            color: var(--primary);
+            filter: drop-shadow(0 0 8px rgba(67, 97, 238, 0.6));
+            margin-right: 10px;
+        }
+
+        .menu-separator {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.06);
+            margin: 1.2rem 1.8rem;
+        }
+
+        .menu-group-title {
+            padding: 0.5rem 1.8rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: rgba(255, 255, 255, 0.4);
+            font-weight: 700;
+            font-family: var(--font-heading);
+            margin-top: 0.5rem;
+        }
+
+        #sidebar ul.components {
+            padding: 0 0 6rem 0; /* extra padding to prevent footer overlap */
+        }
+
+        #sidebar ul li a {
+            padding: 0.85rem 1.5rem;
+            margin: 0.3rem 1.2rem;
+            display: flex;
+            align-items: center;
+            color: var(--sidebar-text);
+            text-decoration: none;
+            border-radius: var(--radius-md);
+            transition: all 0.3s ease;
+            font-weight: 500;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #sidebar ul li a i {
+            margin-right: 14px;
+            font-size: 1.25rem;
+            width: 24px;
+            text-align: center;
+            transition: all 0.3s ease;
+            color: var(--sidebar-text);
+        }
+
+        #sidebar ul li a:hover {
+            color: var(--sidebar-text-hover);
+            background: rgba(255, 255, 255, 0.04);
+            transform: translateX(4px);
+        }
+        
+        #sidebar ul li a:hover i {
+            color: var(--primary);
+            transform: scale(1.1);
+        }
+
+        #sidebar ul li.active>a {
+            color: #ffffff;
+            background: var(--sidebar-active-bg);
+            font-weight: 600;
+            box-shadow: inset 4px 0 0 var(--sidebar-active-border);
+        }
+        
+        #sidebar ul li.active>a i {
+            color: #ffffff;
+            filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.4));
+        }
+
+        .badge-notify {
+            font-family: var(--font-body);
+            font-size: 0.75rem;
             font-weight: 700;
             margin-left: auto;
         }
 
         /* // Sidebar Highlights for Conversions */
-        .highlight-item>a {
-            background: linear-gradient(90deg, rgba(16,185,129,0.05) 0%, transparent 100%);
-        }
-        .highlight-item.active>a {
-            box-shadow: inset 3px 0 0 var(--success);
-            background: rgba(16, 185, 129, 0.15);
-        }
-        .highlight-item.active>a i, .highlight-item>a:hover i {
-            color: var(--success) !important;
-            filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.5)) !important;
-        }
-
-        .highlight-item-2>a {
-            background: linear-gradient(90deg, rgba(67,97,238,0.05) 0%, transparent 100%);
-        }
+        
 
         /* // main content */
         #content {
@@ -606,14 +788,13 @@ try {
                 </a>
 
                 <div class="d-flex align-items-center">
-                    <div style="width: 36px; height: 36px; border-radius: 12px; background: linear-gradient(135deg, var(--primary), var(--purple)); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white;">
+                    <div style="width: 36px; height: 36px; border-radius: 12px; var(--purple)); display: flex; align-items: center; justify-content: center; font-weight: bold; color: white;">
                         <i class="bi bi-person"></i>
                     </div>
                     <div class="ms-3">
-                        <h6 class="mb-0 text-white" style="font-size: 0.85rem; font-weight: 600;">Monitoramento</h6>
-                        <small style="font-size: 0.7rem; color: var(--sidebar-text);">Admin Implantação</small>
+                        <h6 class="mb-0 text-white" style="font-size: 0.85rem; font-weight: 600;"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Usuário', ENT_QUOTES, 'UTF-8') ?></h6>
+                        <a href="logout.php" style="font-size: 0.7rem; color: var(--sidebar-text); text-decoration: none;">Sair</a>
                     </div>
-                </div>
             </div>
 
             <style>

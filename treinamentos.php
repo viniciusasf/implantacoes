@@ -334,8 +334,8 @@ function garantirTabelaPendenciasTreinamentos(PDO $pdo)
 function criarServicoGoogleCalendarStatus()
 {
     $autoloadPath = __DIR__ . '/vendor/autoload.php';
-    $credentialsPath = __DIR__ . '/credentials.json';
-    $tokenPath = __DIR__ . '/token.json';
+    $credentialsPath = appGoogleCredentialsPath();
+    $tokenPath = appGoogleTokenPath();
 
     if (!file_exists($autoloadPath) || !file_exists($credentialsPath) || !file_exists($tokenPath)) {
         return [null, 'integracao_google_nao_configurada'];
@@ -475,7 +475,7 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
 {
     try {
         $autoloadPath = __DIR__ . '/vendor/autoload.php';
-        $credentialsPath = __DIR__ . '/credentials.json';
+        $credentialsPath = appGoogleCredentialsPath();
         $tokenPath = googleTokenPath();
         $authStartUrl = 'google_calendar_sync.php?id_treinamento=' . (int) $idTreinamento . '&start_auth=1';
 
@@ -1208,12 +1208,12 @@ if (!empty($_GET['open_google_agenda_treinamento_id'])) {
 // Visualização (lista ou calendario)
 $view_mode = $_GET['view'] ?? 'list';
 
-// Ordenação
-$ordenacao = isset($_GET['ordenacao']) ? $_GET['ordenacao'] : 'data_treinamento';
-$direcao = isset($_GET['direcao']) ? $_GET['direcao'] : 'asc';
+// Ordenação: a visão completa inicia pelos treinamentos mais recentes.
+$ordenacao = isset($_GET['ordenacao']) ? $_GET['ordenacao'] : ($mostrar_todos ? 'id_treinamento' : 'data_treinamento');
+$direcao = isset($_GET['direcao']) ? $_GET['direcao'] : ($mostrar_todos ? 'desc' : 'asc');
 
 // Validação da ordenação para segurança
-$colunas_permitidas = ['cliente_nome', 'data_treinamento', 'tema', 'status'];
+$colunas_permitidas = ['id_treinamento', 'cliente_nome', 'data_treinamento', 'tema', 'status'];
 $ordenacao = in_array($ordenacao, $colunas_permitidas) ? $ordenacao : 'data_treinamento';
 $direcao = $direcao === 'desc' ? 'desc' : 'asc';
 
@@ -1558,7 +1558,9 @@ include 'header.php';
             <div class="p-4 border-bottom d-flex justify-content-between align-items-center bg-white">
                 <h5 class="fw-bold mb-0">Listagem de Treinamentos</h5>
                 <div class="d-flex gap-2">
-                    <a href="treinamentos.php?mostrar_todos=1" class="btn btn-sm btn-light border px-3">Ver Resolvidos</a>
+                    <a href="<?= $mostrar_todos ? 'treinamentos.php' : 'treinamentos.php?mostrar_todos=1&ordenacao=id_treinamento&direcao=desc' ?>" class="btn btn-sm btn-light border px-3">
+                        <?= $mostrar_todos ? 'Ver Pendentes' : 'Ver Resolvidos' ?>
+                    </a>
                     <div class="dropdown">
                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
                             data-bs-toggle="dropdown">Ordenar</button>
@@ -2310,11 +2312,13 @@ include 'header.php';
                     <label class="form-label small fw-bold text-muted">Tema</label>
                     <select name="tema" id="tema" class="form-select" required>
                         <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
+                        <option value="GESTAOGTP">CONFIGURAR GESTAOGPT</option>
+                        <option value="ASSISTENCIAPRO">CONFIGURAR ASSISTÊNCIAPRO</option>
                         <option value="CADASTROS/ESTOQUE">CADASTROS/ESTOQUE</option>
                         <option value="VENDAS">VENDAS</option>
                         <option value="COMPRAS">COMPRAS</option>
                         <option value="FATURAMENTO/NF">FATURAMENTO/NF</option>
-                        <option value="FINANCEIRO/CAIXA">FINANCEIRO/CAIXA</option>
+                        <option value="FINANCEIRO/CAIXA">FINANCEIRO/BOLETOS/CAIXA</option>
                         <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
                         <option value="RELATÓRIOS">RELATÓRIOS</option>
                         <option value="ATENDIMENTOS">ATENDIMENTOS</option>
@@ -2331,7 +2335,7 @@ include 'header.php';
                         <label class="form-label small fw-bold text-muted">Status</label>
                         <select name="status" id="status" class="form-select">
                             <option value="PENDENTE">PENDENTE</option>
-                            <option value="Resolvido">Resolvido</option>
+                            <option value="Resolvido">RESOLVIDO</option>
                         </select>
                     </div>
                 </div>

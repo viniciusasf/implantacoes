@@ -1,11 +1,12 @@
 <?php
+require_once __DIR__ . '/app_config.php';
 
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/google_oauth_token_helper.php';
 
 function driveTokenPath()
 {
-    $primary = __DIR__ . '/token.json';
+    $primary = appGoogleTokenPath();
     $fallback = __DIR__ . '/token_drive.json';
     if (file_exists($primary)) {
         return $primary;
@@ -15,7 +16,7 @@ function driveTokenPath()
 
 function driveCredentialsPath()
 {
-    return __DIR__ . '/credentials.json';
+    return appGoogleCredentialsPath();
 }
 
 function driveGetClient()
