@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/auth.php';
 date_default_timezone_set('America/Sao_Paulo');
 header('Content-Type: application/json');
 
@@ -38,11 +39,11 @@ try {
     $windowEnd = (clone $agora)->modify('+' . $dias . ' days')->setTime(23, 59, 59);
 
     $client = new Google\Client();
-    $client->setAuthConfig(__DIR__ . '/credentials.json');
+    $client->setAuthConfig(appGoogleCredentialsPath());
     $client->addScope(Google\Service\Calendar::CALENDAR_READONLY);
     $client->setAccessType('offline');
 
-    $tokenPath = __DIR__ . '/token.json';
+    $tokenPath = appGoogleTokenPath();
     if (!file_exists($tokenPath)) {
         returnResponse(false, 'Token Google nao encontrado. Sincronize um evento primeiro.');
     }

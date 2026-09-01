@@ -1,5 +1,6 @@
 token.json
 *.json
+config.local.php
 
 # Local dependencies and scratch space
 node_modules/

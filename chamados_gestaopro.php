@@ -459,7 +459,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             <td class="text-center align-middle" style="white-space:nowrap">
                 <div class="d-flex gap-1 justify-content-center align-items-center flex-nowrap">
                     ${btnSalvar}
-                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold shadow-sm btn-action btn-copy-comprovante-link" data-id="${idChamado}" title="Gerar / copiar link do comprovante HTML">
+                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold btn-action btn-copy-comprovante-link" data-id="${idChamado}" title="Gerar / copiar link do comprovante HTML">
                         <i class="bi bi-file-earmark-richtext"></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-success shadow-sm copy-whatsapp-message btn-action btn-action-icon" data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp" data-message="${msgAttr}" title="Copiar WhatsApp">
