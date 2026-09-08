@@ -4,6 +4,20 @@ require_once 'config.php';
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $cliente = trim((string)($_POST['cliente'] ?? ''));
+
+    if ($cliente !== '') {
+        try {
+            $stmt = $pdo->prepare("DELETE FROM chamados_espelho_local WHERE TRIM(nome_fantasia) = TRIM(?)");
+            $stmt->execute([$cliente]);
+
+            echo json_encode(['sucesso' => true, 'quantidade' => $stmt->rowCount()]);
+        } catch (PDOException $e) {
+            echo json_encode(['sucesso' => false, 'erro' => 'Erro ao excluir chamados do cliente: ' . $e->getMessage()]);
+        }
+        exit;
+    }
+
     $ids = isset($_POST['ids']) ? json_decode($_POST['ids'], true) : [];
 
     if (empty($ids) || !is_array($ids)) {

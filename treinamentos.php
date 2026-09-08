@@ -808,6 +808,22 @@ if (isset($_GET['enviar_pendencia'])) {
     }
 }
 
+// Lógica para Reativar Treinamento
+if (isset($_GET['reativar_treinamento'])) {
+    $id = (int) $_GET['reativar_treinamento'];
+    if ($id > 0) {
+        try {
+            $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'PENDENTE' WHERE id_treinamento = ? AND UPPER(TRIM(status)) NOT IN ('PENDENTE')");
+            $stmt->execute([$id]);
+            header("Location: treinamentos.php?mostrar_todos=1&msg=" . urlencode("Treinamento reativado com sucesso!") . "&tipo=success");
+            exit;
+        } catch (Throwable $e) {
+            header("Location: treinamentos.php?mostrar_todos=1&msg=" . urlencode("Erro ao reativar treinamento: " . $e->getMessage()) . "&tipo=danger");
+            exit;
+        }
+    }
+}
+
 // Lógica para Deletar
 if (isset($_GET['delete'])) {
     $id = (int) $_GET['delete'];
@@ -1278,7 +1294,7 @@ $hoje_data = date('Y-m-d');
 $total_resultados = count($treinamentos);
 
 $clientes_list = $pdo->query("
-    SELECT id_cliente, fantasia, data_fim 
+    SELECT id_cliente, fantasia, data_fim, recursos 
     FROM clientes 
     ORDER BY fantasia ASC
 ")->fetchAll();
@@ -1590,6 +1606,7 @@ include 'header.php';
                                 </a>
                             </th>
                             <th>Cliente</th>
+                            <th class="col-recursos">Recursos utilizados</th>
                             <th class="col-mini text-center" title="Performance de Realização (Ativos)">Taxa Histórica</th>
                             <th class="col-mini text-center">Link Chamados</th>
                             <th class="col-mini">Serv.</th>
@@ -1673,6 +1690,11 @@ include 'header.php';
                                             <?php endif; ?>
                                         </div>
                                     </td>
+                                    <td class="col-recursos">
+                                        <div class="small fw-bold" title="Recursos utilizados pelo cliente">
+                                            <?= htmlspecialchars($t['recursos'] ?: '---') ?>
+                                        </div>
+                                    </td>
                                     <td class="text-center align-middle">
                                         <?php
                                             $id_cliente_atual = $t['id_cliente'];
@@ -1732,19 +1754,10 @@ include 'header.php';
                                             <button class="btn btn-sm btn-outline-primary btn-history-client"
                                                 data-bs-toggle="tooltip" data-bs-title="Ver Histórico/CRM"
                                                 data-id="<?= $t['id_cliente'] ?>"
-                                                data-nome="<?= htmlspecialchars($cliente_exibicao) ?>">
-                                                <i class="bi bi-journal-text"></i>
+                                                data-nome="<?= htmlspecialchars($cliente_exibicao) ?>"
+                                                title="Ver Histórico/CRM">
+                                                <i class="bi bi-journal-text"></i> CRM
                                             </button>
-
-                                            <!-- 2. LUPA (OBSERVAÇÕES DO AGENDAMENTO) -->
-                                            <?php if (!empty($t['observacoes'])): ?>
-                                                <button class="btn btn-sm btn-outline-info view-obs-btn" data-bs-toggle="tooltip"
-                                                    data-bs-title="Ver Obs. Agendamento"
-                                                    data-obs="<?= htmlspecialchars($t['observacoes']) ?>"
-                                                    data-cliente="<?= htmlspecialchars($cliente_exibicao) ?>">
-                                                    <i class="bi bi-search"></i>
-                                                </button>
-                                            <?php endif; ?>
 
                                             <?php
                                             $nome_contato_wp = trim((string) ($t['contato_nome'] ?? ($t['nome_contato'] ?? $t['cliente_nome'])));
@@ -1793,6 +1806,21 @@ include 'header.php';
                                                 </button>
                                             <?php endif; ?>
 
+                                            <!-- 3a. REATIVAR (só para treinamentos finalizados/encerrados) -->
+                                            <?php
+                                                $status_atual = strtoupper(trim((string) ($t['status'] ?? '')));
+                                                $status_reativavel = in_array($status_atual, ['RESOLVIDO', 'FINALIZADO', 'ENCERRADO', 'ENCERRADA'], true);
+                                            ?>
+                                            <?php if ($status_reativavel): ?>
+                                                <a href="?reativar_treinamento=<?= $id_tr ?>&mostrar_todos=1"
+                                                    class="btn btn-sm btn-outline-secondary"
+                                                    data-bs-toggle="tooltip"
+                                                    data-bs-title="Reativar treinamento"
+                                                    onclick="return confirm('Deseja realmente reativar este treinamento?')">
+                                                    <i class="bi bi-arrow-repeat"></i> ↻ Reativar
+                                                </a>
+                                            <?php endif; ?>
+
                                             <!-- 3b. ENVIAR PARA PENDÊNCIAS (só para resolvidos) -->
                                             <?php if (strtoupper($t['status']) == 'RESOLVIDO'): ?>
                                                 <a href="?enviar_pendencia=<?= $id_tr ?>&mostrar_todos=1"
@@ -1816,7 +1844,7 @@ include 'header.php';
                             <?php endforeach; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="9" class="text-center py-5">
+                                <td colspan="10" class="text-center py-5">
                                     <div class="mb-3">
                                         <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
                                     </div>
@@ -2288,13 +2316,13 @@ include 'header.php';
                         </div>
                     </div>
                     <select name="id_cliente" id="id_cliente" class="form-select" required
-                        onchange="filterContatos(this.value)">
+                        onchange="filterContatos(this.value); atualizarRecursosCliente(this.value)">
                         <option value="">Selecione o cliente...</option>
                         <?php
                         foreach ($clientes_list as $c): 
                             $is_ativo = (empty($c['data_fim']) || $c['data_fim'] === '0000-00-00' || strtotime($c['data_fim']) > time());
                         ?>
-                            <option value="<?= $c['id_cliente'] ?>" data-ativo="<?= $is_ativo ? '1' : '0' ?>" <?= !$is_ativo ? 'style="display:none;"' : '' ?>>
+                            <option value="<?= $c['id_cliente'] ?>" data-ativo="<?= $is_ativo ? '1' : '0' ?>" data-recursos="<?= htmlspecialchars($c['recursos'] ?? '', ENT_QUOTES) ?>" <?= !$is_ativo ? 'style="display:none;"' : '' ?>>
                                 <?= htmlspecialchars($c['fantasia']) ?>
                             </option>
                         <?php endforeach; ?>
@@ -2309,11 +2337,16 @@ include 'header.php';
                 </div>
 
                 <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Recursos utilizados pelo cliente</label>
+                    <div id="recursos_cliente" class="form-control bg-light text-muted" style="min-height: 38px;">Selecione um cliente para consultar.</div>
+                </div>
+
+                <div class="mb-3">
                     <label class="form-label small fw-bold text-muted">Tema</label>
                     <select name="tema" id="tema" class="form-select" required>
                         <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
-                        <option value="GESTAOGTP">CONFIGURAR GESTAOGPT</option>
-                        <option value="ASSISTENCIAPRO">CONFIGURAR ASSISTÊNCIAPRO</option>
+                        <option value="CONFIGURAR GESTAOGPT">CONFIGURAR GESTAOGPT</option>
+                        <option value="ONFIGURAR ASSISTÊNCIAPRO">CONFIGURAR ASSISTÊNCIAPRO</option>
                         <option value="CADASTROS/ESTOQUE">CADASTROS/ESTOQUE</option>
                         <option value="VENDAS">VENDAS</option>
                         <option value="COMPRAS">COMPRAS</option>
@@ -2503,6 +2536,7 @@ include 'header.php';
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
+                <div id="hist_dashboard_container" class="row g-3 mb-3"></div>
                 <div id="hist_obs_container">
                     <div class="text-center py-5">
                         <div class="spinner-border" role="status" style="color: #7209b7;"></div>
@@ -2679,6 +2713,19 @@ include 'header.php';
             }
             document.body.removeChild(textArea);
         });
+    }
+
+    function atualizarRecursosCliente(id_cliente) {
+        const recursosContainer = document.getElementById('recursos_cliente');
+        const clienteSelect = document.getElementById('id_cliente');
+        if (!recursosContainer || !clienteSelect || !id_cliente) {
+            if (recursosContainer) recursosContainer.textContent = 'Selecione um cliente para consultar.';
+            return;
+        }
+
+        const opcaoCliente = clienteSelect.options[clienteSelect.selectedIndex];
+        const recursos = (opcaoCliente?.dataset.recursos || '').trim();
+        recursosContainer.textContent = recursos || 'Nenhum recurso informado.';
     }
 
     function montarMensagemDisponibilidadeCliente(diasDisponiveis) {
@@ -2974,6 +3021,7 @@ include 'header.php';
             document.getElementById('data_treinamento').value = this.dataset.data;
 
             filterContatos(this.dataset.cliente, this.dataset.contato);
+            atualizarRecursosCliente(this.dataset.cliente);
             carregarDisponibilidadeGoogle();
             new bootstrap.Modal(document.getElementById('modalTreinamento')).show();
         });
@@ -3124,6 +3172,7 @@ include 'header.php';
         document.getElementById('modalTitle').innerHTML = '<i class="bi bi-calendar-plus me-2"></i>Agendar Treinamento';
         document.getElementById('id_treinamento').value = '';
         this.querySelector('form').reset();
+        document.getElementById('recursos_cliente').textContent = 'Selecione um cliente para consultar.';
 
         // Resetar fleg de encerrados
         const flegEncerrados = document.getElementById('mostrar_encerrados_modal');
@@ -3169,13 +3218,52 @@ include 'header.php';
     function abrirModalHistorico(id, nome) {
         document.getElementById('hist_cliente_nome').innerText = nome;
         const container = document.getElementById('hist_obs_container');
+        const dashboard = document.getElementById('hist_dashboard_container');
         container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Carregando históricos...</p></div>';
+        dashboard.innerHTML = '';
 
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalHistoricoCliente')).show();
 
         fetch(`treinamentos.php?get_observations=1&id_cliente=${id}`)
             .then(r => r.json())
             .then(data => {
+                const treinamentosEncerrados = data.filter(obs => String(obs.titulo || '').startsWith('Treinamento Encerrado: '));
+                const contagemPorTema = {};
+                treinamentosEncerrados.forEach(obs => {
+                    const tema = String(obs.titulo || '').replace(/^Treinamento Encerrado:\s*/i, '').trim();
+                    if (!tema) return;
+                    contagemPorTema[tema] = (contagemPorTema[tema] || 0) + 1;
+                });
+
+                if (Object.keys(contagemPorTema).length > 0) {
+                    const entradas = Object.entries(contagemPorTema).sort((a, b) => b[1] - a[1]).slice(0, 4);
+                    const totalEncerrados = treinamentosEncerrados.length;
+                    dashboard.innerHTML = entradas.map(([tema, qtd], index) => {
+                        const cores = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444'];
+                        const percentual = totalEncerrados > 0 ? Math.round((qtd / totalEncerrados) * 100) : 0;
+                        return `
+                            <div class="col-md-3 col-6">
+                                <div class="p-3 rounded-4 border h-100" style="background: var(--bg-body); border-color: var(--border-color);">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="badge rounded-pill" style="background:${cores[index % cores.length]}20; color:${cores[index % cores.length]}; font-size:0.65rem; padding:0.45rem 0.7rem;">${qtd}</span>
+                                        <i class="bi bi-journal-check" style="color:${cores[index % cores.length]}; font-size:1.1rem;"></i>
+                                    </div>
+                                    <div class="fw-800 small text-truncate" style="color: var(--text-main);">${tema}</div>
+                                    <div class="text-muted mt-1" style="font-size:0.68rem;">${percentual}% do total</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    dashboard.innerHTML = `
+                        <div class="col-12">
+                            <div class="p-3 rounded-4 border text-center" style="background: var(--bg-body); border-color: var(--border-color);">
+                                <span class="text-muted small">Nenhum treinamento encerrado para este cliente.</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 if (data.length === 0) {
                     container.innerHTML = '<div class="text-center py-5 opacity-50"><i class="bi bi-journal-x display-4 text-muted"></i><p class="mt-2">Nenhum registro encontrado para este cliente.</p></div>';
                 } else {
@@ -3200,6 +3288,7 @@ include 'header.php';
                 }
             })
             .catch(err => {
+                dashboard.innerHTML = '';
                 container.innerHTML = '<div class="alert alert-danger">Erro ao carregar dados.</div>';
             });
     }
