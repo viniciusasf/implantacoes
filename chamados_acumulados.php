@@ -288,17 +288,9 @@ ordenarChamadosPorPrevRetorno($agrupadosEnviados);
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     
-    // Limpa lixo técnico (logs de erro do Delphi) das descrições
+    // Mantém a descrição completa no HTML exportado.
     function limparTextoTecnico(texto) {
-        let limpo = String(texto || 'Sem descrição');
-        const marcadores = ['Exception class:', 'cdsCadUsuario:', 'Exception message:', 'Stack trace:', 'Erro técnico:'];
-        for (let m of marcadores) {
-            const idx = limpo.indexOf(m);
-            if (idx !== -1) {
-                limpo = limpo.substring(0, idx); // Corta o texto a partir do erro
-            }
-        }
-        return limpo;
+        return String(texto || 'Sem descrição');
     }
 
     // Botão Marcar como Enviado

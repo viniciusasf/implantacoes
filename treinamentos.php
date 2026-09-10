@@ -1100,7 +1100,7 @@ if (isset($_GET['get_observations']) && isset($_GET['id_cliente'])) {
     $obs_cliente = $stmtAjax->fetchAll(PDO::FETCH_ASSOC);
 
     // Observações (relatório) de fechamento de treinamentos
-    $stmtTreinamentos = $pdo->prepare("SELECT id_treinamento, tema, observacoes, data_treinamento_encerrado, data_treinamento FROM treinamentos WHERE id_cliente = ? AND UPPER(status) = 'RESOLVIDO' AND observacoes IS NOT NULL AND TRIM(observacoes) != ''");
+    $stmtTreinamentos = $pdo->prepare("SELECT id_treinamento, tema, observacoes, data_treinamento_encerrado, data_treinamento, tipo_pendencia_encerramento FROM treinamentos WHERE id_cliente = ? AND UPPER(status) = 'RESOLVIDO' AND observacoes IS NOT NULL AND TRIM(observacoes) != ''");
     $stmtTreinamentos->execute([$id_c]);
     $treinamentos_encerrados = $stmtTreinamentos->fetchAll(PDO::FETCH_ASSOC);
 
@@ -1122,13 +1122,17 @@ if (isset($_GET['get_observations']) && isset($_GET['id_cliente'])) {
         if (!$data_obs)
             $data_obs = date('Y-m-d H:i:s'); // fallback de segurança
 
+        $tipoPendencia = trim((string) ($t['tipo_pendencia_encerramento'] ?? ''));
+        $tipoEncerramento = strtoupper($tipoPendencia) === 'COM_PENDENCIA' ? 'Com Pendência' : 'Sem Pendência';
+
         $todas_obs[] = [
             'id' => 'trein_' . $t['id_treinamento'],
             'titulo' => 'Treinamento Encerrado: ' . $t['tema'],
             'conteudo' => $t['observacoes'],
             'tipo' => 'ATUALIZAÇÃO',
             'data_observacao' => $data_obs,
-            'registrado_por' => 'Sistema (Encerramento)'
+            'registrado_por' => 'Sistema (Encerramento)',
+            'tipo_encerramento' => $tipoEncerramento
         ];
     }
 
@@ -1527,6 +1531,21 @@ include 'header.php';
     .btn-outline-primary:hover {
         background: var(--primary);
         color: #fff;
+    }
+
+    .btn-history-client {
+        border-radius: 10px;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        box-shadow: 0 4px 12px rgba(67, 97, 238, 0.08);
+    }
+
+    .btn-history-client:hover,
+    .btn-history-client:focus-visible {
+        transform: translateY(-8px);
+        border-color: var(--primary);
+        color: #fff;
+        background-color: var(--primary);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.28);
     }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -2297,7 +2316,7 @@ include 'header.php';
 
 <!-- Modal para Agendar/Editar Treinamento -->
 <div class="modal fade" id="modalTreinamento" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <form method="POST" class="modal-content border-0 shadow-lg" id="formAgendaTreinamento"
             style="border-radius: 15px;">
             <div class="modal-header border-0 px-4 pt-4">
@@ -2346,8 +2365,9 @@ include 'header.php';
                     <select name="tema" id="tema" class="form-select" required>
                         <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
                         <option value="CONFIGURAR GESTAOGPT">CONFIGURAR GESTAOGPT</option>
-                        <option value="ONFIGURAR ASSISTÊNCIAPRO">CONFIGURAR ASSISTÊNCIAPRO</option>
+                        <option value="CONFIGURAR ASSISTÊNCIAPRO">CONFIGURAR ASSISTÊNCIAPRO</option>
                         <option value="CADASTROS/ESTOQUE">CADASTROS/ESTOQUE</option>
+                        <option value="CUSTOMIZAÇÕES">CUSTOMIZAÇÕES</option>
                         <option value="VENDAS">VENDAS</option>
                         <option value="COMPRAS">COMPRAS</option>
                         <option value="FATURAMENTO/NF">FATURAMENTO/NF</option>
@@ -3229,40 +3249,72 @@ include 'header.php';
             .then(data => {
                 const treinamentosEncerrados = data.filter(obs => String(obs.titulo || '').startsWith('Treinamento Encerrado: '));
                 const contagemPorTema = {};
+                const contagemPorTipoEncerramento = {
+                    'Com Pendência': 0,
+                    'Sem Pendência': 0
+                };
+
                 treinamentosEncerrados.forEach(obs => {
                     const tema = String(obs.titulo || '').replace(/^Treinamento Encerrado:\s*/i, '').trim();
-                    if (!tema) return;
-                    contagemPorTema[tema] = (contagemPorTema[tema] || 0) + 1;
+                    if (tema) {
+                        contagemPorTema[tema] = (contagemPorTema[tema] || 0) + 1;
+                    }
+
+                    const tipoEncerramento = obs.tipo_encerramento || 'Sem Pendência';
+                    if (contagemPorTipoEncerramento.hasOwnProperty(tipoEncerramento)) {
+                        contagemPorTipoEncerramento[tipoEncerramento] += 1;
+                    }
                 });
 
-                if (Object.keys(contagemPorTema).length > 0) {
-                    const entradas = Object.entries(contagemPorTema).sort((a, b) => b[1] - a[1]).slice(0, 4);
-                    const totalEncerrados = treinamentosEncerrados.length;
-                    dashboard.innerHTML = entradas.map(([tema, qtd], index) => {
+                const totalEncerrados = treinamentosEncerrados.length;
+                const cardsBase = [
+                    { label: 'Total encerrados', valor: totalEncerrados, icon: 'bi-journal-check', color: '#4f46e5', gradient: 'linear-gradient(135deg, rgba(79,70,229,0.18), rgba(79,70,229,0.05))' },
+                    { label: 'Com pendência', valor: contagemPorTipoEncerramento['Com Pendência'], icon: 'bi-exclamation-triangle', color: '#f59e0b', gradient: 'linear-gradient(135deg, rgba(245,158,11,0.18), rgba(245,158,11,0.05))' },
+                    { label: 'Sem pendência', valor: contagemPorTipoEncerramento['Sem Pendência'], icon: 'bi-check-circle', color: '#10b981', gradient: 'linear-gradient(135deg, rgba(16,185,129,0.18), rgba(16,185,129,0.05))' },
+                    { label: 'Temas principais', valor: Object.keys(contagemPorTema).length, icon: 'bi-bar-chart', color: '#ef4444', gradient: 'linear-gradient(135deg, rgba(239,68,68,0.18), rgba(239,68,68,0.05))' }
+                ];
+
+                const cardsHtml = cardsBase.map((card) => `
+                    <div class="col-md-3 col-6">
+                        <div class="p-3 rounded-4 border h-100 shadow-sm" style="background: ${card.gradient}; border-color: var(--border-color); box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; background: ${card.color}22; color: ${card.color};">
+                                    <i class="${card.icon}" style="font-size: 1rem;"></i>
+                                </div>
+                                <span class="fw-800" style="font-size: 1.5rem; color: var(--text-main);">${card.valor}</span>
+                            </div>
+                            <div class="small fw-700" style="color: var(--text-main); letter-spacing: 0.02em;">${card.label}</div>
+                        </div>
+                    </div>
+                `).join('');
+
+                const temasHtml = Object.keys(contagemPorTema).length > 0
+                    ? Object.entries(contagemPorTema).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([tema, qtd], idx) => {
                         const cores = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444'];
                         const percentual = totalEncerrados > 0 ? Math.round((qtd / totalEncerrados) * 100) : 0;
                         return `
-                            <div class="col-md-3 col-6">
-                                <div class="p-3 rounded-4 border h-100" style="background: var(--bg-body); border-color: var(--border-color);">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="badge rounded-pill" style="background:${cores[index % cores.length]}20; color:${cores[index % cores.length]}; font-size:0.65rem; padding:0.45rem 0.7rem;">${qtd}</span>
-                                        <i class="bi bi-journal-check" style="color:${cores[index % cores.length]}; font-size:1.1rem;"></i>
-                                    </div>
-                                    <div class="fw-800 small text-truncate" style="color: var(--text-main);">${tema}</div>
-                                    <div class="text-muted mt-1" style="font-size:0.68rem;">${percentual}% do total</div>
+                            <div class="d-flex justify-content-between align-items-center py-2 border-bottom" style="border-color: var(--border-color);">
+                                <div>
+                                    <div class="fw-700 small" style="color: var(--text-main);">${tema}</div>
+                                    <div class="text-muted" style="font-size:0.68rem;">${percentual}% do total</div>
                                 </div>
+                                <span class="badge rounded-pill" style="background:${cores[idx % cores.length]}20; color:${cores[idx % cores.length]}; font-weight:700;">${qtd}</span>
                             </div>
                         `;
-                    }).join('');
-                } else {
-                    dashboard.innerHTML = `
-                        <div class="col-12">
-                            <div class="p-3 rounded-4 border text-center" style="background: var(--bg-body); border-color: var(--border-color);">
-                                <span class="text-muted small">Nenhum treinamento encerrado para este cliente.</span>
-                            </div>
+                    }).join('')
+                    : '<div class="text-muted small py-2">Nenhum tema encerrado registrado.</div>';
+
+                dashboard.innerHTML = `
+                    <div class="col-12">
+                        <div class="row g-3 mb-2">${cardsHtml}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="p-3 rounded-4 border shadow-sm" style="background: rgba(15,23,42,0.02); border-color: var(--border-color);">
+                            <div class="fw-800 mb-3" style="font-size:0.75rem; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.08em;">Temas mais recorrentes</div>
+                            ${temasHtml}
                         </div>
-                    `;
-                }
+                    </div>
+                `;
 
                 if (data.length === 0) {
                     container.innerHTML = '<div class="text-center py-5 opacity-50"><i class="bi bi-journal-x display-4 text-muted"></i><p class="mt-2">Nenhum registro encontrado para este cliente.</p></div>';

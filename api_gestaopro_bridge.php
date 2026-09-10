@@ -44,6 +44,50 @@ function salvarCache(string $file, array $dados): void {
     @file_put_contents($file, json_encode($dados, JSON_UNESCAPED_UNICODE));
 }
 
+function mesclarChamados(array $chamados): array {
+    $porId = [];
+    foreach ($chamados as $chamado) {
+        $id = (string) ($chamado['ID'] ?? '');
+        if ($id === '') {
+            $porId[] = $chamado;
+            continue;
+        }
+
+        if (!isset($porId[$id])) {
+            $porId[$id] = $chamado;
+            continue;
+        }
+
+        $descricaoAtual = (string) ($porId[$id]['DESCRICAO'] ?? '');
+        $descricaoNova = (string) ($chamado['DESCRICAO'] ?? '');
+        if (strlen($descricaoNova) > strlen($descricaoAtual)) {
+            $porId[$id]['DESCRICAO'] = $chamado['DESCRICAO'];
+        }
+    }
+
+    return array_values($porId);
+}
+
+function completarDescricoesChamados(array $chamados, string $cookieStr): array {
+    foreach ($chamados as &$chamado) {
+        $descricao = (string) ($chamado['DESCRICAO'] ?? '');
+        $id = $chamado['ID'] ?? null;
+        if ($id === null || strlen($descricao) < 500) continue;
+
+        $detalhe = buscarEndpoint('/api/chamados/' . rawurlencode((string) $id), $cookieStr);
+        if (!$detalhe) continue;
+
+        $detalheChamado = $detalhe['chamado'] ?? $detalhe;
+        $descricaoCompleta = (string) ($detalheChamado['DESCRICAO'] ?? $detalheChamado['descricao'] ?? '');
+        if (strlen($descricaoCompleta) > strlen($descricao)) {
+            $chamado['DESCRICAO'] = $descricaoCompleta;
+        }
+    }
+    unset($chamado);
+
+    return $chamados;
+}
+
 // ── Descobrir Next-Action ID dinamicamente ───────────────────────────────────
 function descobrirActionId(): ?string {
     $context = stream_context_create(['ssl' => ['verify_peer' => false, 'verify_peer_name' => false]]);
@@ -175,7 +219,8 @@ try {
 
     // 1. Cache
     $cached = lerCache($cacheFile, $somenteCache);
-    if ($cached !== null) {
+    $cacheDescricoesCompletas = $cached['__descricoes_completas'] ?? false;
+    if ($cached !== null && ($base_endpoint !== 'chamados' || $cacheDescricoesCompletas)) {
         echo json_encode([
             'sucesso'   => true,
             'origem'    => 'cache',
@@ -187,7 +232,7 @@ try {
     }
 
     // A abertura da tela deve usar somente a ultima leitura ja armazenada.
-    if ($somenteCache) {
+    if ($somenteCache && $cached === null) {
         http_response_code(404);
         echo json_encode([
             'sucesso' => false,
@@ -230,7 +275,9 @@ try {
             }
 
             // Substituir array parcial pelo completo
-            $dados[$chavePrincipal] = $todosRegistros;
+            $dados[$chavePrincipal] = $chavePrincipal === 'chamados'
+                ? mesclarChamados($todosRegistros)
+                : $todosRegistros;
             $dados['count'] = count($todosRegistros);
             $dados['page'] = 'all';
             $dados['totalPages'] = 1;
@@ -244,11 +291,13 @@ try {
             $dadosStatus = buscarEndpoint('/api/chamados?' . $query, $cookieStr);
 
             if ($dadosStatus && isset($dadosStatus['chamados']) && is_array($dadosStatus['chamados'])) {
-                $dados['chamados'] = array_merge($dados['chamados'] ?? [], $dadosStatus['chamados']);
+                $dados['chamados'] = mesclarChamados(array_merge($dados['chamados'] ?? [], $dadosStatus['chamados']));
             }
         }
 
         $dados['count'] = count($dados['chamados'] ?? []);
+        $dados['chamados'] = completarDescricoesChamados($dados['chamados'], $cookieStr);
+        $dados['__descricoes_completas'] = true;
     }
 
     // 4. Cache + retorno

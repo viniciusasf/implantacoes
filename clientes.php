@@ -108,13 +108,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $data_inicio = $_POST['data_inicio'];
     $data_fim = (!empty($_POST['data_fim']) && $_POST['data_fim'] !== '0000-00-00') ? $_POST['data_fim'] : null;
     $data_previsao_encerramento = !empty($_POST['data_previsao_encerramento']) ? $_POST['data_previsao_encerramento'] : null;
-    $id_cliente_api = !empty($_POST['id_cliente_api']) ? $_POST['id_cliente_api'] : null;
+    $id_cliente_api = !empty($_POST['id_cliente_api']) ? trim($_POST['id_cliente_api']) : null;
+    $anexo = trim($_POST['anexo'] ?? '');
+    $link_para_id = preg_match('/^https?:\/\//i', $anexo) ? $anexo : 'https://' . $anexo;
+    $caminho_link = parse_url($link_para_id, PHP_URL_PATH) ?: '';
+    if (preg_match('~/([0-9]+)/?$~', $caminho_link, $id_api_encontrado)) {
+        $id_cliente_api = $id_api_encontrado[1];
+    }
     $emitir_nf = $_POST['emitir_nf'] ?? 'Não';
     $configurado = $_POST['configurado'] ?? 'Não';
 
     // NOVOS CAMPOS
     $num_licencas = $_POST['num_licencas'] ?? 0;
-    $anexo = $_POST['anexo'] ?? '';
     $chamados = $_POST['chamados'] ?? '';
     
     // CAMPO DE RECURSOS
@@ -667,6 +672,11 @@ body, html {
                         <div class="d-flex align-items-center mb-1">
                             <i class="bi bi-server me-2 text-muted"></i> <?= htmlspecialchars($c['servidor']) ?>
                         </div>
+                        <?php if (!empty($c['id_cliente_api'])): ?>
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-braces-asterisk me-2 text-muted"></i> ID API: <?= htmlspecialchars($c['id_cliente_api']) ?>
+                        </div>
+                        <?php endif; ?>
                         <?php if (!empty($contatos_por_cliente[$c['id_cliente']])): ?>
                         <div class="d-flex align-items-center">
                             <i class="bi bi-person-lines-fill me-2 text-muted"></i> 
@@ -713,7 +723,7 @@ body, html {
                                     data-inicio="<?= $c['data_inicio'] ?>" 
                                     data-fim="<?= $c['data_fim'] ?>" 
                                     data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
-                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '') ?>" 
+                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                     data-cfg="<?= $c['configurado'] ?>" 
                                     data-licencas="<?= $c['num_licencas'] ?>" 
@@ -826,6 +836,9 @@ body, html {
                                     <td>
                                         <div class="small fw-bold"><?= htmlspecialchars($c['vendedor']) ?></div>
                                         <div class="text-muted small"><?= htmlspecialchars($c['servidor']) ?></div>
+                                        <?php if (!empty($c['id_cliente_api'])): ?>
+                                        <div class="text-muted small"><i class="bi bi-braces-asterisk me-1"></i>ID API: <?= htmlspecialchars($c['id_cliente_api']) ?></div>
+                                        <?php endif; ?>
                                         <?php if (!empty($contatos_por_cliente[$c['id_cliente']])): ?>
                                         <div class="text-muted small"><i class="bi bi-person-lines-fill me-1"></i><?= htmlspecialchars(implode(', ', array_column($contatos_por_cliente[$c['id_cliente']], 'nome'))) ?></div>
                                         <?php endif; ?>
@@ -847,7 +860,7 @@ body, html {
                                                     data-inicio="<?= $c['data_inicio'] ?>" 
                                                     data-fim="<?= $c['data_fim'] ?>" 
                                                     data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
-                                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '') ?>" 
+                                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
                                                     data-obs="<?= htmlspecialchars($c['observacao']) ?>" 
                                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                                     data-cfg="<?= $c['configurado'] ?>" 
@@ -1189,11 +1202,12 @@ body, html {
         document.getElementById('data_inicio').value = d.inicio || '';
         document.getElementById('id_data_fim').value = d.fim || '';
         document.getElementById('data_previsao_encerramento').value = d.previsaoEncerramento || '';
-        document.getElementById('id_cliente_api').value = button.getAttribute('data-id-cliente-api') || '';
+        document.getElementById('id_cliente_api').value = button.getAttribute('data-id-cliente-api') || d.idClienteApi || '';
         document.getElementById('emitir_nf').value = d.nf || 'Não';
         document.getElementById('configurado').value = d.cfg || 'Não';
         document.getElementById('num_licencas').value = d.licencas || 0;
         document.getElementById('anexo').value = d.anexo || '';
+        sincronizarIdClienteApi();
         document.getElementById('chamados').value = d.chamados || '';
         
         // Limpar e preencher checkbox de recursos
@@ -1212,6 +1226,25 @@ body, html {
         const modal = new bootstrap.Modal(document.getElementById('modalCliente'));
         modal.show();
     }
+
+    function sincronizarIdClienteApi() {
+        const link = document.getElementById('anexo').value.trim();
+        const campoId = document.getElementById('id_cliente_api');
+        const linkComProtocolo = /^https?:\/\//i.test(link) ? link : `https://${link}`;
+
+        try {
+            const caminho = new URL(linkComProtocolo).pathname;
+            const resultado = caminho.match(/\/(\d+)\/?$/);
+            if (resultado) {
+                campoId.value = resultado[1];
+            }
+        } catch (erro) {
+            // Mantém o valor existente enquanto o link ainda está incompleto.
+        }
+    }
+
+    document.getElementById('anexo').addEventListener('input', sincronizarIdClienteApi);
+    document.getElementById('anexo').addEventListener('change', sincronizarIdClienteApi);
 
     function toggleConfigurado(valor) {
         const div = document.getElementById('div_configurado');
