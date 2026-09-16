@@ -20,6 +20,8 @@ define('MONITOR_STATUS_VALIDOS', [
     'Aguardando Suporte',
     'Aguardando Testes',
     'Aguardando Desenvolvimento',
+    'Aguardando Autorização',
+    'Aguardando Fila',
     'Aguardando Desenv.' // Incluindo variação comum
 ]);
 ?>

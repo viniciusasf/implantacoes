@@ -40,10 +40,10 @@ $stmt_map = $pdo->query("SELECT id_cliente, id_cliente_api, servidor FROM client
 <div class="row g-3 mb-4">
     <?php
     $kpis = [
-        ['id'=>'kpi-aguard-dev',   'label'=>'Aguard. Desenvolvimento','icon'=>'bi-code-slash',       'color'=>'warning'],
-        ['id'=>'kpi-aguard-testes','label'=>'Aguardando Testes',     'icon'=>'bi-check2-circle',     'color'=>'success'],
-        ['id'=>'kpi-aguard-suporte','label'=>'Aguardando Suporte',   'icon'=>'bi-headset',           'color'=>'purple'],
-        ['id'=>'kpi-total',        'label'=>'Total',                'icon'=>'bi-ticket-detailed',   'color'=>'primary'],
+        ['id'=>'kpi-aguard-dev',          'label'=>'Aguard. Desenvolvimento','icon'=>'bi-code-slash',          'color'=>'warning'],
+        ['id'=>'kpi-aguard-testes',       'label'=>'Aguardando Testes',     'icon'=>'bi-check2-circle',      'color'=>'success'],
+        ['id'=>'kpi-aguard-autorizacao',  'label'=>'Aguardando Autorização','icon'=>'bi-hourglass-split',    'color'=>'danger'],
+        ['id'=>'kpi-aguard-fila',         'label'=>'Aguardando Fila',      'icon'=>'bi-list-check',         'color'=>'primary'],
     ];
     foreach ($kpis as $k): ?>
     <div class="col-6 col-md-3">
@@ -135,11 +135,28 @@ $stmt_map = $pdo->query("SELECT id_cliente, id_cliente_api, servidor FROM client
     </div>
 </div>
 
+<div class="modal fade" id="modal-descricao-chamado" tabindex="-1" aria-labelledby="modal-descricao-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-descricao-titulo">Descrição do chamado</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-descricao-texto" class="descricao-modal-texto"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 </div>
 
 <style>
 .sortable{cursor:pointer;user-select:none}.sortable:hover{color:var(--primary)!important}
-.descricao-chamado{font-size:.82rem;white-space:normal;overflow:visible;overflow-wrap:anywhere;word-break:break-word;min-width:300px}
+.descricao-chamado{font-size:.82rem;min-width:260px;max-width:360px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.descricao-resumo{display:inline-block;max-width:calc(100% - 34px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+.btn-ver-descricao{width:28px;height:28px;padding:0!important;flex:0 0 28px}
+.descricao-modal-texto{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.55;color:var(--text-dark)}
 .badge-ch{font-size:.68rem;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.03em;white-space:nowrap}
 .peso-chip{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;font-weight:700;font-size:.8rem}
 .btn-action {
@@ -257,7 +274,10 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         'Aguardando Desenvolvimento': ['var(--warning-light)','var(--warning)'],
         'Em Desenvolvimento':          ['var(--info-light)',   'var(--info)'],
         'Aguardando Cliente':          ['var(--purple-light)', 'var(--purple)'],
+        'Aguardando Suporte':          ['var(--purple-light)', 'var(--purple)'],
         'Aguardando Testes':           ['var(--success-light)','var(--success)'],
+        'Aguardando Autorização':      ['rgba(239, 68, 68, 0.12)','var(--danger)'],
+        'Aguardando Fila':             ['var(--primary-light)','var(--primary)'],
         'Enviado Atualização':         ['var(--primary-light)','var(--primary)'],
         'Resolvido':                   ['var(--success-light)','var(--success)'],
         'Cancelado':                   ['#f1f5f9',             'var(--text-muted)'],
@@ -272,7 +292,11 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             'aguardando desenvolvimento': 'Aguardando Desenvolvimento',
             'em desenvolvimento': 'Em Desenvolvimento',
             'aguardando cliente': 'Aguardando Cliente',
+            'aguardando suporte': 'Aguardando Suporte',
             'aguardando testes': 'Aguardando Testes',
+            'aguardando autorizacao': 'Aguardando Autorização',
+            'aguardando autorização': 'Aguardando Autorização',
+            'aguardando fila': 'Aguardando Fila',
             'enviado atualizacao': 'Enviado Atualização',
             'enviado atualização': 'Enviado Atualização',
             'enviado atualização': 'Enviado Atualização',
@@ -308,6 +332,11 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             .replace(/>/g,'&gt;')
             .replace(/"/g,'&quot;')
             .replace(/'/g,'&#039;');
+    }
+
+    function resumirDescricao(text, limite = 110){
+        const valor = String(text || '—').replace(/\s+/g, ' ').trim();
+        return valor.length > limite ? valor.slice(0, limite).trimEnd() + '...' : valor;
     }
 
     function criarMensagemWhatsapp(chamado){
@@ -418,10 +447,12 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         }
             lista.sort((a,b)=>{
             const statusOrder = {
-                'Aguardando Suporte': 1,
-                'Enviado Atualização': 2,
-                'Aguardando Testes': 3,
-                'Aguardando Desenvolvimento': 4
+                'Enviado Atualização': 1,
+                'Aguardando Testes': 2,
+                'Aguardando Desenvolvimento': 3,
+                'Aguardando Autorização': 4,
+                'Aguardando Fila': 5,
+                'Aguardando Suporte': 6
             };
             const statusA = normalizarStatus(a.CHAMADO_STATUS);
             const statusB = normalizarStatus(b.CHAMADO_STATUS);
@@ -458,7 +489,8 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             const servidor = (r.SERVIDOR || r.SERVIDORNUVEM || MAPA_SERVIDOR_LOCAL[r.ID_CLIENTE] || '—');
             const tipoAcomp = escapeHtmlAttribute(r.TIPOACOMP || '—');
             const descricao = String(r.DESCRICAO || '—');
-            const descricaoHtml = escapeHtml(descricao).replace(/\r?\n/g, '<br>');
+            const descricaoResumo = escapeHtml(resumirDescricao(descricao));
+            const descricaoAttr = escapeHtmlAttribute(descricao);
             const retornoStatus = getRetornoDataStatus(r.DATAPREV_RETORNO);
             const retornoStyle = retornoStatus ? `background:${retornoStatus.bg};color:${retornoStatus.color};border-radius:8px;padding:0.45rem 0.6rem;` : '';
             const retornoBadge = retornoStatus ? `<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${retornoStatus.color};margin-top:.22rem">${retornoStatus.label}</div>` : '';
@@ -478,7 +510,12 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             </td>
             <td>${badgeStatus(r.CHAMADO_STATUS)}</td>
             <td style="font-size:.75rem;background:var(--bg-body);padding:2px 7px;border-radius:6px;white-space:nowrap">${servidor}</td>
-            <td class="descricao-chamado" title="${escapeHtmlAttribute(descricao)}">${descricaoHtml}</td>
+            <td class="descricao-chamado" title="Abrir descrição completa">
+                <span class="descricao-resumo">${descricaoResumo}</span>
+                <button type="button" class="btn btn-sm btn-outline-primary btn-action btn-action-icon btn-ver-descricao" data-descricao="${descricaoAttr}" data-id="${idChamado}" title="Ver descrição completa" aria-label="Ver descrição completa">
+                    <i class="bi bi-file-text"></i>
+                </button>
+            </td>
             <td style="font-size:.8rem;white-space:nowrap">${tipoAcomp}</td>
             <td class="retorno-cell" style="font-size:.82rem;${retornoStyle}">${fmtData(r.DATAPREV_RETORNO)}${retornoBadge}</td>
             <td class="text-center align-middle" style="white-space:nowrap">
@@ -521,8 +558,8 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
     function atualizarKPIs(lista){
         document.getElementById('kpi-aguard-dev').textContent=lista.filter(r=>normalizarStatus(r.CHAMADO_STATUS)==='Aguardando Desenvolvimento').length;
         document.getElementById('kpi-aguard-testes').textContent=lista.filter(r=>['Aguardando Testes','Enviado Atualização'].includes(normalizarStatus(r.CHAMADO_STATUS))).length;
-        document.getElementById('kpi-aguard-suporte').textContent=lista.filter(r=>normalizarStatus(r.CHAMADO_STATUS)==='Aguardando Suporte').length;
-        document.getElementById('kpi-total').textContent=lista.length;
+        document.getElementById('kpi-aguard-autorizacao').textContent=lista.filter(r=>normalizarStatus(r.CHAMADO_STATUS)==='Aguardando Autorização').length;
+        document.getElementById('kpi-aguard-fila').textContent=lista.filter(r=>normalizarStatus(r.CHAMADO_STATUS)==='Aguardando Fila').length;
     }
 
     function carregarDados(forcar){
@@ -546,7 +583,8 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             window.chamadosLocais = respLocais.sucesso ? (respLocais.dados || {}) : {};
 
             const statusValores = [...new Set(lista.map(r => normalizarStatus(r.CHAMADO_STATUS)).filter(Boolean))].sort();
-            populaDropdownCheckboxes('filtro-status-menu', 'filtro-status-label', 'filtro-status-cb', statusValores, ['Aguardando Desenvolvimento', 'Aguardando Suporte', 'Aguardando Testes', 'Enviado Atualização'], 'Todos os status');
+            const statusPadrao = ['Aguardando Desenvolvimento', 'Aguardando Testes', 'Enviado Atualização', 'Aguardando Autorização', 'Aguardando Fila'];
+            populaDropdownCheckboxes('filtro-status-menu', 'filtro-status-label', 'filtro-status-cb', statusValores, statusPadrao, 'Todos os status');
             populaDropdownCheckboxes('filtro-tipo-menu', 'filtro-tipo-label', 'filtro-tipo-cb', lista.map(r=>r.TIPOACOMP), [], 'Todos os tipos');
             populaSelect('filtro-responsavel', lista.map(r=>r.RESPONSAVEL), 'VINICIUS');
             aplicarFiltros();
@@ -606,6 +644,17 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
     }
 
     document.addEventListener('click', function(event){
+        const btnDescricao = event.target.closest('.btn-ver-descricao');
+        if (btnDescricao) {
+            const modalTitulo = document.getElementById('modal-descricao-titulo');
+            const modalTexto = document.getElementById('modal-descricao-texto');
+            const descricaoCompleta = btnDescricao.getAttribute('data-descricao') || '—';
+            modalTitulo.textContent = 'Descrição do chamado #' + btnDescricao.dataset.id;
+            modalTexto.textContent = descricaoCompleta;
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-descricao-chamado')).show();
+            return;
+        }
+
         const btnSalvar = event.target.closest('.btn-salvar-local');
         if (btnSalvar) {
             const id = parseInt(btnSalvar.dataset.id);

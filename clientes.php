@@ -110,10 +110,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $data_previsao_encerramento = !empty($_POST['data_previsao_encerramento']) ? $_POST['data_previsao_encerramento'] : null;
     $id_cliente_api = !empty($_POST['id_cliente_api']) ? trim($_POST['id_cliente_api']) : null;
     $anexo = trim($_POST['anexo'] ?? '');
-    $link_para_id = preg_match('/^https?:\/\//i', $anexo) ? $anexo : 'https://' . $anexo;
-    $caminho_link = parse_url($link_para_id, PHP_URL_PATH) ?: '';
-    if (preg_match('~/([0-9]+)/?$~', $caminho_link, $id_api_encontrado)) {
-        $id_cliente_api = $id_api_encontrado[1];
+    if (!empty($id_cliente_api) && empty($anexo)) {
+        $anexo = 'https://interno.gestaopro.srv.br/clientes/' . trim($id_cliente_api);
+    } elseif (!empty($anexo)) {
+        $anexo = preg_match('/^https?:\/\//i', $anexo) ? $anexo : 'https://' . ltrim($anexo, '/');
+        $link_para_id = $anexo;
+        $caminho_link = parse_url($link_para_id, PHP_URL_PATH) ?: '';
+        if (preg_match('~/([0-9]+)/?$~', $caminho_link, $id_api_encontrado)) {
+            $id_cliente_api = $id_api_encontrado[1];
+        }
     }
     $emitir_nf = $_POST['emitir_nf'] ?? 'Não';
     $configurado = $_POST['configurado'] ?? 'Não';
@@ -1195,6 +1200,8 @@ body, html {
     function openEditModal(button) {
         const d = button.dataset;
         document.getElementById('modalTitle').innerText = 'Editar Cliente';
+        const idClienteApi = (button.getAttribute('data-id-cliente-api') || d.idClienteApi || '').trim();
+
         document.getElementById('id_cliente').value = d.id;
         document.getElementById('fantasia').value = d.fantasia || '';
         document.getElementById('servidor').value = d.servidor || '';
@@ -1202,11 +1209,11 @@ body, html {
         document.getElementById('data_inicio').value = d.inicio || '';
         document.getElementById('id_data_fim').value = d.fim || '';
         document.getElementById('data_previsao_encerramento').value = d.previsaoEncerramento || '';
-        document.getElementById('id_cliente_api').value = button.getAttribute('data-id-cliente-api') || d.idClienteApi || '';
+        document.getElementById('id_cliente_api').value = idClienteApi;
         document.getElementById('emitir_nf').value = d.nf || 'Não';
         document.getElementById('configurado').value = d.cfg || 'Não';
         document.getElementById('num_licencas').value = d.licencas || 0;
-        document.getElementById('anexo').value = d.anexo || '';
+        document.getElementById('anexo').value = d.anexo || (idClienteApi ? `https://interno.gestaopro.srv.br/clientes/${idClienteApi}` : '');
         sincronizarIdClienteApi();
         document.getElementById('chamados').value = d.chamados || '';
         

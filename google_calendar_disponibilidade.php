@@ -25,7 +25,7 @@ function hasOverlap(DateTime $start, DateTime $end, array $busyIntervals)
 
 try {
     $timezone = new DateTimeZone('America/Sao_Paulo');
-    $dias = isset($_GET['dias']) ? (int)$_GET['dias'] : 3;
+    $dias = isset($_GET['dias']) ? (int)$_GET['dias'] : 4;
     if ($dias < 1) {
         $dias = 1;
     } elseif ($dias > 14) {

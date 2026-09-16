@@ -104,6 +104,11 @@ ordenarChamadosPorPrevRetorno($agrupadosEnviados);
             Gerencie os chamados salvos localmente para notificar os clientes em lote.
         </p>
     </div>
+    <div class="d-flex gap-2 align-items-center">
+        <button type="button" class="btn btn-secondary btn-sm fw-bold" onclick="window.history.back();">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </button>
+    </div>
 </div>
 
 <div class="row">

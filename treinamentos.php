@@ -2380,23 +2380,15 @@ include 'header.php';
                 </div>
 
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-12">
                         <label class="form-label small fw-bold text-muted">Data/Hora</label>
                         <input type="datetime-local" name="data_treinamento" id="data_treinamento" class="form-control">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold text-muted">Status</label>
-                        <select name="status" id="status" class="form-select">
-                            <option value="PENDENTE">PENDENTE</option>
-                            <option value="Resolvido">RESOLVIDO</option>
-                        </select>
                     </div>
                 </div>
 
                 <div class="mt-3">
                     <div class="d-flex align-items-center justify-content-between mb-2">
-                        <label class="form-label small fw-bold text-muted mb-0">Horários disponíveis (hoje, amanhã e
-                            depois)</label>
+                        <label class="form-label small fw-bold text-muted mb-0">Horários disponíveis (próximos 5 dias)</label>
                         <div class="d-flex gap-2">
                             <button type="button" class="btn btn-sm btn-outline-primary"
                                 id="btn_buscar_disponibilidade">
@@ -2749,35 +2741,33 @@ include 'header.php';
     }
 
     function montarMensagemDisponibilidadeCliente(diasDisponiveis) {
-        const clienteSelect = document.getElementById('id_cliente');
-        const clienteNome = clienteSelect && clienteSelect.selectedIndex > 0 ?
-            clienteSelect.options[clienteSelect.selectedIndex].text : '';
-
         const linhas = [];
         const diasComSlot = diasDisponiveis.filter(dia => Array.isArray(dia.horarios) && dia.horarios.length > 0);
 
-        linhas.push('Olá' + (clienteNome ? ' ' + clienteNome : '') + '! Tudo bem? 👍');
+        linhas.push('Olá! Tudo bem? 😊');
+        linhas.push('');
+        linhas.push('Vamos agendar nosso treinamento? 🚀');
+        linhas.push('');
+        linhas.push('Veja os horários disponíveis e escolha o que fica melhor para você:');
         linhas.push('');
 
         if (diasComSlot.length === 0) {
-            linhas.push('Para agendarmos nosso treinamento, no momento não tenho horários livres para os próximos dias, mas podemos combinar um horário específico se preferir. 😕');
+            linhas.push('📅 Nenhum horário disponível para os próximos dias no momento.');
         } else {
-            linhas.push('Para agendarmos nosso treinamento, veja os horários que tenho disponíveis:');
-            linhas.push('');
             diasDisponiveis.forEach((dia) => {
                 const dataLabel = dia.data_label || dia.data || 'Dia';
                 const horarios = Array.isArray(dia.horarios) ? dia.horarios : [];
                 if (horarios.length > 0) {
                     const horas = horarios.map((slot) => slot.hora).filter(Boolean);
-                    linhas.push('*' + dataLabel + '*: ' + horas.join(', '));
+                    linhas.push('📅 ' + dataLabel + ': ' + horas.join(', '));
                 } else {
-                    linhas.push('*' + dataLabel + '*: Sem horários disponíveis');
+                    linhas.push('📅 ' + dataLabel + ': Sem horários disponíveis.');
                 }
             });
         }
 
         linhas.push('');
-        linhas.push('Qual desses fica melhor para você? *Me informe também o tema/assunto que gostaria de tratar, que eu agendo aqui! 🚀*');
+        linhas.push('💡 Importante: Como os horários podem ser preenchidos por outros clientes, se possível, me confirme o quanto antes para garantir sua preferência.');
         return linhas.join('\n');
     }
 
@@ -2879,7 +2869,7 @@ include 'header.php';
 
         container.innerHTML = '<div class="text-muted"><div class="spinner-border spinner-border-sm me-2"></span>Consultando Google Agenda...</div>';
 
-        fetch('google_calendar_disponibilidade.php?dias=2&duracao_min=60', {
+        fetch('google_calendar_disponibilidade.php?dias=4&duracao_min=60', {
             cache: 'no-store'
         })
             .then(r => r.json())
