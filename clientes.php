@@ -131,53 +131,69 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $recursos_arr = $_POST['recursos'] ?? [];
     $recursos = is_array($recursos_arr) ? implode(', ', $recursos_arr) : (string)$recursos_arr;
 
-    if (isset($_POST['id_cliente']) && !empty($_POST['id_cliente'])) {
-        // UPDATE com novos campos
-        $stmt = $pdo->prepare("UPDATE `clientes` SET 
-            `fantasia`=?, `servidor`=?, `vendedor`=?, `telefone_ddd`=?, 
-            `data_inicio`=?, `data_fim`=?, `data_previsao_encerramento`=?, `id_cliente_api`=?, 
-            `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=?
-            WHERE `id_cliente`=?");
-        $stmt->execute([
-            $fantasia,
-            $servidor,
-            $vendedor,
-            $telefone,
-            $data_inicio,
-            $data_fim,
-            $data_previsao_encerramento,
-            $id_cliente_api,
-            $emitir_nf,
-            $configurado,
-            $num_licencas,
-            $anexo,
-            $chamados,
-            $recursos,
-            $_POST['id_cliente']
-        ]);
-    } else {
-        // INSERT com novos campos
-        $stmt = $pdo->prepare("INSERT INTO `clientes` (
-            `fantasia`, `servidor`, `vendedor`, `telefone_ddd`, 
-            `data_inicio`, `data_fim`, `data_previsao_encerramento`, `id_cliente_api`,
-            `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([
-            $fantasia,
-            $servidor,
-            $vendedor,
-            $telefone,
-            $data_inicio,
-            $data_fim,
-            $data_previsao_encerramento,
-            $id_cliente_api,
-            $emitir_nf,
-            $configurado,
-            $num_licencas,
-            $anexo,
-            $chamados,
-            $recursos,
-        ]);
+    try {
+        if (isset($_POST['id_cliente']) && !empty($_POST['id_cliente'])) {
+            // UPDATE com novos campos
+            $stmt = $pdo->prepare("UPDATE `clientes` SET 
+                `fantasia`=?, `servidor`=?, `vendedor`=?, `telefone_ddd`=?, 
+                `data_inicio`=?, `data_fim`=?, `data_previsao_encerramento`=?, `id_cliente_api`=?, 
+                `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=?
+                WHERE `id_cliente`=?");
+            $stmt->execute([
+                $fantasia,
+                $servidor,
+                $vendedor,
+                $telefone,
+                $data_inicio,
+                $data_fim,
+                $data_previsao_encerramento,
+                $id_cliente_api,
+                $emitir_nf,
+                $configurado,
+                $num_licencas,
+                $anexo,
+                $chamados,
+                $recursos,
+                $_POST['id_cliente']
+            ]);
+        } else {
+            // INSERT com novos campos
+            $stmt = $pdo->prepare("INSERT INTO `clientes` (
+                `fantasia`, `servidor`, `vendedor`, `telefone_ddd`, 
+                `data_inicio`, `data_fim`, `data_previsao_encerramento`, `id_cliente_api`,
+                `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([
+                $fantasia,
+                $servidor,
+                $vendedor,
+                $telefone,
+                $data_inicio,
+                $data_fim,
+                $data_previsao_encerramento,
+                $id_cliente_api,
+                $emitir_nf,
+                $configurado,
+                $num_licencas,
+                $anexo,
+                $chamados,
+                $recursos,
+            ]);
+        }
+    } catch (PDOException $e) {
+        if ($e->getCode() === '23000' && $id_cliente_api !== null) {
+            $redirect_to = 'clientes.php';
+            if (!empty($_POST['redirect_to'])) {
+                $candidate = basename($_POST['redirect_to']);
+                $allowed = ['clientes.php', 'monitoramento_gestaopro.php', 'chamados_gestaopro.php'];
+                if (in_array($candidate, $allowed, true)) {
+                    $redirect_to = $candidate;
+                }
+            }
+            header("Location: {$redirect_to}?msg=Este+cliente+da+GestaoPRO+ja+esta+cadastrado&view=" . $view_mode);
+            exit;
+        }
+        throw $e;
     }
 
     $redirect_to = 'clientes.php';

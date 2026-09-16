@@ -964,7 +964,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $id_cliente = $_POST['id_cliente'];
     $id_contato = $_POST['id_contato'];
     $tema = $_POST['tema'];
-    $status = $_POST['status'];
+    $status = 'PENDENTE';
+    if (isset($_POST['status']) && trim((string) $_POST['status']) !== '') {
+        $status = strtoupper(trim((string) $_POST['status']));
+    }
+    if ($status !== 'PENDENTE') {
+        $status = 'PENDENTE';
+    }
     $data_treinamento = !empty($_POST['data_treinamento']) ? normalizarDataTreinamento($_POST['data_treinamento']) : null;
     $id_treinamento_atual = isset($_POST['id_treinamento']) ? (int) $_POST['id_treinamento'] : 0;
     $has_google_event_link = array_key_exists('google_event_link', $_POST);
@@ -983,6 +989,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['id_treinamento']) && !empty($_POST['id_treinamento'])) {
 
         // --- 1. ATUALIZAÇÃO DE TREINAMENTO EXISTENTE ---
+        $status = 'PENDENTE';
+        if (isset($_POST['status']) && trim((string) $_POST['status']) !== '') {
+            $status = strtoupper(trim((string) $_POST['status']));
+        }
+        if ($status !== 'PENDENTE') {
+            $status = 'PENDENTE';
+        }
+
         $campos_update = [
             "id_cliente=?",
             "id_contato=?",
@@ -2325,6 +2339,7 @@ include 'header.php';
             </div>
             <div class="modal-body px-4">
                 <input type="hidden" name="id_treinamento" id="id_treinamento">
+                <input type="hidden" name="status" id="status" value="PENDENTE">
 
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
@@ -3027,7 +3042,7 @@ include 'header.php';
             document.getElementById('id_treinamento').value = this.dataset.id;
             document.getElementById('id_cliente').value = this.dataset.cliente;
             document.getElementById('tema').value = this.dataset.tema;
-            document.getElementById('status').value = this.dataset.status;
+            document.getElementById('status').value = 'PENDENTE';
             document.getElementById('data_treinamento').value = this.dataset.data;
 
             filterContatos(this.dataset.cliente, this.dataset.contato);

@@ -33,6 +33,17 @@ if (!in_array($base_endpoint, $ENDPOINTS_VALIDOS, true)) {
 $cacheFile = __DIR__ . "/logs/gp_cache_{$endpoint}.json";
 
 // ── Cache simples em arquivo ──────────────────────────────────────────────────
+function garantirDiretorioCache(string $caminhoArquivo): void {
+    $diretorio = dirname($caminhoArquivo);
+    if (is_dir($diretorio)) {
+        return;
+    }
+
+    if (!@mkdir($diretorio, 0777, true) && !is_dir($diretorio)) {
+        throw new RuntimeException("Não foi possível criar o diretório de cache: {$diretorio}");
+    }
+}
+
 function lerCache(string $file, bool $aceitarExpirado = false): ?array {
     if (!file_exists($file)) return null;
     if (!$aceitarExpirado && (time() - filemtime($file)) > GP_CACHE_TTL) return null;
@@ -41,6 +52,7 @@ function lerCache(string $file, bool $aceitarExpirado = false): ?array {
 }
 
 function salvarCache(string $file, array $dados): void {
+    garantirDiretorioCache($file);
     @file_put_contents($file, json_encode($dados, JSON_UNESCAPED_UNICODE));
 }
 
@@ -145,6 +157,7 @@ function descobrirActionId(): ?string {
 // ── Login → obtém string de cookies ──────────────────────────────────────────
 function fazerLogin($tentativa = 1): ?string {
     $hashFile = __DIR__ . '/logs/gp_action_hash.txt';
+    garantirDiretorioCache($hashFile);
     $actionId = file_exists($hashFile) ? trim(file_get_contents($hashFile)) : GP_ACTION_ID;
 
     $body = json_encode([['login' => GP_LOGIN, 'senha' => GP_SENHA, 'from' => null]]);
