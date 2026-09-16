@@ -217,7 +217,7 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
 const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
 const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
 const CHAMADOS_BAIXADOS = <?php echo json_encode($chamados_retornos_local); ?>;
-const CHAMADOS_STATUS_WHATSAPP = ['Aguardando Desenvolvimento','Aguardando Fila','Aguardando Cliente','Aguardando Testes','Resolvido','Encerrado'];
+const CHAMADOS_STATUS_WHATSAPP = ['Aguardando Desenvolvimento','Aguardando Autorização','Aguardando Fila','Aguardando Cliente','Aguardando Testes','Resolvido','Encerrado'];
 const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
 
 (function(){
@@ -511,14 +511,18 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
     }
 
     // ── carregar dados ─────────────────────────────────────────────────────────
-    function carregarDados(forcar){
+    function carregarDados(forcar, somenteCache = false){
         document.getElementById('estado-carregando').classList.remove('d-none');
         document.getElementById('estado-erro').classList.add('d-none');
         document.getElementById('wrapper-tabela').classList.add('d-none');
         document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise';
 
-        const url = forcar ? 'api_gestaopro_bridge.php?forcar=1' : 'api_gestaopro_bridge.php';
-        const urlChamados = forcar ? 'api_gestaopro_bridge.php?endpoint=chamados&forcar=1' : 'api_gestaopro_bridge.php?endpoint=chamados';
+        const url = forcar
+            ? 'api_gestaopro_bridge.php?forcar=1'
+            : (somenteCache ? 'api_gestaopro_bridge.php?somente_cache=1' : 'api_gestaopro_bridge.php');
+        const urlChamados = forcar
+            ? 'api_gestaopro_bridge.php?endpoint=chamados&forcar=1'
+            : (somenteCache ? 'api_gestaopro_bridge.php?endpoint=chamados&somente_cache=1' : 'api_gestaopro_bridge.php?endpoint=chamados');
 
         Promise.all([
             fetch(url).then(r => r.json()),
@@ -577,11 +581,7 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
     document.getElementById('btn-refresh').addEventListener('click', function(){
         this.disabled = true;
         document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise spin';
-        // Invalida cache deletando arquivo via parâmetro
-        Promise.all([
-            fetch('api_gestaopro_bridge.php?forcar=1'),
-            fetch('api_gestaopro_bridge.php?endpoint=chamados&forcar=1')
-        ]).then(()=>carregarDados(false));
+        carregarDados(true);
     });
 
     ['filtro-busca','filtro-vendedor','filtro-nuvem'].forEach(id => {
@@ -665,8 +665,8 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
         }
     });
 
-    // Init
-    carregarDados(false);
+    // Init: mantém a última leitura da API em tela até que o usuário force a atualização manual.
+    carregarDados(false, true);
 })();
 </script>
 
@@ -731,6 +731,13 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                     <div class="input-group">
                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-braces-asterisk text-success"></i></span>
                         <input type="number" name="id_cliente_api" id="cadastroIdClienteApi" class="form-control border-start-0 ps-0" placeholder="Ex: 6547" required>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Link do Cadastro</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-link-45deg text-success"></i></span>
+                        <input type="text" name="anexo" id="cadastroLinkCadastro" class="form-control border-start-0 ps-0" placeholder="Ex: https://interno.gestaopro.srv.br/clientes/7618" required>
                     </div>
                 </div>
             </div>
@@ -811,13 +818,28 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
 <script>
 
 function abrirModalCadastroCliente(nome, vendedor, servidor, idClienteApi, dataInicio, numLicencas) {
+    const idApi = idClienteApi ? String(idClienteApi).trim() : '';
+    const linkCadastro = idApi ? `https://interno.gestaopro.srv.br/clientes/${idApi}` : '';
+
     document.getElementById('cadastroNomeFantasia').value = nome || '';
     document.getElementById('cadastroVendedor').value = vendedor || '';
     document.getElementById('cadastroServidor').value = servidor || '';
     document.getElementById('cadastroDataInicio').value = dataInicio || new Date().toISOString().slice(0, 10);
     document.getElementById('cadastroNumLicencas').value = numLicencas ? Number(numLicencas) : 0;
-    document.getElementById('cadastroIdClienteApi').value = idClienteApi ? String(idClienteApi).trim() : '';
+    document.getElementById('cadastroIdClienteApi').value = idApi;
+    document.getElementById('cadastroLinkCadastro').value = linkCadastro;
     bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCadastroClienteGP')).show();
+}
+
+const cadastroIdClienteApiInput = document.getElementById('cadastroIdClienteApi');
+if (cadastroIdClienteApiInput) {
+    cadastroIdClienteApiInput.addEventListener('input', function () {
+        const idApi = this.value.trim();
+        const linkInput = document.getElementById('cadastroLinkCadastro');
+        if (linkInput) {
+            linkInput.value = idApi ? `https://interno.gestaopro.srv.br/clientes/${idApi}` : '';
+        }
+    });
 }
 </script>
 

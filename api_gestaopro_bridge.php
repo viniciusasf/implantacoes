@@ -1,20 +1,23 @@
 <?php
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/app_config.php';
 /**
  * bridge: API GestãoPro → JSON
  * Suporta múltiplos endpoints: implantacoes | chamados
  * Uso: api_gestaopro_bridge.php?endpoint=implantacoes
  *      api_gestaopro_bridge.php?endpoint=chamados
- *      Adicionar &forcar=1 para ignorar o cache.
+ *      Adicionar &forcar=1 para atualizar os dados pela API.
+ *      Adicionar &somente_cache=1 para retornar a ultima leitura, mesmo expirada.
  */
 
 header('Content-Type: application/json; charset=utf-8');
 date_default_timezone_set('America/Sao_Paulo');
 
 // ── Configurações ─────────────────────────────────────────────────────────────
-define('GP_BASE_URL',  'https://interno.gestaopro.srv.br');
-define('GP_ACTION_ID', '40c1193ac08d14a23dc52b4bb1daa769e054ec51bb');
-define('GP_LOGIN',     'vinicius');
-define('GP_SENHA',     'codigoc123');
+define('GP_BASE_URL',  appRequiredConfig('gestaopro', 'base_url'));
+define('GP_ACTION_ID', appRequiredConfig('gestaopro', 'action_id'));
+define('GP_LOGIN',     appRequiredConfig('gestaopro', 'login'));
+define('GP_SENHA',     appRequiredConfig('gestaopro', 'password'));
 define('GP_CACHE_TTL', 300); // 5 minutos
 
 $ENDPOINTS_VALIDOS = ['implantacoes', 'chamados'];
@@ -30,15 +33,59 @@ if (!in_array($base_endpoint, $ENDPOINTS_VALIDOS, true)) {
 $cacheFile = __DIR__ . "/logs/gp_cache_{$endpoint}.json";
 
 // ── Cache simples em arquivo ──────────────────────────────────────────────────
-function lerCache(string $file): ?array {
+function lerCache(string $file, bool $aceitarExpirado = false): ?array {
     if (!file_exists($file)) return null;
-    if ((time() - filemtime($file)) > GP_CACHE_TTL) return null;
+    if (!$aceitarExpirado && (time() - filemtime($file)) > GP_CACHE_TTL) return null;
     $dados = @json_decode(file_get_contents($file), true);
     return is_array($dados) ? $dados : null;
 }
 
 function salvarCache(string $file, array $dados): void {
     @file_put_contents($file, json_encode($dados, JSON_UNESCAPED_UNICODE));
+}
+
+function mesclarChamados(array $chamados): array {
+    $porId = [];
+    foreach ($chamados as $chamado) {
+        $id = (string) ($chamado['ID'] ?? '');
+        if ($id === '') {
+            $porId[] = $chamado;
+            continue;
+        }
+
+        if (!isset($porId[$id])) {
+            $porId[$id] = $chamado;
+            continue;
+        }
+
+        $descricaoAtual = (string) ($porId[$id]['DESCRICAO'] ?? '');
+        $descricaoNova = (string) ($chamado['DESCRICAO'] ?? '');
+        if (strlen($descricaoNova) > strlen($descricaoAtual)) {
+            $porId[$id]['DESCRICAO'] = $chamado['DESCRICAO'];
+        }
+    }
+
+    return array_values($porId);
+}
+
+function completarDescricoesChamados(array $chamados, string $cookieStr): array {
+    foreach ($chamados as &$chamado) {
+        $descricao = (string) ($chamado['DESCRICAO'] ?? '');
+        $id = $chamado['ID'] ?? null;
+        if ($id === null || strlen($descricao) < 500) continue;
+
+        $detalhe = buscarEndpoint('/api/chamados/' . rawurlencode((string) $id), $cookieStr);
+        if (!$detalhe) continue;
+
+        $detalheChamado = $detalhe['chamado'] ?? $detalhe;
+        $descricaoCompleta = (string) ($detalheChamado['DESCRICAO'] ?? $detalheChamado['descricao'] ?? '');
+        if (strlen($descricaoCompleta) > strlen($descricao)) {
+            $chamado['DESCRICAO'] = $descricaoCompleta;
+        }
+    }
+    unset($chamado);
+
+    return $chamados;
 }
 
 // ── Descobrir Next-Action ID dinamicamente ───────────────────────────────────
@@ -163,14 +210,17 @@ function buscarEndpoint(string $path, string $cookieStr): ?array {
 
 // ── Fluxo principal ───────────────────────────────────────────────────────────
 try {
+    $somenteCache = !empty($_GET['somente_cache']);
+
     // Invalidar cache se solicitado
     if (!empty($_GET['forcar']) && file_exists($cacheFile)) {
         @unlink($cacheFile);
     }
 
     // 1. Cache
-    $cached = lerCache($cacheFile);
-    if ($cached !== null) {
+    $cached = lerCache($cacheFile, $somenteCache);
+    $cacheDescricoesCompletas = $cached['__descricoes_completas'] ?? false;
+    if ($cached !== null && ($base_endpoint !== 'chamados' || $cacheDescricoesCompletas)) {
         echo json_encode([
             'sucesso'   => true,
             'origem'    => 'cache',
@@ -178,6 +228,16 @@ try {
             'gerado_em' => date('d/m/Y H:i:s', filemtime($cacheFile)),
             'dados'     => $cached,
         ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    // A abertura da tela deve usar somente a ultima leitura ja armazenada.
+    if ($somenteCache && $cached === null) {
+        http_response_code(404);
+        echo json_encode([
+            'sucesso' => false,
+            'erro' => 'Nenhuma leitura anterior dos chamados esta disponivel. Use Atualizar para consultar a API.',
+        ]);
         exit;
     }
 
@@ -215,20 +275,29 @@ try {
             }
 
             // Substituir array parcial pelo completo
-            $dados[$chavePrincipal] = $todosRegistros;
+            $dados[$chavePrincipal] = $chavePrincipal === 'chamados'
+                ? mesclarChamados($todosRegistros)
+                : $todosRegistros;
             $dados['count'] = count($todosRegistros);
             $dados['page'] = 'all';
             $dados['totalPages'] = 1;
         }
     }
 
-    // Buscar "Resolvidos" separadamente para juntar na base, se o endpoint for chamados
+    // Alguns status não vêm na consulta padrão da API; busque-os separadamente.
     if ($base_endpoint === 'chamados') {
-        $dadosResolvidos = buscarEndpoint("/api/chamados?status=Resolvido", $cookieStr);
-        if ($dadosResolvidos && isset($dadosResolvidos['chamados']) && is_array($dadosResolvidos['chamados'])) {
-            $dados['chamados'] = array_merge($dados['chamados'] ?? [], $dadosResolvidos['chamados']);
-            $dados['count'] = count($dados['chamados']);
+        foreach (['Resolvido', 'Enviado Atualização'] as $status) {
+            $query = http_build_query(['status' => $status]);
+            $dadosStatus = buscarEndpoint('/api/chamados?' . $query, $cookieStr);
+
+            if ($dadosStatus && isset($dadosStatus['chamados']) && is_array($dadosStatus['chamados'])) {
+                $dados['chamados'] = mesclarChamados(array_merge($dados['chamados'] ?? [], $dadosStatus['chamados']));
+            }
         }
+
+        $dados['count'] = count($dados['chamados'] ?? []);
+        $dados['chamados'] = completarDescricoesChamados($dados['chamados'], $cookieStr);
+        $dados['__descricoes_completas'] = true;
     }
 
     // 4. Cache + retorno

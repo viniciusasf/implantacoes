@@ -49,7 +49,9 @@ function encerrarImplantacaoCliente(PDO $pdo, $idCliente, $cancelada = false)
             $stmtCliente->execute([$dataAtual, $idCliente]);
         }
 
-        // Fecha treinamentos pendentes para remover o cliente dos fluxos de atendimento.
+        // Fecha APENAS treinamentos pendentes já passados (sem data futura).
+        // Treinamentos agendados para hoje ou para o futuro permanecem PENDENTE,
+        // pois ainda precisam ser realizados mesmo com a implantação encerrada.
         $observacaoFechamento = $cancelada
             ? '[Encerrado automaticamente por cancelamento da implantacao em ' . $dataAtual . ']'
             : '[Encerrado automaticamente por conclusao da implantacao em ' . $dataAtual . ']';
@@ -60,7 +62,8 @@ function encerrarImplantacaoCliente(PDO $pdo, $idCliente, $cancelada = false)
                  data_treinamento_encerrado = ?,
                  observacoes = CONCAT(IFNULL(observacoes, ''), CASE WHEN IFNULL(observacoes, '') = '' THEN '' ELSE ' ' END, ?)
              WHERE id_cliente = ?
-               AND status = 'PENDENTE'"
+               AND UPPER(status) = 'PENDENTE'
+               AND (data_treinamento IS NULL OR data_treinamento < NOW())"
         );
         $stmtTreinamentos->execute([$dataHoraAtual, $observacaoFechamento, $idCliente]);
 
@@ -105,13 +108,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $data_inicio = $_POST['data_inicio'];
     $data_fim = (!empty($_POST['data_fim']) && $_POST['data_fim'] !== '0000-00-00') ? $_POST['data_fim'] : null;
     $data_previsao_encerramento = !empty($_POST['data_previsao_encerramento']) ? $_POST['data_previsao_encerramento'] : null;
-    $id_cliente_api = !empty($_POST['id_cliente_api']) ? $_POST['id_cliente_api'] : null;
+    $id_cliente_api = !empty($_POST['id_cliente_api']) ? trim($_POST['id_cliente_api']) : null;
+    $anexo = trim($_POST['anexo'] ?? '');
+    if (!empty($id_cliente_api) && empty($anexo)) {
+        $anexo = 'https://interno.gestaopro.srv.br/clientes/' . trim($id_cliente_api);
+    } elseif (!empty($anexo)) {
+        $anexo = preg_match('/^https?:\/\//i', $anexo) ? $anexo : 'https://' . ltrim($anexo, '/');
+        $link_para_id = $anexo;
+        $caminho_link = parse_url($link_para_id, PHP_URL_PATH) ?: '';
+        if (preg_match('~/([0-9]+)/?$~', $caminho_link, $id_api_encontrado)) {
+            $id_cliente_api = $id_api_encontrado[1];
+        }
+    }
     $emitir_nf = $_POST['emitir_nf'] ?? 'Não';
     $configurado = $_POST['configurado'] ?? 'Não';
 
     // NOVOS CAMPOS
     $num_licencas = $_POST['num_licencas'] ?? 0;
-    $anexo = $_POST['anexo'] ?? '';
     $chamados = $_POST['chamados'] ?? '';
     
     // CAMPO DE RECURSOS
@@ -518,7 +531,7 @@ body, html {
         </div>
         <div class="d-flex align-items-center gap-2">
             <a href="clientes.php?mostrar_encerrados=<?= $mostrar_encerrados == '1' ? '0' : '1' ?>&view=<?= urlencode($view_mode) ?>&busca=<?= urlencode($busca) ?>&estagio="
-               class="btn btn-outline-secondary btn-modern px-3">
+               class="btn btn-outline-primary btn-modern px-3">
                 <i class="bi <?= $mostrar_encerrados == '1' ? 'bi-eye-slash text-danger' : 'bi-eye text-success' ?>"></i>
                 Ver Ativos/Encerrados
             </a>
@@ -664,6 +677,11 @@ body, html {
                         <div class="d-flex align-items-center mb-1">
                             <i class="bi bi-server me-2 text-muted"></i> <?= htmlspecialchars($c['servidor']) ?>
                         </div>
+                        <?php if (!empty($c['id_cliente_api'])): ?>
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-braces-asterisk me-2 text-muted"></i> ID API: <?= htmlspecialchars($c['id_cliente_api']) ?>
+                        </div>
+                        <?php endif; ?>
                         <?php if (!empty($contatos_por_cliente[$c['id_cliente']])): ?>
                         <div class="d-flex align-items-center">
                             <i class="bi bi-person-lines-fill me-2 text-muted"></i> 
@@ -710,7 +728,7 @@ body, html {
                                     data-inicio="<?= $c['data_inicio'] ?>" 
                                     data-fim="<?= $c['data_fim'] ?>" 
                                     data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
-                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '') ?>" 
+                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                     data-cfg="<?= $c['configurado'] ?>" 
                                     data-licencas="<?= $c['num_licencas'] ?>" 
@@ -823,6 +841,9 @@ body, html {
                                     <td>
                                         <div class="small fw-bold"><?= htmlspecialchars($c['vendedor']) ?></div>
                                         <div class="text-muted small"><?= htmlspecialchars($c['servidor']) ?></div>
+                                        <?php if (!empty($c['id_cliente_api'])): ?>
+                                        <div class="text-muted small"><i class="bi bi-braces-asterisk me-1"></i>ID API: <?= htmlspecialchars($c['id_cliente_api']) ?></div>
+                                        <?php endif; ?>
                                         <?php if (!empty($contatos_por_cliente[$c['id_cliente']])): ?>
                                         <div class="text-muted small"><i class="bi bi-person-lines-fill me-1"></i><?= htmlspecialchars(implode(', ', array_column($contatos_por_cliente[$c['id_cliente']], 'nome'))) ?></div>
                                         <?php endif; ?>
@@ -844,7 +865,7 @@ body, html {
                                                     data-inicio="<?= $c['data_inicio'] ?>" 
                                                     data-fim="<?= $c['data_fim'] ?>" 
                                                     data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
-                                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '') ?>" 
+                                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
                                                     data-obs="<?= htmlspecialchars($c['observacao']) ?>" 
                                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                                     data-cfg="<?= $c['configurado'] ?>" 
@@ -1038,7 +1059,7 @@ body, html {
                                 <label class="form-label small fw-bold text-muted">Recursos Utilizados</label>
                                 <div class="p-2 border rounded bg-white">
                                     <?php 
-                                    $lista_recursos = ['ORÇAMENTO', 'CATÁLOGO', 'GESTAOGPT', 'SERVIÇO/OS', 'PRODUÇÃO/OS', 'PDV'];
+                                    $lista_recursos = ['ORÇAMENTO', 'GESTAOGPT', 'ASSISTÊNCIAPRO', 'PRODUÇÃO/OS', 'PDV'];
                                     foreach($lista_recursos as $rec): ?>
                                     <div class="form-check mb-1">
                                       <input class="form-check-input recurso-checkbox" type="checkbox" name="recursos[]" value="<?= $rec ?>" id="rec_<?= md5($rec) ?>">
@@ -1179,6 +1200,8 @@ body, html {
     function openEditModal(button) {
         const d = button.dataset;
         document.getElementById('modalTitle').innerText = 'Editar Cliente';
+        const idClienteApi = (button.getAttribute('data-id-cliente-api') || d.idClienteApi || '').trim();
+
         document.getElementById('id_cliente').value = d.id;
         document.getElementById('fantasia').value = d.fantasia || '';
         document.getElementById('servidor').value = d.servidor || '';
@@ -1186,11 +1209,12 @@ body, html {
         document.getElementById('data_inicio').value = d.inicio || '';
         document.getElementById('id_data_fim').value = d.fim || '';
         document.getElementById('data_previsao_encerramento').value = d.previsaoEncerramento || '';
-        document.getElementById('id_cliente_api').value = d.idClienteApi || d.api || button.getAttribute('data-id-cliente-api') || '';
+        document.getElementById('id_cliente_api').value = idClienteApi;
         document.getElementById('emitir_nf').value = d.nf || 'Não';
         document.getElementById('configurado').value = d.cfg || 'Não';
         document.getElementById('num_licencas').value = d.licencas || 0;
-        document.getElementById('anexo').value = d.anexo || '';
+        document.getElementById('anexo').value = d.anexo || (idClienteApi ? `https://interno.gestaopro.srv.br/clientes/${idClienteApi}` : '');
+        sincronizarIdClienteApi();
         document.getElementById('chamados').value = d.chamados || '';
         
         // Limpar e preencher checkbox de recursos
@@ -1209,6 +1233,25 @@ body, html {
         const modal = new bootstrap.Modal(document.getElementById('modalCliente'));
         modal.show();
     }
+
+    function sincronizarIdClienteApi() {
+        const link = document.getElementById('anexo').value.trim();
+        const campoId = document.getElementById('id_cliente_api');
+        const linkComProtocolo = /^https?:\/\//i.test(link) ? link : `https://${link}`;
+
+        try {
+            const caminho = new URL(linkComProtocolo).pathname;
+            const resultado = caminho.match(/\/(\d+)\/?$/);
+            if (resultado) {
+                campoId.value = resultado[1];
+            }
+        } catch (erro) {
+            // Mantém o valor existente enquanto o link ainda está incompleto.
+        }
+    }
+
+    document.getElementById('anexo').addEventListener('input', sincronizarIdClienteApi);
+    document.getElementById('anexo').addEventListener('change', sincronizarIdClienteApi);
 
     function toggleConfigurado(valor) {
         const div = document.getElementById('div_configurado');

@@ -119,7 +119,7 @@ if (!function_exists('sincronizarGoogleMeetAutomatico')) {
 
         try {
             $autoloadPath    = __DIR__ . '/vendor/autoload.php';
-            $credentialsPath = __DIR__ . '/credentials.json';
+            $credentialsPath = appGoogleCredentialsPath();
 
             if (!file_exists($autoloadPath) || !file_exists($credentialsPath)) {
                 return ['success' => false, 'message' => 'Integração Google não configurada.'];
