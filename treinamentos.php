@@ -1335,6 +1335,24 @@ foreach ($stmt_perf->fetchAll(PDO::FETCH_ASSOC) as $row) {
     $taxas_clientes[$row['id_cliente']] = $total > 0 ? round(($realizados / $total) * 100, 1) : 0;
 }
 
+// --- AUTONOMIA MEDIA DO SCORECARD (somente modulos utilizados) ---
+$autonomia_clientes = [];
+try {
+    $stmtAutonomia = $pdo->query("SELECT id_cliente,
+                                         ROUND(AVG(CASE
+                                             WHEN uso_real > 0 THEN ((uso_real - operacoes_suporte) / uso_real) * 100
+                                             ELSE 0
+                                         END), 1) AS autonomia_media
+                                  FROM treinamento_efetivo_cliente
+                                  WHERE utiliza_modulo = 1
+                                  GROUP BY id_cliente");
+    foreach ($stmtAutonomia->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $autonomia_clientes[(int) $row['id_cliente']] = (float) $row['autonomia_media'];
+    }
+} catch (Throwable $e) {
+    // A tabela pode ainda nao existir para instalacoes que nao abriram a avaliacao efetiva.
+}
+
 
 include 'header.php';
 ?>
@@ -1422,6 +1440,32 @@ include 'header.php';
         border-radius: 50px;
         text-transform: uppercase;
         letter-spacing: 0.3px;
+    }
+
+    .treinamento-autonomia-completa > td {
+        background-color: #dcfce7 !important;
+        color: #166534 !important;
+        border-top-color: #86efac !important;
+        border-bottom-color: #86efac !important;
+    }
+
+    .treinamento-autonomia-completa .text-dark,
+    .treinamento-autonomia-completa .text-muted,
+    .treinamento-autonomia-completa .fw-bold {
+        color: #166534 !important;
+    }
+
+    [data-theme="dark"] .treinamento-autonomia-completa > td {
+        background-color: rgba(22, 101, 52, 0.35) !important;
+        color: #bbf7d0 !important;
+        border-top-color: rgba(134, 239, 172, 0.45) !important;
+        border-bottom-color: rgba(134, 239, 172, 0.45) !important;
+    }
+
+    [data-theme="dark"] .treinamento-autonomia-completa .text-dark,
+    [data-theme="dark"] .treinamento-autonomia-completa .text-muted,
+    [data-theme="dark"] .treinamento-autonomia-completa .fw-bold {
+        color: #bbf7d0 !important;
     }
 
     /* Page Header - Simplificado */
@@ -1686,8 +1730,10 @@ include 'header.php';
                                 if (!empty($t['contato_telefone'])) {
                                     $contato_exibicao .= " - " . $t['contato_telefone'];
                                 }
+                                $autonomia_media_cliente = $autonomia_clientes[(int) $t['id_cliente']] ?? 0;
+                                $classe_autonomia_completa = $autonomia_media_cliente >= 100 ? ' treinamento-autonomia-completa' : '';
                                 ?>
-                                <tr class="<?= $bg_class ?>">
+                                <tr class="<?= $bg_class . $classe_autonomia_completa ?>">
                                     <td class="ps-4">
                                         <div class="text-dark fw-bold" style="font-size: 0.85rem; line-height: 1.1;">
                                             <?= $data_t ? date('d/m/Y', $data_t) : '---' ?>
@@ -1792,6 +1838,13 @@ include 'header.php';
                                                 <i class="bi bi-journal-text"></i> CRM
                                             </button>
 
+                                            <button class="btn btn-sm btn-outline-info btn-open-effective"
+                                                data-bs-toggle="tooltip" data-bs-title="Abrir avaliação efetiva"
+                                                data-id-cliente="<?= (int) $t['id_cliente'] ?>"
+                                                title="Avaliação efetiva">
+                                                <i class="bi bi-clipboard-check"></i>
+                                            </button>
+
                                             <?php
                                             $nome_contato_wp = trim((string) ($t['contato_nome'] ?? ($t['nome_contato'] ?? $t['cliente_nome'])));
                                             $dt_treino = new DateTime($t['data_treinamento'], new DateTimeZone('America/Sao_Paulo'));
@@ -1832,6 +1885,7 @@ include 'header.php';
                                             <!-- 3. FINALIZAR -->
                                             <?php if (strtoupper($t['status']) == 'PENDENTE'): ?>
                                                 <button class="btn btn-sm btn-outline-success open-finish-modal" data-id="<?= $id_tr ?>"
+                                                    data-id-cliente="<?= (int) $t['id_cliente'] ?>"
                                                     data-cliente="<?= htmlspecialchars($cliente_exibicao) ?>"
                                                     data-tema="<?= htmlspecialchars($t['tema']) ?>" title="Finalizar"
                                                     data-bs-toggle="tooltip">
@@ -2506,9 +2560,14 @@ include 'header.php';
                 <div class="form-text small opacity-75">A marcacao com/sem pendencia e obrigatoria para concluir o
                     treinamento.</div>
             </div>
-            <div class="modal-footer border-0 p-4">
-                <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-success px-4 fw-bold shadow-sm">Encerrar e Salvar</button>
+            <div class="modal-footer border-0 p-4 d-flex justify-content-between align-items-center gap-2">
+                <button type="button" id="btn-abrir-avaliacao-efetiva" class="btn btn-outline-primary px-4 fw-bold">
+                    <i class="bi bi-clipboard-check me-2"></i>Avaliação efetiva
+                </button>
+                <div class="d-flex gap-2 ms-auto">
+                    <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success px-4 fw-bold shadow-sm">Encerrar e Salvar</button>
+                </div>
             </div>
         </form>
     </div>
@@ -2571,7 +2630,10 @@ include 'header.php';
                     </div>
                 </div>
             </div>
-            <div class="modal-footer border-0 p-4">
+            <div class="modal-footer border-0 p-4 d-flex flex-column gap-2">
+                <button type="button" id="btn-abrir-avaliacao-efetiva-crm" class="btn btn-outline-primary w-100 fw-bold">
+                    <i class="bi bi-clipboard-check me-2"></i> Abrir avaliação efetiva
+                </button>
                 <button type="button" class="btn btn-premium w-100" onclick="abrirModalNovaObs()"
                     style="background: linear-gradient(135deg, var(--primary) 0%, #1e293b 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">
                     <i class="bi bi-plus-circle me-2"></i> Adicionar Novo Registro Agora
@@ -3060,15 +3122,41 @@ include 'header.php';
             const id = this.dataset.id;
             const cliente = this.dataset.cliente;
             const tema = this.dataset.tema;
+            const idCliente = this.dataset.idCliente || this.dataset.clienteId || null;
 
             document.getElementById('modal_id_treinamento').value = id;
             document.getElementById('modal_cliente_info').innerText = cliente + " | " + tema;
+            document.getElementById('btn-abrir-avaliacao-efetiva').dataset.idCliente = idCliente || '';
             document.querySelectorAll('.pendencia-opcao').forEach(radio => {
                 radio.checked = false;
             });
 
             new bootstrap.Modal(document.getElementById('modalEncerrar')).show();
         });
+    });
+
+    function abrirAvaliacaoEfetiva(idCliente) {
+        if (!idCliente) return;
+        const url = `treinamento_efetivo.php?id_cliente=${encodeURIComponent(idCliente)}`;
+        window.location.href = url;
+    }
+
+    document.getElementById('btn-abrir-avaliacao-efetiva').addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const idCliente = this.dataset.idCliente;
+        if (!idCliente) return;
+        bootstrap.Modal.getInstance(document.getElementById('modalEncerrar'))?.hide();
+        abrirAvaliacaoEfetiva(idCliente);
+    });
+
+    document.getElementById('btn-abrir-avaliacao-efetiva-crm').addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const idCliente = currentClientIdForObs;
+        if (!idCliente) return;
+        bootstrap.Modal.getInstance(document.getElementById('modalHistoricoCliente'))?.hide();
+        abrirAvaliacaoEfetiva(idCliente);
     });
 
     // 6. Link Manual Google (Ex-Relatorio)
@@ -3236,7 +3324,18 @@ include 'header.php';
         btn.addEventListener('click', function () {
             currentClientIdForObs = this.dataset.id;
             currentClientNameForObs = this.dataset.nome;
+            document.getElementById('btn-abrir-avaliacao-efetiva-crm').dataset.idCliente = currentClientIdForObs;
             abrirModalHistorico(currentClientIdForObs, currentClientNameForObs);
+        });
+    });
+
+    document.querySelectorAll('.btn-open-effective').forEach(btn => {
+        btn.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const idCliente = this.dataset.idCliente;
+            if (!idCliente) return;
+            abrirAvaliacaoEfetiva(idCliente);
         });
     });
 
