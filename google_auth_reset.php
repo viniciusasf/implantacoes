@@ -4,7 +4,7 @@
  * Script auxiliar para resetar e reautorizar o token OAuth do Google Agenda e Drive.
  * Acesse via: http://localhost/implanta/google_auth_reset.php
  */
-session_start();
+require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/google_oauth_token_helper.php';
 
@@ -19,7 +19,7 @@ function buildRedirectUri(): string
 function makeClient(): Google\Client
 {
     $client = new Google\Client();
-    $client->setAuthConfig(__DIR__ . '/credentials.json');
+    $client->setAuthConfig(appGoogleCredentialsPath());
     $client->addScope([Google\Service\Calendar::CALENDAR, Google\Service\Drive::DRIVE_FILE]);
     $client->setAccessType('offline');
     $client->setPrompt('consent');

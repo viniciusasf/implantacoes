@@ -61,6 +61,7 @@ function garantirTabelaTreinamentoEfetivo(PDO $pdo)
         id_avaliacao INT AUTO_INCREMENT PRIMARY KEY,
         id_cliente INT NOT NULL,
         processo VARCHAR(50) NOT NULL,
+        utiliza_modulo TINYINT(1) NOT NULL DEFAULT 1,
         nivel TINYINT(1) NOT NULL DEFAULT 0,
         meta_minima INT NOT NULL DEFAULT 0,
         uso_real INT NOT NULL DEFAULT 0,
@@ -73,6 +74,11 @@ function garantirTabelaTreinamentoEfetivo(PDO $pdo)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 
     $pdo->exec($sql);
+
+    $columnStmt = $pdo->query("SHOW COLUMNS FROM treinamento_efetivo_cliente LIKE 'utiliza_modulo'");
+    if (!$columnStmt->fetch(PDO::FETCH_ASSOC)) {
+        $pdo->exec("ALTER TABLE treinamento_efetivo_cliente ADD COLUMN utiliza_modulo TINYINT(1) NOT NULL DEFAULT 1 AFTER processo");
+    }
 }
 
 function carregarAvaliacaoTreinamentoEfetivo(PDO $pdo, $idCliente, array $processos)
@@ -85,6 +91,7 @@ function carregarAvaliacaoTreinamentoEfetivo(PDO $pdo, $idCliente, array $proces
             'icone' => $processo['icone'],
             'descricao' => $processo['descricao'],
             'regra' => $processo['regra'],
+            'utiliza_modulo' => 1,
             'nivel' => 0,
             'meta_minima' => (int) $processo['meta'],
             'uso_real' => 0,
@@ -94,7 +101,7 @@ function carregarAvaliacaoTreinamentoEfetivo(PDO $pdo, $idCliente, array $proces
         ];
     }
 
-    $stmt = $pdo->prepare("SELECT processo, nivel, meta_minima, uso_real, operacoes_suporte, erros_retrabalho, updated_at
+    $stmt = $pdo->prepare("SELECT processo, utiliza_modulo, nivel, meta_minima, uso_real, operacoes_suporte, erros_retrabalho, updated_at
                            FROM treinamento_efetivo_cliente
                            WHERE id_cliente = ?");
     $stmt->execute([$idCliente]);
@@ -105,6 +112,7 @@ function carregarAvaliacaoTreinamentoEfetivo(PDO $pdo, $idCliente, array $proces
             continue;
         }
 
+        $avaliacoes[$slug]['utiliza_modulo'] = isset($row['utiliza_modulo']) ? (int) $row['utiliza_modulo'] : 1;
         $avaliacoes[$slug]['nivel'] = (int) ($row['nivel'] ?? 0);
         $avaliacoes[$slug]['meta_minima'] = (int) ($row['meta_minima'] ?? $avaliacoes[$slug]['meta_minima']);
         $avaliacoes[$slug]['uso_real'] = (int) ($row['uso_real'] ?? 0);
@@ -136,7 +144,7 @@ if (!$cliente) {
 try {
     garantirTabelaTreinamentoEfetivo($pdo);
 } catch (Throwable $e) {
-    header("Location: treinamentos_cliente.php?id_cliente=" . $id_cliente . "&msg=" . urlencode("Nao foi possivel preparar a estrutura do treinamento efetivo.") . "&tipo=danger");
+    header("Location: treinamento_efetivo.php?id_cliente=" . $id_cliente . "&msg=" . urlencode("Nao foi possivel preparar a estrutura do treinamento efetivo: " . $e->getMessage()) . "&tipo=danger");
     exit;
 }
 
@@ -146,14 +154,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usoPost = $_POST['uso_real'] ?? [];
     $suportePost = $_POST['operacoes_suporte'] ?? [];
     $errosPost = $_POST['erros_retrabalho'] ?? [];
+    $utilizaModuloPost = $_POST['utiliza_modulo'] ?? [];
 
     try {
         $pdo->beginTransaction();
 
         $sql = "INSERT INTO treinamento_efetivo_cliente
-                    (id_cliente, processo, nivel, meta_minima, uso_real, operacoes_suporte, erros_retrabalho)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (id_cliente, processo, utiliza_modulo, nivel, meta_minima, uso_real, operacoes_suporte, erros_retrabalho)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
+                    utiliza_modulo = VALUES(utiliza_modulo),
                     nivel = VALUES(nivel),
                     meta_minima = VALUES(meta_minima),
                     uso_real = VALUES(uso_real),
@@ -163,13 +173,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         foreach ($processos as $processo) {
             $slug = $processo['slug'];
+            $utilizaModulo = isset($utilizaModuloPost[$slug]) ? ((string) $utilizaModuloPost[$slug] === '0' ? 0 : 1) : 1;
             $nivel = max(0, min(4, (int) ($nivelPost[$slug] ?? 0)));
             $meta = max(0, (int) ($metaPost[$slug] ?? $processo['meta']));
             $uso = max(0, (int) ($usoPost[$slug] ?? 0));
             $suporte = max(0, min($uso, (int) ($suportePost[$slug] ?? 0)));
             $erros = max(0, min($uso, (int) ($errosPost[$slug] ?? 0)));
 
-            $stmtSave->execute([$id_cliente, $slug, $nivel, $meta, $uso, $suporte, $erros]);
+            $stmtSave->execute([$id_cliente, $slug, $utilizaModulo, $nivel, $meta, $uso, $suporte, $erros]);
         }
 
         $pdo->commit();
@@ -502,21 +513,33 @@ include 'header.php';
     color: #047857;
 }
 
+.status-na {
+    background: rgba(148, 163, 184, 0.14);
+    color: #475569;
+}
+
 .table-shell {
     overflow-x: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    background: var(--bg-body);
 }
 
 .table-scorecard {
     width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
+    min-width: 760px;
+    border-collapse: collapse;
 }
 
 .table-scorecard th,
 .table-scorecard td {
-    padding: 0.95rem 1rem;
+    padding: 0.9rem 1rem;
     border-bottom: 1px solid var(--border-color);
     vertical-align: middle;
+}
+
+.table-scorecard tbody tr:last-child td {
+    border-bottom: 0;
 }
 
 .table-scorecard th {
@@ -620,7 +643,14 @@ include 'header.php';
             </div>
         </div>
 
-        <div class="row g-4 mb-4">
+        <div class="d-flex justify-content-end mb-3">
+            <button type="button" class="btn btn-outline-secondary btn-sm fw-bold" data-bs-toggle="collapse"
+                data-bs-target="#orientacoes-avaliacao" aria-expanded="false" aria-controls="orientacoes-avaliacao">
+                <i class="bi bi-info-circle me-2"></i>Ver orientacoes
+            </button>
+        </div>
+
+        <div class="row g-4 mb-4 collapse" id="orientacoes-avaliacao">
             <div class="col-xl-4">
                 <div class="guide-card">
                     <h3><i class="bi bi-signpost-split me-2 text-primary"></i>Regua de evolucao</h3>
@@ -740,6 +770,14 @@ include 'header.php';
                         <p class="process-copy"><?= htmlspecialchars($processo['descricao'], ENT_QUOTES, 'UTF-8') ?></p>
                         <div class="process-rule"><?= htmlspecialchars($processo['regra'], ENT_QUOTES, 'UTF-8') ?></div>
 
+                        <div class="field-block mb-3">
+                            <label for="utiliza_<?= $processo['slug'] ?>">Este módulo será utilizado?</label>
+                            <select class="form-select campo-utiliza" id="utiliza_<?= $processo['slug'] ?>" name="utiliza_modulo[<?= htmlspecialchars($processo['slug'], ENT_QUOTES, 'UTF-8') ?>]">
+                                <option value="1" <?= ((int) $avaliacao['utiliza_modulo']) === 1 ? 'selected' : '' ?>>Sim</option>
+                                <option value="0" <?= ((int) $avaliacao['utiliza_modulo']) === 0 ? 'selected' : '' ?>>Não</option>
+                            </select>
+                        </div>
+
                         <div class="process-grid">
                             <div class="field-block">
                                 <label for="nivel_<?= $processo['slug'] ?>">Nivel atual</label>
@@ -818,7 +856,7 @@ include 'header.php';
                         <?php foreach ($processos as $processo):
                             $avaliacao = $avaliacoes[$processo['slug']];
                         ?>
-                            <tr data-row="<?= htmlspecialchars($processo['slug'], ENT_QUOTES, 'UTF-8') ?>">
+                            <tr data-row="<?= htmlspecialchars($processo['slug'], ENT_QUOTES, 'UTF-8') ?>" <?= ((int) $avaliacao['utiliza_modulo']) === 1 ? '' : 'hidden' ?>>
                                 <td><strong><?= htmlspecialchars($processo['titulo'], ENT_QUOTES, 'UTF-8') ?></strong></td>
                                 <td class="row-nivel"><?= (int) $avaliacao['nivel'] ?></td>
                                 <td class="row-uso"><?= (int) $avaliacao['uso_real'] ?>/<?= (int) $avaliacao['meta_minima'] ?></td>
@@ -857,7 +895,10 @@ document.addEventListener('DOMContentLoaded', function () {
         return `${Math.round(value)}%`;
     }
 
-    function getStatusConfig(pronto, score) {
+    function getStatusConfig(pronto, score, aplicavel) {
+        if (!aplicavel) {
+            return { text: 'Nao aplicavel', className: 'status-na' };
+        }
         if (pronto) {
             return { text: 'Pronto para operacao', className: 'status-ready' };
         }
@@ -870,6 +911,41 @@ document.addEventListener('DOMContentLoaded', function () {
     function computeCard(card) {
         const slug = card.dataset.processo;
         const title = card.dataset.titulo;
+        const utilizaModulo = card.querySelector('.campo-utiliza').value === '1';
+        const fields = card.querySelectorAll('input, select');
+
+        fields.forEach(field => {
+            if (field.classList.contains('campo-utiliza')) {
+                return;
+            }
+            field.disabled = !utilizaModulo;
+        });
+
+        const row = document.querySelector(`[data-row="${slug}"]`);
+        if (!utilizaModulo) {
+            const chip = card.querySelector('.status-processo');
+            chip.textContent = 'Nao aplicavel';
+            chip.className = 'status-chip status-na status-processo';
+
+            card.querySelector('.score-processo').textContent = 'N/A';
+            card.querySelector('.mini-progress-bar').style.width = '0%';
+            card.querySelector('.uso-processo').textContent = 'Uso: N/A';
+            card.querySelector('.autonomia-processo').textContent = 'Autonomia: N/A';
+            card.querySelector('.qualidade-processo').textContent = 'Qualidade: N/A';
+
+            if (row) {
+                row.hidden = true;
+                row.querySelector('.row-nivel').textContent = '—';
+                row.querySelector('.row-uso').textContent = 'N/A';
+                row.querySelector('.row-autonomia').textContent = 'N/A';
+                row.querySelector('.row-qualidade').textContent = 'N/A';
+                row.querySelector('.row-score').textContent = 'N/A';
+                row.querySelector('.row-status').textContent = 'Nao aplicavel';
+            }
+
+            return { slug, title, score: 0, autonomia: 0, pronto: true, aplicavel: false };
+        }
+
         const nivel = parseInt(card.querySelector('.campo-nivel').value || '0', 10);
         const meta = Math.max(0, parseInt(card.querySelector('.campo-meta').value || '0', 10));
         const uso = Math.max(0, parseInt(card.querySelector('.campo-uso').value || '0', 10));
@@ -889,7 +965,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const qualidade = uso > 0 ? clamp(((uso - erros) / uso) * 100, 0, 100) : 0;
         const score = (nivelScore * 0.4) + (usoScore * 0.2) + (autonomia * 0.2) + (qualidade * 0.2);
         const pronto = nivel >= 3 && uso >= meta && autonomia >= 80 && qualidade >= 85;
-        const status = getStatusConfig(pronto, score);
+        const status = getStatusConfig(pronto, score, true);
 
         const chip = card.querySelector('.status-processo');
         chip.textContent = status.text;
@@ -901,8 +977,8 @@ document.addEventListener('DOMContentLoaded', function () {
         card.querySelector('.autonomia-processo').textContent = `Autonomia: ${formatPercent(autonomia)}`;
         card.querySelector('.qualidade-processo').textContent = `Qualidade: ${formatPercent(qualidade)}`;
 
-        const row = document.querySelector(`[data-row="${slug}"]`);
         if (row) {
+            row.hidden = false;
             row.querySelector('.row-nivel').textContent = nivel;
             row.querySelector('.row-uso').textContent = `${uso}/${meta}`;
             row.querySelector('.row-autonomia').textContent = formatPercent(autonomia);
@@ -911,44 +987,54 @@ document.addEventListener('DOMContentLoaded', function () {
             row.querySelector('.row-status').textContent = status.text;
         }
 
-        return { slug, title, score, autonomia, pronto };
+        return { slug, title, score, autonomia, pronto, aplicavel: true };
     }
 
     function updateSummary() {
         const results = cards.map(computeCard);
-        const total = results.length;
-        const averageScore = total > 0 ? results.reduce((sum, item) => sum + item.score, 0) / total : 0;
-        const averageAutonomy = total > 0 ? results.reduce((sum, item) => sum + item.autonomia, 0) / total : 0;
-        const readyCount = results.filter(item => item.pronto).length;
+        const aplicaveis = results.filter(item => item.aplicavel);
+        const total = aplicaveis.length;
+        const averageScore = total > 0 ? aplicaveis.reduce((sum, item) => sum + item.score, 0) / total : 0;
+        const averageAutonomy = total > 0 ? aplicaveis.reduce((sum, item) => sum + item.autonomia, 0) / total : 0;
+        const readyCount = aplicaveis.filter(item => item.pronto).length;
 
-        const coreReady = targets.core.every(slug => {
-            const item = results.find(result => result.slug === slug);
+        const coreEligible = targets.core.filter(slug => aplicaveis.some(item => item.slug === slug));
+        const commercialEligible = targets.commercial.filter(slug => aplicaveis.some(item => item.slug === slug));
+
+        const coreReady = coreEligible.length === 0 ? true : coreEligible.every(slug => {
+            const item = aplicaveis.find(result => result.slug === slug);
             return item && item.pronto;
         });
 
-        const commercialReady = targets.commercial.some(slug => {
-            const item = results.find(result => result.slug === slug);
+        const commercialReady = commercialEligible.length === 0 ? true : commercialEligible.some(slug => {
+            const item = aplicaveis.find(result => result.slug === slug);
             return item && item.pronto;
         });
 
         const globalReady = coreReady && commercialReady;
 
-        document.getElementById('score-geral').textContent = formatPercent(averageScore);
-        document.getElementById('processos-prontos').textContent = `${readyCount}/${total}`;
-        document.getElementById('autonomia-media').textContent = formatPercent(averageAutonomy);
-        document.getElementById('status-global').textContent = globalReady ? 'Sim' : 'Nao';
-        document.getElementById('status-global-copy').textContent = globalReady
-            ? 'Todos os obrigatorios estao validados e o fluxo comercial foi testado.'
-            : 'Ainda existem etapas criticas sem validacao suficiente.';
+        document.getElementById('score-geral').textContent = total > 0 ? formatPercent(averageScore) : 'N/A';
+        document.getElementById('processos-prontos').textContent = total > 0 ? `${readyCount}/${total}` : '0/0';
+        document.getElementById('autonomia-media').textContent = total > 0 ? formatPercent(averageAutonomy) : 'N/A';
+        document.getElementById('status-global').textContent = total === 0 ? 'N/A' : (globalReady ? 'Sim' : 'Nao');
+        document.getElementById('status-global-copy').textContent = total === 0
+            ? 'Nenhum módulo está ativo para este cliente.'
+            : (globalReady ? 'Todos os obrigatorios estao validados e o fluxo comercial foi testado.' : 'Ainda existem etapas criticas sem validacao suficiente.');
 
         const fluxoBadge = document.getElementById('fluxo-comercial-badge');
-        fluxoBadge.textContent = commercialReady ? 'Fluxo comercial validado' : 'Fluxo comercial nao validado';
-        fluxoBadge.className = commercialReady
-            ? 'badge bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2 rounded-pill'
-            : 'badge bg-body border text-muted px-3 py-2 rounded-pill';
+        fluxoBadge.textContent = total === 0 ? 'Sem módulos ativos' : (commercialReady ? 'Fluxo comercial validado' : 'Fluxo comercial nao validado');
+        fluxoBadge.className = total === 0
+            ? 'badge bg-body border text-muted px-3 py-2 rounded-pill'
+            : (commercialReady ? 'badge bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2 rounded-pill' : 'badge bg-body border text-muted px-3 py-2 rounded-pill');
 
         const leituraGeral = document.getElementById('leitura-geral');
         const leituraCopy = document.getElementById('leitura-geral-copy');
+
+        if (total === 0) {
+            leituraGeral.textContent = 'Nenhum módulo ativo para este cliente.';
+            leituraCopy.textContent = 'Use o flag “Sim/Não” para marcar os módulos que realmente farão parte do processo.';
+            return;
+        }
 
         if (globalReady) {
             leituraGeral.textContent = 'Cliente pronto para encerrar a implantacao.';
@@ -962,7 +1048,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const criticalGaps = results
+        const criticalGaps = aplicaveis
             .filter(item => (targets.core.includes(item.slug) || targets.commercial.includes(item.slug)) && !item.pronto)
             .slice(0, 2)
             .map(item => item.title);
@@ -982,6 +1068,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('limpar-avaliacao').addEventListener('click', function () {
         cards.forEach(card => {
+            card.querySelector('.campo-utiliza').value = '1';
             card.querySelector('.campo-nivel').value = '0';
             card.querySelector('.campo-uso').value = '0';
             card.querySelector('.campo-suporte').value = '0';

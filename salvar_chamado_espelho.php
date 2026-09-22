@@ -19,9 +19,10 @@ try {
         VALUES 
         (:id, :id_cliente, :fantasia, :status, :tipo, :descricao, :dataprev, :responsavel, NOW(), 0)
         ON DUPLICATE KEY UPDATE 
+        id_cliente_api = VALUES(id_cliente_api),
         status_chamado = VALUES(status_chamado),
         tipo_acompanhamento = VALUES(tipo_acompanhamento),
-        descricao_problema = VALUES(descricao_problema),
+        descricao_problema = IF(CHAR_LENGTH(VALUES(descricao_problema)) >= CHAR_LENGTH(descricao_problema), VALUES(descricao_problema), descricao_problema),
         data_prev_retorno = VALUES(data_prev_retorno),
         responsavel = VALUES(responsavel),
         data_importacao = NOW()

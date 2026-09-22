@@ -88,7 +88,7 @@ function obterConvidadosCliente(PDO $pdo, $idCliente)
 
 try {
     $client = new Google\Client();
-    $client->setAuthConfig('credentials.json');
+    $client->setAuthConfig(appGoogleCredentialsPath());
     $client->addScope(Google\Service\Calendar::CALENDAR);
     $client->setAccessType('offline'); // Essencial para receber o Refresh Token
     $client->setApprovalPrompt('force'); // Força o prompt de consentimento para garantir novo token
