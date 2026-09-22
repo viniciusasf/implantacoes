@@ -34,6 +34,66 @@ garantirTabelaObservacoes($pdo);
 
 
 
+function calcularScoreGeralCliente(PDO $pdo, $idCliente) {
+    static $cache = [];
+    if (isset($cache[$idCliente])) return $cache[$idCliente];
+
+    $processos = [
+        'produtos' => 20,
+        'clientes' => 10,
+        'orcamento' => 3,
+        'pdv' => 5,
+        'boleto' => 2,
+        'nota_fiscal' => 2
+    ];
+
+    $stmt = $pdo->prepare("SELECT processo, utiliza_modulo, nivel, meta_minima, uso_real, operacoes_suporte, erros_retrabalho 
+                           FROM treinamento_efetivo_cliente 
+                           WHERE id_cliente = ?");
+    $stmt->execute([$idCliente]);
+    $avaliacoes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $dbData = [];
+    foreach ($avaliacoes as $row) {
+        $dbData[$row['processo']] = $row;
+    }
+
+    $totalScore = 0;
+    $countAplicavel = 0;
+
+    foreach ($processos as $slug => $defaultMeta) {
+        $utiliza = isset($dbData[$slug]) ? (int)($dbData[$slug]['utiliza_modulo']) : 1;
+        if ($utiliza === 0) continue;
+
+        $nivel = isset($dbData[$slug]) ? (int)$dbData[$slug]['nivel'] : 0;
+        $meta = isset($dbData[$slug]) ? (int)$dbData[$slug]['meta_minima'] : $defaultMeta;
+        $uso = isset($dbData[$slug]) ? (int)$dbData[$slug]['uso_real'] : 0;
+        $suporte = isset($dbData[$slug]) ? (int)$dbData[$slug]['operacoes_suporte'] : 0;
+        $erros = isset($dbData[$slug]) ? (int)$dbData[$slug]['erros_retrabalho'] : 0;
+        
+        $suporte = max(0, min($uso, $suporte));
+        $erros = max(0, min($uso, $erros));
+
+        $nivelScore = ($nivel / 4) * 100;
+        $usoScore = $meta > 0 ? max(0, min(100, ($uso / $meta) * 100)) : 100;
+        $autonomia = $uso > 0 ? max(0, min(100, (($uso - $suporte) / $uso) * 100)) : 0;
+        $qualidade = $uso > 0 ? max(0, min(100, (($uso - $erros) / $uso) * 100)) : 0;
+
+        $score = ($nivelScore * 0.4) + ($usoScore * 0.2) + ($autonomia * 0.2) + ($qualidade * 0.2);
+        
+        $totalScore += $score;
+        $countAplicavel++;
+    }
+
+    $resultado = 'N/A';
+    if ($countAplicavel > 0) {
+        $resultado = round($totalScore / $countAplicavel) . '%';
+    }
+    
+    $cache[$idCliente] = $resultado;
+    return $resultado;
+}
+
 function treinamentosTemColuna(PDO $pdo, $coluna, $forceRefresh = false)
 {
     static $cache = [];
@@ -1456,16 +1516,16 @@ include 'header.php';
     }
 
     [data-theme="dark"] .treinamento-autonomia-completa > td {
-        background-color: rgba(22, 101, 52, 0.35) !important;
-        color: #bbf7d0 !important;
-        border-top-color: rgba(134, 239, 172, 0.45) !important;
-        border-bottom-color: rgba(134, 239, 172, 0.45) !important;
+        background-color: #14532d !important;
+        color: #dcfce7 !important;
+        border-top-color: #4ade80 !important;
+        border-bottom-color: #4ade80 !important;
     }
 
     [data-theme="dark"] .treinamento-autonomia-completa .text-dark,
     [data-theme="dark"] .treinamento-autonomia-completa .text-muted,
     [data-theme="dark"] .treinamento-autonomia-completa .fw-bold {
-        color: #bbf7d0 !important;
+        color: #dcfce7 !important;
     }
 
     /* Page Header - Simplificado */
@@ -1685,6 +1745,7 @@ include 'header.php';
                             <th>Cliente</th>
                             <th class="col-recursos">Recursos utilizados</th>
                             <th class="col-mini text-center" title="Performance de Realização (Ativos)">Taxa Histórica</th>
+                            <th class="col-mini text-center" title="Score Geral de Treinamento Efetivo">Score Geral</th>
                             <th class="col-mini text-center">Link Chamados</th>
                             <th class="col-mini">Serv.</th>
                             <th>Contato</th>
@@ -1788,6 +1849,18 @@ include 'header.php';
                                             </div>
                                             <span class="small fw-bold text-muted"><?= $taxa ?>%</span>
                                         </div>
+                                    </td>
+
+                                    <td class="text-center align-middle">
+                                        <?php
+                                            $scoreGeral = calcularScoreGeralCliente($pdo, $t['id_cliente']);
+                                            $scoreNum = (int)$scoreGeral;
+                                            $scoreColor = 'text-success';
+                                            if ($scoreGeral === 'N/A') $scoreColor = 'text-muted';
+                                            elseif ($scoreNum < 45) $scoreColor = 'text-danger';
+                                            elseif ($scoreNum < 80) $scoreColor = 'text-warning';
+                                        ?>
+                                        <div class="fw-bold <?= $scoreColor ?>"><?= htmlspecialchars($scoreGeral) ?></div>
                                     </td>
 
                                     <td class="text-center col-mini">
