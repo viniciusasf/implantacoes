@@ -131,6 +131,20 @@ $stmt_map = $pdo->query("SELECT id_cliente, id_cliente_api, servidor FROM client
                     <tbody id="tbody-chamados"></tbody>
                 </table>
             </div>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 px-3 py-3 border-top">
+                <div class="d-flex align-items-center gap-2">
+                    <label for="tamanho-pagina" class="small text-muted mb-0">Por página</label>
+                    <select id="tamanho-pagina" class="form-select form-select-sm" style="width:auto">
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <span id="lbl-paginacao" class="small text-muted"></span>
+                </div>
+                <nav aria-label="Paginação dos chamados">
+                    <ul id="controles-paginacao" class="pagination pagination-sm mb-0"></ul>
+                </nav>
+            </div>
         </div>
     </div>
 </div>
@@ -222,7 +236,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
     const MAPA_SERVIDOR_LOCAL = <?php echo json_encode($mapa_servidor_local); ?>;
 
 (function(){
-    let todos=[], sortCol='DATAPREV_RETORNO', sortAsc=true;
+    let todos=[], sortCol='DATAPREV_RETORNO', sortAsc=true, paginaAtual=1, tamanhoPagina=50;
 
     function parseDateOnly(iso){
         if(!iso) return null;
@@ -440,7 +454,23 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
 
     function renderTabela(lista){
         const tbody=document.getElementById('tbody-chamados');
+        const totalPaginas = Math.max(1, Math.ceil(lista.length / tamanhoPagina));
+        paginaAtual = Math.min(paginaAtual, totalPaginas);
+        const inicio = (paginaAtual - 1) * tamanhoPagina;
+        const fim = Math.min(inicio + tamanhoPagina, lista.length);
         document.getElementById('lbl-contagem').textContent=lista.length+' registro'+(lista.length!==1?'s':'');
+        document.getElementById('lbl-paginacao').textContent=lista.length ? `${inicio + 1}–${fim} de ${lista.length}` : '0 registros';
+        const controles = document.getElementById('controles-paginacao');
+        const itemPagina = (label, pagina, disabled = false, active = false, aria = '') =>
+            `<li class="page-item${disabled?' disabled':''}${active?' active':''}"><button type="button" class="page-link" data-pagina="${pagina}" ${disabled?'disabled':''}${aria?` aria-label="${aria}"`:''}>${label}</button></li>`;
+        let htmlPaginacao = itemPagina('&laquo;', paginaAtual - 1, paginaAtual === 1, false, 'Página anterior');
+        const primeiraPagina = Math.max(1, paginaAtual - 2);
+        const ultimaPagina = Math.min(totalPaginas, primeiraPagina + 4);
+        for (let pagina = primeiraPagina; pagina <= ultimaPagina; pagina++) {
+            htmlPaginacao += itemPagina(pagina, pagina, false, pagina === paginaAtual);
+        }
+        htmlPaginacao += itemPagina('&raquo;', paginaAtual + 1, paginaAtual === totalPaginas, false, 'Próxima página');
+        controles.innerHTML = htmlPaginacao;
         if(!lista.length){
             tbody.innerHTML='<tr><td colspan="8" class="text-center py-5" style="color:var(--text-muted)">Nenhum chamado encontrado.</td></tr>';
             return;
@@ -478,7 +508,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             if(typeof va==='number') return sortAsc?va-vb:vb-va;
             return sortAsc?String(va).localeCompare(String(vb),'pt-BR'):String(vb).localeCompare(String(va),'pt-BR');
         });
-        tbody.innerHTML=lista.map(r=>{
+        tbody.innerHTML=lista.slice(inicio, fim).map(r=>{
             const idChamado = parseInt(r.ID);
             const rowClasses = [];
             if (isRetornoAtrasado(r.DATAPREV_RETORNO)) rowClasses.push('linha-atrasada');
@@ -536,7 +566,8 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         }).join('');
     }
 
-    function aplicarFiltros(){
+    function aplicarFiltros(preservarPagina=false){
+        if(!preservarPagina) paginaAtual=1;
         const busca=document.getElementById('filtro-busca').value.toLowerCase();
         const statusList = Array.from(document.querySelectorAll('.filtro-status-cb:checked')).map(cb => cb.value);
         const tipoList   = Array.from(document.querySelectorAll('.filtro-tipo-cb:checked')).map(cb => cb.value);
@@ -612,6 +643,19 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         carregarDados(true);
     });
 
+    document.getElementById('controles-paginacao').addEventListener('click', function(e){
+        const botao = e.target.closest('[data-pagina]');
+        if (!botao || botao.disabled) return;
+        paginaAtual = parseInt(botao.dataset.pagina, 10) || 1;
+        aplicarFiltros(true);
+    });
+
+    document.getElementById('tamanho-pagina').addEventListener('change', function(){
+        tamanhoPagina=parseInt(this.value,10)||50;
+        paginaAtual=1;
+        aplicarFiltros();
+    });
+
     ['filtro-busca','filtro-responsavel'].forEach(id=>{
         document.getElementById(id).addEventListener('input',aplicarFiltros);
         document.getElementById(id).addEventListener('change',aplicarFiltros);
@@ -649,9 +693,22 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             const modalTitulo = document.getElementById('modal-descricao-titulo');
             const modalTexto = document.getElementById('modal-descricao-texto');
             const descricaoCompleta = btnDescricao.getAttribute('data-descricao') || '—';
-            modalTitulo.textContent = 'Descrição do chamado #' + btnDescricao.dataset.id;
+            const idChamado = btnDescricao.dataset.id;
+            modalTitulo.textContent = 'Descrição do chamado #' + idChamado;
             modalTexto.textContent = descricaoCompleta;
             bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-descricao-chamado')).show();
+            if (descricaoCompleta.length >= 500) {
+                fetch('api_gestaopro_bridge.php?endpoint=chamados&detalhe=' + encodeURIComponent(idChamado))
+                    .then(response => response.json())
+                    .then(resposta => {
+                        const chamado = resposta.sucesso && resposta.dados ? resposta.dados.chamado : null;
+                        const descricao = chamado && (chamado.DESCRICAO || chamado.descricao);
+                        if (descricao && modalTitulo.textContent.endsWith('#' + idChamado)) {
+                            modalTexto.textContent = descricao;
+                        }
+                    })
+                    .catch(() => {});
+            }
             return;
         }
 

@@ -1,6 +1,11 @@
 <?php
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/app_config.php';
+// A ponte pode levar vários segundos consultando a API externa. Libere a sessão
+// para que as outras requisições AJAX da mesma página não fiquem bloqueadas.
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+}
 /**
  * bridge: API GestãoPro → JSON
  * Suporta múltiplos endpoints: implantacoes | chamados
@@ -80,24 +85,62 @@ function mesclarChamados(array $chamados): array {
     return array_values($porId);
 }
 
-function completarDescricoesChamados(array $chamados, string $cookieStr): array {
-    foreach ($chamados as &$chamado) {
-        $descricao = (string) ($chamado['DESCRICAO'] ?? '');
-        $id = $chamado['ID'] ?? null;
-        if ($id === null || strlen($descricao) < 500) continue;
+/** Busca todas as páginas de um endpoint que retorna uma coleção paginada. */
+function buscarTodasPaginas(string $path, string $cookieStr, string $chavePrincipal): ?array {
+    $separador = strpos($path, '?') === false ? '?' : '&';
+    $primeira = buscarEndpoint($path, $cookieStr);
+    if (!$primeira || !isset($primeira[$chavePrincipal]) || !is_array($primeira[$chavePrincipal])) {
+        return $primeira;
+    }
 
-        $detalhe = buscarEndpoint('/api/chamados/' . rawurlencode((string) $id), $cookieStr);
-        if (!$detalhe) continue;
+    $registros = $primeira[$chavePrincipal];
+    // Sem totalPages não há um fim confiável para a consulta. Algumas consultas
+    // por status continuam retornando páginas indefinidamente e estouram o tempo do PHP.
+    if (!isset($primeira['totalPages'])) {
+        return $primeira;
+    }
 
-        $detalheChamado = $detalhe['chamado'] ?? $detalhe;
-        $descricaoCompleta = (string) ($detalheChamado['DESCRICAO'] ?? $detalheChamado['descricao'] ?? '');
-        if (strlen($descricaoCompleta) > strlen($descricao)) {
-            $chamado['DESCRICAO'] = $descricaoCompleta;
+    $vistos = [];
+    foreach ($registros as $registro) {
+        $chave = is_array($registro) && isset($registro['ID'])
+            ? 'id:' . (string) $registro['ID']
+            : 'row:' . hash('sha256', serialize($registro));
+        $vistos[$chave] = true;
+    }
+    $totalPaginas = max(1, (int) $primeira['totalPages']);
+    $pagina = max(1, (int) ($primeira['page'] ?? 1));
+
+    $tamanhoLote = 8;
+    for ($inicioPagina = $pagina + 1; $inicioPagina <= $totalPaginas; $inicioPagina += $tamanhoLote) {
+        $fimPagina = min($totalPaginas, $inicioPagina + $tamanhoLote - 1);
+        $paths = [];
+        for ($numeroPagina = $inicioPagina; $numeroPagina <= $fimPagina; $numeroPagina++) {
+            $paths[$numeroPagina] = $path . $separador . 'page=' . $numeroPagina;
+        }
+        $paginas = buscarEndpointsEmLote($paths, $cookieStr);
+
+        foreach ($paginas as $numeroPagina => $dadosPagina) {
+            if (!$dadosPagina || !isset($dadosPagina[$chavePrincipal]) || !is_array($dadosPagina[$chavePrincipal])) {
+                throw new RuntimeException("Falha ao carregar a página {$numeroPagina} de {$path}.");
+            }
+            $itensPagina = $dadosPagina[$chavePrincipal];
+            if (!$itensPagina) continue;
+            foreach ($itensPagina as $registro) {
+                $chave = is_array($registro) && isset($registro['ID'])
+                    ? 'id:' . (string) $registro['ID']
+                    : 'row:' . hash('sha256', serialize($registro));
+                if (isset($vistos[$chave])) continue;
+                $vistos[$chave] = true;
+                $registros[] = $registro;
+            }
         }
     }
-    unset($chamado);
 
-    return $chamados;
+    $primeira[$chavePrincipal] = $registros;
+    $primeira['count'] = count($registros);
+    $primeira['page'] = 'all';
+    $primeira['totalPages'] = 1;
+    return $primeira;
 }
 
 // ── Descobrir Next-Action ID dinamicamente ───────────────────────────────────
@@ -221,8 +264,66 @@ function buscarEndpoint(string $path, string $cookieStr): ?array {
     return is_array($dados) ? $dados : null;
 }
 
+/** Busca várias páginas em paralelo para manter a atualização dentro do tempo do PHP. */
+function buscarEndpointsEmLote(array $paths, string $cookieStr): array {
+    $multi = curl_multi_init();
+    $handles = [];
+    foreach ($paths as $chave => $path) {
+        $ch = curl_init(GP_BASE_URL . $path);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 25,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_COOKIE => $cookieStr,
+            CURLOPT_HTTPHEADER => ['Accept: application/json'],
+        ]);
+        curl_multi_add_handle($multi, $ch);
+        $handles[$chave] = $ch;
+    }
+
+    do {
+        $status = curl_multi_exec($multi, $ativos);
+        if ($ativos) curl_multi_select($multi, 1.0);
+    } while ($ativos && $status === CURLM_OK);
+
+    $resultados = [];
+    foreach ($handles as $chave => $ch) {
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $response = curl_multi_getcontent($ch);
+        $dados = $httpCode === 200 && $response ? json_decode($response, true) : null;
+        $resultados[$chave] = is_array($dados) ? $dados : null;
+        curl_multi_remove_handle($multi, $ch);
+        curl_close($ch);
+    }
+    curl_multi_close($multi);
+    return $resultados;
+}
+
 // ── Fluxo principal ───────────────────────────────────────────────────────────
 try {
+    if ($base_endpoint === 'chamados' && isset($_GET['detalhe'])) {
+        $idDetalhe = filter_var($_GET['detalhe'], FILTER_VALIDATE_INT);
+        if (!$idDetalhe || $idDetalhe < 1) {
+            http_response_code(400);
+            echo json_encode(['sucesso' => false, 'erro' => 'ID do chamado inválido.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $cookieDetalhe = fazerLogin();
+        if (!$cookieDetalhe) {
+            http_response_code(401);
+            echo json_encode(['sucesso' => false, 'erro' => 'Falha na autenticação com a API GestãoPro.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $detalhe = buscarEndpoint('/api/chamados/' . rawurlencode((string) $idDetalhe), $cookieDetalhe);
+        if (!$detalhe) {
+            http_response_code(502);
+            echo json_encode(['sucesso' => false, 'erro' => 'Não foi possível carregar os detalhes do chamado.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        echo json_encode(['sucesso' => true, 'dados' => ['chamado' => $detalhe['chamado'] ?? $detalhe]], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     $somenteCache = !empty($_GET['somente_cache']);
 
     // Invalidar cache se solicitado
@@ -232,8 +333,7 @@ try {
 
     // 1. Cache
     $cached = lerCache($cacheFile, $somenteCache);
-    $cacheDescricoesCompletas = $cached['__descricoes_completas'] ?? false;
-    if ($cached !== null && ($base_endpoint !== 'chamados' || $cacheDescricoesCompletas)) {
+    if ($cached !== null && ($base_endpoint !== 'chamados' || isset($cached['chamados']))) {
         echo json_encode([
             'sucesso'   => true,
             'origem'    => 'cache',
@@ -263,7 +363,9 @@ try {
     }
 
     // 3. Buscar dados (com suporte a paginação para chamados)
-    $dados = buscarEndpoint("/api/{$endpoint}", $cookieStr);
+    $dados = $base_endpoint === 'chamados'
+        ? buscarTodasPaginas("/api/{$endpoint}", $cookieStr, 'chamados')
+        : buscarEndpoint("/api/{$endpoint}", $cookieStr);
     if (!$dados) {
         http_response_code(502);
         echo json_encode(['sucesso' => false, 'erro' => "Endpoint /api/{$endpoint} retornou resposta inválida."]);
@@ -271,7 +373,7 @@ try {
     }
 
     // Se o endpoint retorna dados paginados, buscar todas as páginas
-    if (isset($dados['totalPages']) && $dados['totalPages'] > 1) {
+    if ($base_endpoint !== 'chamados' && isset($dados['totalPages']) && $dados['totalPages'] > 1) {
         // Identificar a chave dos dados (ex: 'chamados', 'clientes')
         $chavesDados = array_diff(array_keys($dados), ['total', 'page', 'count', 'totalPages']);
         $chavePrincipal = reset($chavesDados);
@@ -301,7 +403,7 @@ try {
     if ($base_endpoint === 'chamados') {
         foreach (['Resolvido', 'Enviado Atualização'] as $status) {
             $query = http_build_query(['status' => $status]);
-            $dadosStatus = buscarEndpoint('/api/chamados?' . $query, $cookieStr);
+            $dadosStatus = buscarTodasPaginas('/api/chamados?' . $query, $cookieStr, 'chamados');
 
             if ($dadosStatus && isset($dadosStatus['chamados']) && is_array($dadosStatus['chamados'])) {
                 $dados['chamados'] = mesclarChamados(array_merge($dados['chamados'] ?? [], $dadosStatus['chamados']));
@@ -309,8 +411,7 @@ try {
         }
 
         $dados['count'] = count($dados['chamados'] ?? []);
-        $dados['chamados'] = completarDescricoesChamados($dados['chamados'], $cookieStr);
-        $dados['__descricoes_completas'] = true;
+        $dados['__lista_completa'] = true;
     }
 
     // 4. Cache + retorno
