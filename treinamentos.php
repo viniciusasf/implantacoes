@@ -1318,7 +1318,7 @@ $offset = ($pagina - 1) * $por_pagina;
 
 // Query principal com contagem para paginação
 $sql_base = "
-    SELECT t.*, c.fantasia as cliente_nome, c.status as cliente_status, c.data_fim as cliente_data_fim, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim, c.recursos, c.anexo, c.chamados
+    SELECT t.*, c.fantasia as cliente_nome, c.status as cliente_status, c.data_fim as cliente_data_fim, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim, c.recursos, c.anexo, c.chamados, c.link_videos
     FROM treinamentos t
     LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
     LEFT JOIN contatos co ON t.id_contato = co.id_contato
@@ -1902,6 +1902,15 @@ include 'header.php';
                                     <td class="text-end pe-3 col-mini">
                                         <?php $id_tr = (int) $t['id_treinamento']; ?>
                                         <div class="d-flex justify-content-end gap-1 flex-nowrap">
+                                            <?php if (!empty($t['link_videos'])): ?>
+                                                <a href="<?= htmlspecialchars($t['link_videos'], ENT_QUOTES, 'UTF-8') ?>"
+                                                   target="_blank" rel="noopener noreferrer"
+                                                   class="btn btn-sm btn-outline-danger"
+                                                   data-bs-toggle="tooltip" data-bs-title="Vídeos Passo a Passo"
+                                                   aria-label="Vídeos Passo a Passo">
+                                                    <i class="bi bi-youtube"></i>
+                                                </a>
+                                            <?php endif; ?>
                                             <!-- 1. HISTÓRICO (CRM) -->
                                             <button class="btn btn-sm btn-outline-primary btn-history-client"
                                                 data-bs-toggle="tooltip" data-bs-title="Ver Histórico/CRM"
