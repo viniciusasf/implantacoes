@@ -161,6 +161,40 @@ try {
       }
     }
 
+    $descricaoAtual = trim((string) ($chamado['descricao_problema'] ?? ''));
+    try {
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+        $host = $_SERVER['HTTP_HOST'];
+        $baseDir = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
+        $apiDetalheUrl = $protocol . $host . $baseDir . '/api_gestaopro_bridge.php?endpoint=chamados&detalhe=' . urlencode((string) $idChamado);
+        $context = stream_context_create([
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+            ],
+        ]);
+        $apiDetalheResponse = @file_get_contents($apiDetalheUrl, false, $context);
+        if ($apiDetalheResponse !== false) {
+            $apiDetalheData = json_decode($apiDetalheResponse, true);
+            $descricaoDetalhe = '';
+            if (!empty($apiDetalheData['sucesso']) && !empty($apiDetalheData['dados'])) {
+                $dadosChamado = $apiDetalheData['dados']['chamado'] ?? $apiDetalheData['dados'];
+                if (is_array($dadosChamado)) {
+                    $descricaoDetalhe = trim((string) ($dadosChamado['DESCRICAO'] ?? $dadosChamado['descricao'] ?? ''));
+                }
+            }
+
+            if ($descricaoDetalhe !== '' && (mb_strlen($descricaoAtual, 'UTF-8') < mb_strlen($descricaoDetalhe, 'UTF-8'))) {
+                $chamado['descricao_problema'] = $descricaoDetalhe;
+
+                $stmtDescricao = $pdo->prepare('UPDATE chamados_espelho_local SET descricao_problema = ? WHERE id_chamado_api = ?');
+                $stmtDescricao->execute([$descricaoDetalhe, $idChamado]);
+            }
+        }
+    } catch (Throwable $e) {
+        // Mantém o valor local se a API de detalhes falhar.
+    }
+
     $html = gerarHtmlComprovanteChamado($chamado);
 
     // O comprovante passa a ser persistido como HTML, preservando o CSS do layout.
@@ -316,12 +350,17 @@ function sanitizeFolderName(string $text): string
 
 function sanitizeFilePart(string $text): string
 {
-  $text = trim($text);
-  $text = preg_replace('/[\\x00-\\x1f\\x7f]/u', '', $text);
-  $text = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text) ?: $text;
-  $text = preg_replace('/[^a-zA-Z0-9]+/', '_', $text);
-  $text = trim($text, '_');
-  return $text !== '' ? $text : 'sem_tipo';
+    $text = trim((string) $text);
+    if ($text === '') {
+        return 'sem_tipo';
+    }
+
+    $text = preg_replace('/[\x00-\x1f\x7f]+/u', '', $text);
+    $text = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text) ?: $text;
+    $text = preg_replace('/[^A-Za-z0-9]+/u', '', $text);
+    $text = trim($text);
+
+    return $text !== '' ? $text : 'sem_tipo';
 }
 
 function gerarHtmlComprovanteChamado(array $chamado)

@@ -94,8 +94,22 @@ function driveSanitizeQueryValue($value)
     return str_replace("'", "\\'", $value);
 }
 
+/**
+ * Normaliza o nome da pasta para busca/criação consistente
+ * Remove espaços extras no início/fim e substitui múltiplos espaços por um único
+ */
+function driveNormalizeFolderName($folderName)
+{
+    $folderName = trim($folderName);
+    $folderName = preg_replace('/\s+/', ' ', $folderName);
+    return $folderName;
+}
+
 function driveFindOrCreateFolder(Google\Service\Drive $service, $folderName = 'PDF Chamados', $parentId = null)
 {
+    // Normaliza o nome para evitar duplicatas por diferenças de espaçamento
+    $folderName = driveNormalizeFolderName($folderName);
+
     $query = "mimeType='application/vnd.google-apps.folder' and name='" . driveSanitizeQueryValue($folderName) . "' and trashed=false";
     if ($parentId) {
         $query .= " and '" . driveSanitizeQueryValue($parentId) . "' in parents";

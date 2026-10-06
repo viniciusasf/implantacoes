@@ -16,7 +16,7 @@ function treinamentoEfetivoDefinicoes()
             'slug' => 'clientes',
             'titulo' => 'Clientes',
             'icone' => 'bi-people',
-            'descricao' => 'Mede o cadastro de clientes reais com os campos minimos necessarios para venda e faturamento.',
+            'descricao' => 'Mede o cadastro de clientes reais com os campos minimos necessarios.',
             'meta' => 10,
             'regra' => 'Cadastro completo de clientes reais, incluindo dados de contato e fiscais quando aplicavel.'
         ],
@@ -48,7 +48,7 @@ function treinamentoEfetivoDefinicoes()
             'slug' => 'nota_fiscal',
             'titulo' => 'Nota fiscal',
             'icone' => 'bi-file-earmark-medical',
-            'descricao' => 'Valida emissao fiscal correta, incluindo tratamento de rejeicoes simples e conferencia do XML ou DANFE.',
+            'descricao' => 'Valida emissao fiscal correta, incluindo tratamento de rejeicoes simples.',
             'meta' => 2,
             'regra' => 'Processo concluido apenas quando a nota sair corretamente e o cliente entender correcoes basicas.'
         ],
@@ -202,6 +202,63 @@ foreach ($avaliacoes as $avaliacao) {
     if (!empty($avaliacao['updated_at']) && ($ultimaAtualizacao === null || strtotime($avaliacao['updated_at']) > strtotime($ultimaAtualizacao))) {
         $ultimaAtualizacao = $avaliacao['updated_at'];
     }
+}
+
+// Exportacao do documento de validacao para conferencia do cliente.
+if (isset($_GET['exportar']) && $_GET['exportar'] === 'pdf') {
+    require_once __DIR__ . '/vendor/autoload.php';
+
+    $esc = static function ($valor) {
+        return htmlspecialchars((string) $valor, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    };
+    $nivelTexto = [0 => 'Nao treinado', 1 => 'Com ajuda total', 2 => 'Com pouca ajuda', 3 => 'Executa sozinho', 4 => 'Executa com consistencia'];
+    $linhas = '';
+    $totalAplicaveis = 0;
+    $prontos = 0;
+    foreach ($processos as $processo) {
+        $a = $avaliacoes[$processo['slug']];
+        $aplicavel = (int) $a['utiliza_modulo'] === 1;
+        if ($aplicavel) {
+            $totalAplicaveis++;
+            $autonomia = $a['uso_real'] > 0 ? max(0, 100 * (1 - ($a['operacoes_suporte'] / $a['uso_real']))) : 0;
+            $qualidade = $a['uso_real'] > 0 ? max(0, 100 * (1 - ($a['erros_retrabalho'] / $a['uso_real']))) : 0;
+            $pronto = $a['nivel'] >= 3 && $a['uso_real'] >= $a['meta_minima'] && $autonomia >= 80 && $qualidade >= 85;
+            if ($pronto) $prontos++;
+            $status = $pronto ? 'Pronto para validacao' : 'Em desenvolvimento';
+            $dados = 'Nivel ' . ($nivelTexto[$a['nivel']] ?? $nivelTexto[0]) . "\nUso real: " . (int)$a['uso_real'] . ' / meta ' . (int)$a['meta_minima'] . "\nOperacoes com suporte: " . (int)$a['operacoes_suporte'] . ' | Erros/retrabalho: ' . (int)$a['erros_retrabalho'];
+        } else {
+            $status = 'Nao se aplica';
+            $dados = 'Modulo/processo nao utilizado pelo cliente.';
+        }
+        $linhas .= '<tr><td><strong>' . $esc($processo['titulo']) . '</strong><br><small>' . $esc($processo['descricao']) . '</small></td><td>' . nl2br($esc($dados)) . '</td><td>' . $esc($status) . '</td></tr>';
+    }
+    $dataEmissao = date('d/m/Y');
+    $clienteNome = $esc($cliente['fantasia']);
+    $statusGeral = $totalAplicaveis > 0 && $prontos === $totalAplicaveis ? 'Pronto para encerramento da implantacao' : 'Validacao em andamento — revisar os processos pendentes';
+    $html = '<!doctype html><html><head><meta charset="UTF-8"><style>
+        @page{margin:32px 36px}body{font-family:DejaVu Sans,sans-serif;color:#172033;font-size:10px;line-height:1.45}
+        .top{border-bottom:3px solid #2457c5;padding-bottom:12px;margin-bottom:18px}.brand{color:#2457c5;font-size:10px;font-weight:bold;letter-spacing:1.4px;text-transform:uppercase}
+        h1{font-size:22px;margin:5px 0 2px}h2{font-size:13px;color:#173b80;margin:20px 0 8px}.meta{color:#526078}
+        .summary{background:#f1f5fb;border:1px solid #d9e2f0;padding:10px 12px;margin:14px 0}.summary strong{color:#173b80}
+        table{width:100%;border-collapse:collapse}th{background:#eaf0fa;text-align:left;color:#173b80;font-size:9px}th,td{border:1px solid #d8dfeb;padding:7px;vertical-align:top}small{color:#58657a;font-size:8px}
+        .checks{margin:7px 0 15px}.sign{margin-top:36px;width:100%}.sign td{border:0;width:50%;padding:8px 18px 0 0}.line{border-top:1px solid #344054;height:21px}.note{font-size:8px;color:#667085;margin-top:14px}.footer{position:fixed;bottom:-15px;color:#667085;font-size:8px;width:100%;text-align:center}
+    </style></head><body><div class="top"><div class="brand">Implanta | Documento de validacao</div><h1>Validacao da implantacao e dos processos</h1><div class="meta">Cliente: <strong>' . $clienteNome . '</strong> &nbsp; | &nbsp; ID: #' . (int)$cliente['id_cliente'] . ' &nbsp; | &nbsp; Emissao: ' . $dataEmissao . '</div></div>
+    <p>Este documento registra os processos configurados e praticados durante a implantacao. O cliente deve conferir as informacoes, validar os fluxos aplicaveis e registrar eventuais ajustes antes do aceite.</p>
+    <div class="summary"><strong>Resumo atual:</strong> ' . $prontos . ' de ' . $totalAplicaveis . ' processos aplicaveis prontos. ' . $esc($statusGeral) . '<br><strong>Servidor:</strong> ' . $esc($cliente['servidor'] ?: 'Nao informado') . ' &nbsp; | &nbsp; <strong>Responsavel comercial:</strong> ' . $esc($cliente['vendedor'] ?: 'Nao informado') . '</div>
+    <h2>Processos e criterios de validacao</h2><table><thead><tr><th style="width:30%">Processo / escopo</th><th style="width:45%">Registro e criterios</th><th style="width:25%">Situacao</th></tr></thead><tbody>' . $linhas . '</tbody></table>
+    <h2>Declaracao do cliente</h2><p>Declaro que revisei os processos aplicaveis descritos neste documento e que as informacoes correspondem ao fluxo apresentado para minha operacao. Os itens pendentes ou ressalvas estao registrados abaixo.</p>
+    <div class="checks">☐ Validado sem ressalvas &nbsp;&nbsp;&nbsp; ☐ Validado com ressalvas registradas &nbsp;&nbsp;&nbsp; ☐ Necessita ajustes antes do aceite</div>
+    <p><strong>Ressalvas, ajustes solicitados ou observacoes:</strong></p><div style="height:65px;border:1px solid #d8dfeb"></div>
+    <table class="sign"><tr><td><div class="line"></div>Nome e assinatura do representante do cliente<br>Data: ____/____/________</td><td><div class="line"></div>Responsavel pela implantacao<br>Data: ____/____/________</td></tr></table>
+    <p class="note">O aceite confirma a revisao dos processos descritos e nao substitui homologacoes fiscais, financeiras ou tecnicas exigidas por terceiros. Processos marcados como "Nao se aplica" foram indicados como nao utilizados na avaliacao atual.</p><div class="footer">Documento gerado em ' . $dataEmissao . ' | Validacao da implantacao</div></body></html>';
+
+    $dompdf = new \Dompdf\Dompdf(['isRemoteEnabled' => false, 'defaultFont' => 'DejaVu Sans']);
+    $dompdf->loadHtml($html, 'UTF-8');
+    $dompdf->setPaper('A4', 'portrait');
+    $dompdf->render();
+    $nomeArquivo = 'validacao-implantacao-' . preg_replace('/[^A-Za-z0-9_-]/', '-', iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', (string)$cliente['fantasia']) ?: 'cliente') . '.pdf';
+    $dompdf->stream($nomeArquivo, ['Attachment' => true]);
+    exit;
 }
 
 $flashMensagem = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
@@ -593,8 +650,11 @@ include 'header.php';
                 </div>
             </div>
             <div class="action-strip">
-                <a href="treinamentos_cliente.php?id_cliente=<?= (int) $id_cliente ?>" class="btn btn-outline-light px-4 fw-bold">
-                    <i class="bi bi-arrow-left me-2"></i>Voltar para ficha
+                <a href="treinamentos.php" class="btn btn-outline-light px-4 fw-bold">
+                    <i class="bi bi-arrow-left me-2"></i>Voltar
+                </a>
+                <a href="treinamento_efetivo.php?id_cliente=<?= (int) $id_cliente ?>&amp;exportar=pdf" class="btn btn-outline-light px-4 fw-bold">
+                    <i class="bi bi-file-earmark-pdf me-2"></i>Exportar validação PDF
                 </a>
                 <button type="submit" form="form-treinamento-efetivo" class="btn btn-warning px-4 fw-bold text-dark">
                     <i class="bi bi-save me-2"></i>Salvar avaliacao

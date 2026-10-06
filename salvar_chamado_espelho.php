@@ -3,6 +3,27 @@ require_once 'config.php';
 
 header('Content-Type: application/json');
 
+function garantirDescricaoLongText(PDO $pdo): void
+{
+    try {
+        $col = $pdo->query("SHOW COLUMNS FROM chamados_espelho_local LIKE 'descricao_problema'")->fetch(PDO::FETCH_ASSOC);
+
+        if (!$col) {
+            $pdo->exec("ALTER TABLE chamados_espelho_local ADD COLUMN descricao_problema LONGTEXT NULL AFTER tipo_acompanhamento");
+            return;
+        }
+
+        $tipo = strtoupper((string) $col['Type']);
+        $temTextoLongo = preg_match('/(TEXT|MEDIUMTEXT|LONGTEXT)/i', $tipo) === 1;
+
+        if (!$temTextoLongo) {
+            $pdo->exec("ALTER TABLE chamados_espelho_local MODIFY descricao_problema LONGTEXT NULL");
+        }
+    } catch (Throwable $e) {
+        // Ignora falha de schema para preservar o fluxo principal.
+    }
+}
+
 $json = file_get_contents('php://input');
 $dados = json_decode($json, true);
 
@@ -12,6 +33,8 @@ if (!$dados || empty($dados['id'])) {
 }
 
 try {
+    garantirDescricaoLongText($pdo);
+
     // Insere ou Atualiza o chamado no banco local
     $stmt = $pdo->prepare("
         INSERT INTO chamados_espelho_local 
@@ -34,7 +57,7 @@ try {
         ':fantasia' => $dados['fantasia'] ?? '',
         ':status' => $dados['status'] ?? '',
         ':tipo' => $dados['tipo'] ?? '',
-        ':descricao' => $dados['descricao'] ?? '',
+        ':descricao' => (string) ($dados['descricao'] ?? ''),
         ':dataprev' => (!empty($dados['dataprev'])) ? $dados['dataprev'] : null,
         ':responsavel' => $dados['responsavel'] ?? ''
     ]);

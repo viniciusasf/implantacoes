@@ -155,6 +155,9 @@ ordenarChamadosPorPrevRetorno($agrupadosEnviados);
                                     <button class="btn btn-sm btn-outline-primary fw-bold btn-gerar-html" data-cliente="<?= htmlspecialchars($cliente) ?>" data-chamados='<?= htmlspecialchars(json_encode($lista), ENT_QUOTES, 'UTF-8') ?>'>
                                         <i class="bi bi-file-earmark-code"></i> Gerar HTML WhatsApp
                                     </button>
+                                    <button class="btn btn-sm btn-outline-secondary fw-bold btn-gerar-txt" data-cliente="<?= htmlspecialchars($cliente) ?>" data-chamados='<?= htmlspecialchars(json_encode($lista), ENT_QUOTES, 'UTF-8') ?>'>
+                                        <i class="bi bi-file-earmark-text"></i> Gerar TXT WhatsApp
+                                    </button>
                                     <button class="btn btn-sm btn-success fw-bold btn-marcar-enviado" data-ids='<?= json_encode(array_column($lista, 'id_chamado_api')) ?>'>
                                         <i class="bi bi-check-all"></i> Marcar como Enviado
                                     </button>
@@ -482,6 +485,17 @@ document.addEventListener('DOMContentLoaded', function() {
             return `<div class="dashboard-card st-${classe}"><span class="count">${lista.length}</span><span class="status-name">${escapeHTML(status)}</span></div>`;
         }).join('');
 
+        const gruposTipo = {};
+        chamadosFiltrados.forEach(ch => {
+            const tipo = String(ch.tipo_acompanhamento || 'Não informado').trim();
+            if (!gruposTipo[tipo]) gruposTipo[tipo] = 0;
+            gruposTipo[tipo]++;
+        });
+
+        const resumoTipo = Object.entries(gruposTipo).map(([tipo, count]) => {
+            return `<div class="dashboard-card st-primary"><span class="count">${count}</span><span class="status-name">${escapeHTML(tipo)}</span></div>`;
+        }).join('');
+
         const secoes = Object.entries(grupos).map(([status, lista]) => {
             const classe = classeStatus(status);
             const cards = lista.map(ch => {
@@ -510,7 +524,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <style>
 :root{--primary:#3b5bdb;--primary-soft:#edf2ff;--primary-dark:#364fc7;--success:#0ca678;--success-soft:#e6fcf5;--success-dark:#087f5b;--warning:#f08c00;--warning-soft:#fff9db;--warning-dark:#e67700;--danger:#e03131;--danger-soft:#fff5f5;--danger-dark:#c92a2a;--neutral:#495057;--neutral-soft:#f1f3f5;--neutral-dark:#343a40;--text:#1a1b1e;--text-secondary:#5c5f66;--text-muted:#868e96;--border:#e9ecef;--bg:#f1f3f5;--card-bg:#fff;--radius:16px;--radius-sm:10px;--shadow:0 1px 2px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.04)}
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;padding:40px 20px 60px;min-height:100vh}.wrapper{max-width:720px;margin:0 auto}.accent-bar{height:4px;background:linear-gradient(90deg,var(--primary),var(--success));border-radius:0 0 4px 4px;margin:-40px auto 32px;max-width:720px}.header{text-align:center;margin-bottom:28px}.header-logo{display:block;max-width:140px;height:auto;margin:0 auto 24px;filter:drop-shadow(0 2px 8px rgba(0,0,0,.06))}.header h1{font-size:1.65rem;font-weight:700;margin-bottom:6px}.client-name{font-size:.95rem;font-weight:500;color:var(--text-secondary)}.generated-at{font-size:.8rem;color:var(--text-muted);margin-top:4px}.intro{background:linear-gradient(135deg,#e6fcf5,#d3f9d8);border:1px solid rgba(12,166,120,.15);border-radius:var(--radius);padding:18px 22px;margin-bottom:28px;display:flex;align-items:flex-start;gap:14px}.intro-icon{flex-shrink:0;width:36px;height:36px;background:var(--success);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px}.intro-text{font-size:.95rem;color:var(--success-dark);line-height:1.55;padding-top:6px}.dashboard{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:32px}.dashboard-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:16px}.dashboard-grid{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.dashboard-card{border-radius:var(--radius-sm);padding:8px 12px;display:flex;align-items:baseline;gap:6px;border:1px solid var(--border);flex:0 0 auto}.dashboard-card .count{font-size:1rem;font-weight:700}.status-name{font-size:.68rem;font-weight:600;text-transform:uppercase;line-height:1.3}.st-success{background:var(--success-soft);border-color:rgba(12,166,120,.2)}.st-success .count,.st-success.section-title{color:var(--success-dark)}.st-warning{background:var(--warning-soft);border-color:rgba(240,140,0,.2)}.st-warning .count,.st-warning.section-title{color:var(--warning-dark)}.st-danger{background:var(--danger-soft);border-color:rgba(224,49,49,.2)}.st-danger .count,.st-danger.section-title{color:var(--danger-dark)}.st-primary{background:var(--primary-soft);border-color:rgba(59,91,219,.2)}.st-primary .count,.st-primary.section-title{color:var(--primary-dark)}.st-neutral{background:var(--neutral-soft);border-color:rgba(73,80,87,.2)}.st-neutral .count,.st-neutral.section-title{color:var(--neutral-dark)}.status-group{margin-bottom:32px}.section-title{display:flex;align-items:center;gap:10px;font-size:1.05rem;font-weight:700;margin-bottom:14px;padding:0 2px}.badge-count{font-size:.68rem;font-weight:700;background:rgba(0,0,0,.06);border-radius:100px;padding:2px 8px}.tickets{display:flex;flex-direction:column;gap:16px}.ticket{background:var(--card-bg);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);overflow:hidden}.ticket-header{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fafbfc,#fff);flex-wrap:wrap;gap:10px}.ticket-id{display:flex;align-items:center;gap:10px}.ticket-number{font-size:1.05rem;font-weight:700}.ticket-status{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;padding:3px 8px;border-radius:100px}.ticket-meta{display:flex;align-items:center;flex-wrap:wrap;justify-content:flex-end}.ticket-type{font-size:11px;font-weight:500;color:var(--primary);background:var(--primary-soft);padding:3px 9px;border-radius:100px;white-space:nowrap;line-height:1.4;margin-left:8px}.ticket-prev{color:var(--success-dark);background:var(--success-soft)}.ticket-body{padding:18px 22px 22px}.ticket-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px}.ticket-description{font-size:.925rem;color:var(--text-secondary);line-height:1.65;white-space:pre-line}.ticket-description a{color:var(--primary);text-decoration:none;word-break:break-all}.footer-note{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:22px 24px;text-align:center;box-shadow:var(--shadow)}.footer-note p{font-size:.9rem;color:var(--text-secondary);margin-bottom:6px}.footer-note .highlight{font-weight:600;color:var(--text);font-size:.95rem}@media(max-width:540px){body{padding:24px 14px 40px}.header h1{font-size:1.35rem}.ticket-header{flex-direction:column;align-items:flex-start}.ticket-header,.ticket-body{padding-left:16px;padding-right:16px}.intro{padding:14px 16px}}
- </style></head><body><div class="accent-bar"></div><div class="wrapper"><header class="header">${logoImg}<h1>Relatório de Chamados</h1><p class="client-name">${escapeHTML(clienteNome)}</p><p class="generated-at">Gerado em ${dataGeracao}</p></header><section class="dashboard"><div class="dashboard-title">Resumo Geral</div><div class="dashboard-grid">${resumo}</div></section>${secoes}<footer class="footer-note"><p class="highlight">Total de chamados: ${chamadosFiltrados.length}</p><p>Aguarde, novas instruções serão enviadas.</p><p class="highlight">Qualquer dúvida, estou à disposição! 🚀</p></footer></div></body></html>`;
+  </style></head><body><div class="accent-bar"></div><div class="wrapper"><header class="header">${logoImg}<h1>Relatório de Chamados</h1><p class="client-name">${escapeHTML(clienteNome)}</p><p class="generated-at">Gerado em ${dataGeracao}</p></header><section class="dashboard"><div class="dashboard-title">Resumo por Status</div><div class="dashboard-grid" style="margin-bottom: 20px;">${resumo}</div><div class="dashboard-title">Resumo por Tipo</div><div class="dashboard-grid">${resumoTipo}</div></section>${secoes}<footer class="footer-note"><p class="highlight">Total de chamados: ${chamadosFiltrados.length}</p><p>Aguarde, novas instruções serão enviadas.</p><p class="highlight">Qualquer dúvida, estou à disposição! 🚀</p></footer></div></body></html>`;
     }
 
     // Função legada mantida para compatibilidade interna
@@ -759,6 +773,58 @@ document.addEventListener('DOMContentLoaded', function() {
             setTimeout(() => {
                 document.body.removeChild(a);
                 window.URL.revokeObjectURL(urlObj);
+            }, 100);
+        });
+    });
+
+    // Gera um TXT simples para leitura e análise em outros sistemas.
+    document.querySelectorAll('.btn-gerar-txt').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const cliente = this.dataset.cliente;
+            const chamados = JSON.parse(this.dataset.chamados);
+            const formatarData = valor => {
+                const texto = String(valor || '').trim();
+                if (!texto || texto === '0000-00-00 00:00:00' || texto === '1970-01-01 00:00:00') return 'Não informada';
+                const data = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (data) return `${data[3]}/${data[2]}/${data[1]}`;
+                return texto;
+            };
+            const linhas = [
+                'RELATÓRIO DE CHAMADOS',
+                `Cliente: ${cliente || 'Cliente'}`,
+                `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+                `Total de chamados: ${chamados.length}`,
+                '',
+                'CHAMADOS'
+            ];
+
+            chamados.forEach((ch, indice) => {
+                const descricao = limparTextoTecnico(ch.descricao_problema) || 'Sem descrição';
+                linhas.push(
+                    '',
+                    `CHAMADO ${indice + 1}`,
+                    `ID: ${ch.id_chamado_api || 'Não informado'}`,
+                    `Status: ${(ch.status_chamado || 'Sem status').trim()}`,
+                    `Previsão de retorno: ${formatarData(ch.data_prev_retorno)}`,
+                    `Tipo: ${(ch.tipo_acompanhamento || 'Não informado').trim()}`,
+                    'Descrição:',
+                    descricao.trim(),
+                    '---'
+                );
+            });
+
+            const nomeArquivo = (cliente || 'cliente').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            // BOM UTF-8 preserva acentos em editores e ferramentas de importação.
+            const blob = new Blob(['\uFEFF' + linhas.join('\r\n')], { type: 'text/plain;charset=utf-8' });
+            const urlObj = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = urlObj;
+            a.download = `listagem_chamados_${nomeArquivo}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(urlObj);
             }, 100);
         });
     });

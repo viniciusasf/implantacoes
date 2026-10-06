@@ -614,7 +614,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             window.chamadosLocais = respLocais.sucesso ? (respLocais.dados || {}) : {};
 
             const statusValores = [...new Set(lista.map(r => normalizarStatus(r.CHAMADO_STATUS)).filter(Boolean))].sort();
-            const statusPadrao = ['Aguardando Desenvolvimento', 'Aguardando Testes', 'Enviado Atualização', 'Aguardando Autorização', 'Aguardando Fila'];
+            const statusPadrao = ['Aguardando Desenvolvimento', 'Aguardando Testes', 'Aguardando Autorização', 'Aguardando Fila'];
             populaDropdownCheckboxes('filtro-status-menu', 'filtro-status-label', 'filtro-status-cb', statusValores, statusPadrao, 'Todos os status');
             populaDropdownCheckboxes('filtro-tipo-menu', 'filtro-tipo-label', 'filtro-tipo-cb', lista.map(r=>r.TIPOACOMP), [], 'Todos os tipos');
             populaSelect('filtro-responsavel', lista.map(r=>r.RESPONSAVEL), 'VINICIUS');
@@ -674,6 +674,21 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         });
     });
 
+    async function obterDescricaoCompletaDoChamado(id) {
+        try {
+            const response = await fetch('api_gestaopro_bridge.php?endpoint=chamados&detalhe=' + encodeURIComponent(id));
+            const resposta = await response.json();
+            const chamado = resposta && resposta.sucesso && resposta.dados ? resposta.dados.chamado : null;
+            const descricao = chamado && (chamado.DESCRICAO ?? chamado.descricao);
+            if (typeof descricao === 'string' && descricao.trim() !== '') {
+                return descricao;
+            }
+        } catch (_) {
+            // Fallback para a descrição local em caso de falha na API.
+        }
+        return null;
+    }
+
     function copiarTextoAreaTransferencia(text, message = 'Copiado para a área de transferência!'){
         if (!text) return;
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -687,7 +702,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         prompt('Copie este link manualmente:', text);
     }
 
-    document.addEventListener('click', function(event){
+    document.addEventListener('click', async function(event){
         const btnDescricao = event.target.closest('.btn-ver-descricao');
         if (btnDescricao) {
             const modalTitulo = document.getElementById('modal-descricao-titulo');
@@ -717,26 +732,29 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             const id = parseInt(btnSalvar.dataset.id);
             const chamado = todos.find(c => c.ID == id);
             if (!chamado) return;
-            
-            const payload = {
-                id: chamado.ID,
-                id_cliente: chamado.ID_CLIENTE,
-                fantasia: chamado.FANTASIA || chamado.RAZAOSOCIAL,
-                status: chamado.CHAMADO_STATUS,
-                tipo: chamado.TIPOACOMP,
-                descricao: chamado.DESCRICAO,
-                dataprev: chamado.DATAPREV_RETORNO,
-                responsavel: chamado.RESPONSAVEL
-            };
 
             btnSalvar.disabled = true;
             btnSalvar.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
 
-            fetch('salvar_chamado_espelho.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            }).then(r=>r.json()).then(res=>{
+            try {
+                const descricaoCompleta = await obterDescricaoCompletaDoChamado(id);
+                const payload = {
+                    id: chamado.ID,
+                    id_cliente: chamado.ID_CLIENTE,
+                    fantasia: chamado.FANTASIA || chamado.RAZAOSOCIAL,
+                    status: chamado.CHAMADO_STATUS,
+                    tipo: chamado.TIPOACOMP,
+                    descricao: descricaoCompleta || chamado.DESCRICAO || '',
+                    dataprev: chamado.DATAPREV_RETORNO,
+                    responsavel: chamado.RESPONSAVEL
+                };
+
+                const res = await fetch('salvar_chamado_espelho.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).then(r => r.json());
+
                 if (res.sucesso) {
                     window.chamadosLocais[id] = 0;
                     btnSalvar.outerHTML = `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm btn-action" title="Salvo Localmente"><i class="bi bi-cloud-check"></i> SALVO</button>`;
@@ -745,7 +763,12 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
                     btnSalvar.disabled = false;
                     btnSalvar.innerHTML = '<i class="bi bi-cloud-arrow-down"></i> SALVAR';
                 }
-            });
+            } catch (err) {
+                console.error(err);
+                alert('Erro ao salvar localmente.');
+                btnSalvar.disabled = false;
+                btnSalvar.innerHTML = '<i class="bi bi-cloud-arrow-down"></i> SALVAR';
+            }
             return;
         }
 
@@ -759,60 +782,58 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             btnComprovante.disabled = true;
             btnComprovante.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
 
-            const payload = {
-                id: chamado.ID,
-                id_cliente: chamado.ID_CLIENTE,
-                fantasia: chamado.FANTASIA || chamado.RAZAOSOCIAL,
-                status: chamado.CHAMADO_STATUS,
-                tipo: chamado.TIPOACOMP,
-                descricao: chamado.DESCRICAO,
-                dataprev: chamado.DATAPREV_RETORNO,
-                responsavel: chamado.RESPONSAVEL
-            };
-            const p = fetch('salvar_chamado_espelho.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            }).then(r=>r.json()).then(res=>{
-                if (!res.sucesso) {
+            try {
+                const descricaoCompleta = await obterDescricaoCompletaDoChamado(id);
+                const payload = {
+                    id: chamado.ID,
+                    id_cliente: chamado.ID_CLIENTE,
+                    fantasia: chamado.FANTASIA || chamado.RAZAOSOCIAL,
+                    status: chamado.CHAMADO_STATUS,
+                    tipo: chamado.TIPOACOMP,
+                    descricao: descricaoCompleta || chamado.DESCRICAO || '',
+                    dataprev: chamado.DATAPREV_RETORNO,
+                    responsavel: chamado.RESPONSAVEL
+                };
+
+                const saveRes = await fetch('salvar_chamado_espelho.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).then(r => r.json());
+
+                if (!saveRes.sucesso) {
                     throw new Error('Falha ao salvar chamado antes de gerar comprovante.');
                 }
+
                 if(!window.chamadosLocais) window.chamadosLocais = {};
                 window.chamadosLocais[id] = 0;
                 const btnSalvar = document.querySelector(`.btn-salvar-local[data-id="${id}"]`);
                 if (btnSalvar) {
                     btnSalvar.outerHTML = `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm btn-action" title="Salvo Localmente"><i class="bi bi-cloud-check"></i> SALVO</button>`;
                 }
-            });
 
-            p.then(() => fetch('gerar_pdf_chamado.php?id=' + encodeURIComponent(id)))
-                .then(async response => {
-                    const rawText = await response.text();
-                    let res = null;
+                const response = await fetch('gerar_pdf_chamado.php?id=' + encodeURIComponent(id));
+                const rawText = await response.text();
+                let res = null;
 
-                    try {
-                        res = rawText ? JSON.parse(rawText) : null;
-                    } catch (e) {
-                        throw new Error(rawText || 'Resposta do servidor inválida.');
-                    }
+                try {
+                    res = rawText ? JSON.parse(rawText) : null;
+                } catch (e) {
+                    throw new Error(rawText || 'Resposta do servidor inválida.');
+                }
 
-                    if (!response.ok || !res || res.sucesso === false) {
-                        throw new Error(res && res.erro ? res.erro : 'Erro ao gerar comprovante.');
-                    }
+                if (!response.ok || !res || res.sucesso === false) {
+                    throw new Error(res && res.erro ? res.erro : 'Erro ao gerar comprovante.');
+                }
 
-                    return res;
-                })
-                .then(() => {
-                    copiarTextoAreaTransferencia(`#${id}`, 'Número do chamado copiado!');
-                })
-                .catch(err => {
-                    console.error(err);
-                    alert(err && err.message ? err.message : 'Erro de rede ao gerar link do comprovante.');
-                })
-                .finally(() => {
-                    btnComprovante.disabled = false;
-                    btnComprovante.innerHTML = originalHtml;
-                });
+                copiarTextoAreaTransferencia(`#${id}`, 'Número do chamado copiado!');
+            } catch (err) {
+                console.error(err);
+                alert(err && err.message ? err.message : 'Erro de rede ao gerar link do comprovante.');
+            } finally {
+                btnComprovante.disabled = false;
+                btnComprovante.innerHTML = originalHtml;
+            }
             return;
         }
 

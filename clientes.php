@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 date_default_timezone_set('America/Sao_Paulo');
 require_once 'config.php';
 
@@ -101,6 +101,8 @@ if (isset($_GET['delete'])) {
 
 // 4. Lógica para Adicionar/Editar - ATUALIZADO COM NOVOS CAMPOS
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $abrirFichaContato = ($_POST['abrir_ficha_contato'] ?? '') === '1';
+    $clienteNovoId = null;
     $fantasia = $_POST['fantasia'];
     $servidor = $_POST['servidor'];
     $vendedor = $_POST['vendedor'];
@@ -126,6 +128,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // NOVOS CAMPOS
     $num_licencas = $_POST['num_licencas'] ?? 0;
     $chamados = $_POST['chamados'] ?? '';
+    $link_videos = trim($_POST['link_videos'] ?? '');
+    $serial = trim($_POST['serial'] ?? '');
+    $cnpj = trim($_POST['cnpj'] ?? '');
+    $link_drive = trim($_POST['link_drive'] ?? '');
     
     // CAMPO DE RECURSOS
     $recursos_arr = $_POST['recursos'] ?? [];
@@ -137,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $pdo->prepare("UPDATE `clientes` SET 
                 `fantasia`=?, `servidor`=?, `vendedor`=?, `telefone_ddd`=?, 
                 `data_inicio`=?, `data_fim`=?, `data_previsao_encerramento`=?, `id_cliente_api`=?, 
-                `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=?
+                `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=?, `link_videos`=?, `serial`=?, `cnpj`=?
                 WHERE `id_cliente`=?");
             $stmt->execute([
                 $fantasia,
@@ -154,15 +160,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $anexo,
                 $chamados,
                 $recursos,
+                $link_videos,
+                $serial ?: null,
+                $cnpj ?: null,
                 $_POST['id_cliente']
             ]);
+            // Atualiza link_drive apenas se veio preenchido no POST (não sobrescreve se vazio)
+            if ($link_drive !== '') {
+                $stmtDrive = $pdo->prepare("UPDATE `clientes` SET `link_drive`=? WHERE `id_cliente`=?");
+                $stmtDrive->execute([$link_drive, $_POST['id_cliente']]);
+            }
         } else {
             // INSERT com novos campos
             $stmt = $pdo->prepare("INSERT INTO `clientes` (
                 `fantasia`, `servidor`, `vendedor`, `telefone_ddd`, 
                 `data_inicio`, `data_fim`, `data_previsao_encerramento`, `id_cliente_api`,
-                `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`, `link_videos`, `serial`, `cnpj`, `link_drive`
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([
                 $fantasia,
                 $servidor,
@@ -178,7 +192,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $anexo,
                 $chamados,
                 $recursos,
+                $link_videos,
+                $serial ?: null,
+                $cnpj ?: null,
+                $link_drive ?: null,
             ]);
+            $clienteNovoId = (int) $pdo->lastInsertId();
         }
     } catch (PDOException $e) {
         if ($e->getCode() === '23000' && $id_cliente_api !== null) {
@@ -194,6 +213,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit;
         }
         throw $e;
+    }
+
+    $destinoContatoSolicitado = $abrirFichaContato
+        || (($_POST['redirect_to'] ?? '') === 'contatos.php');
+    if ($destinoContatoSolicitado && $clienteNovoId) {
+        header('Location: contatos.php?novo=1&id_cliente=' . $clienteNovoId);
+        exit;
     }
 
     $redirect_to = 'clientes.php';
@@ -708,7 +734,7 @@ body, html {
 
                     <div class="mt-auto">
                         <div class="d-flex justify-content-between small mb-1">
-                            <span class="text-muted">Início: <?= date('d/m/Y', strtotime($c['data_inicio'])) ?></span>
+                            <span class="text-muted">Ini­cio: <?= date('d/m/Y', strtotime($c['data_inicio'])) ?></span>
                             <?php if (!empty($c['data_previsao_encerramento']) && $c['data_previsao_encerramento'] !== '0000-00-00'): ?>
                             <span class="text-warning">Previsão: <?= date('d/m/Y', strtotime($c['data_previsao_encerramento'])) ?></span>
                             <?php endif; ?>
@@ -751,6 +777,7 @@ body, html {
                                     data-anexo="<?= $c['anexo'] ?>" 
                                     data-chamados="<?= htmlspecialchars($c['chamados'] ?? '') ?>" 
                                     data-recursos="<?= htmlspecialchars($c['recursos'] ?? '') ?>" 
+                                    data-link-videos="<?= htmlspecialchars($c['link_videos'] ?? '') ?>" 
                                     title="Editar" onclick="openEditModal(this)">
                                 <i class="bi bi-pencil"></i>
                             </button>
@@ -787,6 +814,12 @@ body, html {
                                     <a href="<?= htmlspecialchars($link_chamados) ?>" 
                                        target="_blank" class="btn btn-sm btn-action chamados" title="Link Chamados">
                                         <i class="bi bi-headset"></i>
+                                    </a>
+                                <?php endif; ?>
+                                <?php if (!empty($c['link_videos'])): ?>
+                                    <a href="<?= htmlspecialchars($c['link_videos']) ?>" 
+                                       target="_blank" class="btn btn-sm btn-action gestaopro" style="color: #ea4335; background: rgba(234, 67, 53, 0.15); border-color: rgba(234, 67, 53, 0.3);" title="Vídeos Passo a Passo">
+                                        <i class="bi bi-youtube"></i>
                                     </a>
                                 <?php endif; ?>
                             <?php if (!$cliente_encerrado): ?>
@@ -889,6 +922,7 @@ body, html {
                                                     data-anexo="<?= $c['anexo'] ?>" 
                                                     data-chamados="<?= htmlspecialchars($c['chamados'] ?? '') ?>" 
                                                     data-recursos="<?= htmlspecialchars($c['recursos'] ?? '') ?>" 
+                                                    data-link-videos="<?= htmlspecialchars($c['link_videos'] ?? '') ?>" 
                                                     onclick="openEditModal(this)">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
@@ -927,6 +961,12 @@ body, html {
                                                     <i class="bi bi-headset"></i>
                                                 </a>
                                             <?php endif; ?>
+                                            <?php if (!empty($c['link_videos'])): ?>
+                                                <a href="<?= htmlspecialchars($c['link_videos']) ?>" 
+                                                   target="_blank" class="btn btn-sm btn-action gestaopro" style="color: #ea4335; background: rgba(234, 67, 53, 0.15); border-color: rgba(234, 67, 53, 0.3);" title="Vídeos Passo a Passo">
+                                                    <i class="bi bi-youtube"></i>
+                                                </a>
+                                            <?php endif; ?>
                                             <a href="?delete=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>" class="btn btn-sm btn-action delete" onclick="return confirm('Excluir cliente?')">
                                                 <i class="bi bi-trash"></i>
                                             </a>
@@ -946,7 +986,9 @@ body, html {
 <!-- Modal de Cliente Premium -->
 <div class="modal fade" id="modalCliente" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
-        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden;">
+        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 24px;">
+            <input type="hidden" name="abrir_ficha_contato" value="1">
+            <input type="hidden" name="redirect_to" value="contatos.php">
             <div class="modal-header p-4 border-0 bg-main text-white position-relative">
                 <div class="position-relative z-1">
                     <h5 class="modal-title fw-bold d-flex align-items-center" id="modalTitle">
@@ -958,7 +1000,7 @@ body, html {
                 <div class="position-absolute top-0 start-0 w-100 h-100" style="background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);"></div>
             </div>
 
-            <div class="modal-body p-4 bg-light">
+            <div class="modal-body p-4 bg-light" style="max-height: 70vh; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable;">
                 <input type="hidden" name="id_cliente" id="id_cliente">
                 
                 <div class="dashboard-section p-4 mb-4">
@@ -1031,7 +1073,7 @@ body, html {
                                     </select>
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label small fw-bold text-muted">Link GestãoPRO</label>
+                                    <label class="form-label small fw-bold text-muted">Link GestãooPRO</label>
                                     <div class="input-group mb-1">
                                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-link-45deg text-primary"></i></span>
                                         <input type="text" name="anexo" id="anexo" class="form-control border-start-0 ps-0" placeholder="Ex: https://interno.gestaopro.srv.br/clientes/5190">
@@ -1062,6 +1104,14 @@ body, html {
                                         <input type="number" name="id_cliente_api" id="id_cliente_api" class="form-control border-start-0 ps-0" placeholder="Ex: 5698">
                                     </div>
                                     <small class="text-muted" style="font-size: 0.7rem;">ID utilizado para vincular os dados da API ao sistema local.</small>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label small fw-bold text-muted">Link Vi­deos Passo a Passo</label>
+                                    <div class="input-group mb-1">
+                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-play-circle text-danger"></i></span>
+                                        <input type="url" name="link_videos" id="link_videos" class="form-control border-start-0 ps-0" placeholder="Ex: https://drive.google.com/drive/folders/...">
+                                    </div>
+                                    <small class="text-muted" style="font-size: 0.7rem;">Link da pasta no Google Drive com os vi­deos didaticos.</small>
                                 </div>
                             </div>
                         </div>
@@ -1138,7 +1188,7 @@ body, html {
                         <option value="FATURAMENTO/NF">FATURAMENTO/NF</option>
                         <option value="FINANCEIRO/CAIXA">FINANCEIRO/CAIXA</option>
                         <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
-                        <option value="RELATÓRIOS">RELATÓRIOS</option>
+                        <option value="RELATORIOS">RELATORIOS</option>
                         <option value="ATENDIMENTOS">ATENDIMENTOS</option>
                         <option value="DUVIDAS">DUVIDAS</option>
                     </select>
@@ -1232,6 +1282,7 @@ body, html {
         document.getElementById('anexo').value = d.anexo || (idClienteApi ? `https://interno.gestaopro.srv.br/clientes/${idClienteApi}` : '');
         sincronizarIdClienteApi();
         document.getElementById('chamados').value = d.chamados || '';
+        document.getElementById('link_videos').value = d.linkVideos || '';
         
         // Limpar e preencher checkbox de recursos
         document.querySelectorAll('.recurso-checkbox').forEach(cb => cb.checked = false);

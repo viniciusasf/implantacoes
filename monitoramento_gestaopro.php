@@ -154,9 +154,10 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
                         <tr style="background:var(--bg-body);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">
                             <th class="px-4 py-3 sortable" data-col="FANTASIA">Cliente <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3 sortable" data-col="STATUS_IMPLANTACAO">Status <i class="bi bi-chevron-expand ms-1"></i></th>
-                            <th class="py-3 sortable" data-col="TIPOACOMP">TIPOACOMP <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3 sortable" data-col="SERIAL">Serial <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3 sortable" data-col="VENDEDOR">Consultor <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3 sortable" data-col="SERVIDOR">Servidor <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3 sortable" data-col="NUM_LICENCAS" style="text-align:center">Licenças <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3" style="text-align:center">Chamados</th>
                             <th class="py-3" style="text-align:center">Ações</th>
                         </tr>
@@ -314,7 +315,7 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
     function renderTabela(lista){
         const tbody = document.getElementById('tbody-gp');
         if (!lista.length){
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-5" style="color:var(--text-muted)">Nenhum registro encontrado.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-5" style="color:var(--text-muted)">Nenhum registro encontrado.</td></tr>`;
             document.getElementById('lbl-contagem').textContent = '0 registros';
             return;
         }
@@ -344,10 +345,10 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
             const vendedorCliente = r.VENDEDOR || r.RESPONSAVEL || '';
             const servidorCliente = r.SERVIDOR || r.SERVIDORNUVEM || '';
             const dataInicioPadrao = r.DATA_INICIO || r.INICIO || r.DATAINICIO || '';
-            const licencasCliente = r.NUM_LICENCAS || r.LICENCAS || r.NUM_LICENCIAS || 0;
+            const licencasCliente = r.NUMLIC || r.NUMLIC_GPT || r.NUM_LICENCAS || r.LICENCAS || r.NUM_LICENCIAS || 0;
 
 
-            const btnCadastrar = !isVinculado ? `<button class="btn btn-sm btn-success fw-bold btn-cadastrar-gp" data-nome="${escapeHtmlAttribute(nomeCliente)}" data-vendedor="${escapeHtmlAttribute(vendedorCliente)}" data-servidor="${escapeHtmlAttribute(servidorCliente)}" data-id-cliente-api="${escapeHtmlAttribute(String(r.ID_CLIENTE || ''))}" data-data-inicio="${escapeHtmlAttribute(dataInicioPadrao)}" data-licencas="${escapeHtmlAttribute(String(licencasCliente))}" title="Cadastrar cliente local">
+            const btnCadastrar = !isVinculado ? `<button class="btn btn-sm btn-success fw-bold btn-cadastrar-gp" data-nome="${escapeHtmlAttribute(nomeCliente)}" data-vendedor="${escapeHtmlAttribute(vendedorCliente)}" data-servidor="${escapeHtmlAttribute(servidorCliente)}" data-id-cliente-api="${escapeHtmlAttribute(String(r.ID_CLIENTE || ''))}" data-data-inicio="${escapeHtmlAttribute(dataInicioPadrao)}" data-licencas="${escapeHtmlAttribute(String(licencasCliente))}" data-serial="${escapeHtmlAttribute(String(r.SERIAL || ''))}" data-cnpj="${escapeHtmlAttribute(String(r.CNPJ || r.CNPJ_CPF || r.DOCUMENTO || ''))}" title="Cadastrar cliente local">
                     <i class="bi bi-plus-circle me-1"></i>Cadastrar
                 </button>` : '';
                 
@@ -406,9 +407,12 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                     </div>
                 </td>
                 <td>${badgeStatus(r.STATUS_IMPLANTACAO)}</td>
-                <td style="font-size:.82rem">${escapeHtml(r.TIPOACOMP || '—')}</td>
+                <td style="font-size:.82rem;font-family:monospace;">${escapeHtml(r.SERIAL || '—')}</td>
                 <td style="font-size:.82rem">${nomeConsultor(r)}</td>
                 <td><span style="font-size:.78rem;font-family:monospace;background:var(--bg-body);padding:2px 8px;border-radius:6px">${r.SERVIDOR || '—'}</span></td>
+                <td style="text-align:center;font-size:.82rem;font-weight:600;">
+                    ${licencasCliente}
+                </td>
                 <td style="text-align:center;font-size:.82rem;font-weight:600;color:var(--primary);">
                     ${totalChamados}
                 </td>
@@ -659,7 +663,9 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                 cadastrarBtn.dataset.servidor,
                 cadastrarBtn.dataset.idClienteApi,
                 cadastrarBtn.dataset.dataInicio,
-                cadastrarBtn.dataset.licencas
+                cadastrarBtn.dataset.licencas,
+                cadastrarBtn.dataset.serial,
+                cadastrarBtn.dataset.cnpj
             );
             return;
         }
@@ -678,8 +684,9 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
 <!-- Modal Cadastro de Cliente (GestãoPro) -->
 <div class="modal fade" id="modalCadastroClienteGP" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <form method="POST" action="clientes.php" class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden;">
+        <form method="POST" action="clientes.php" class="modal-content border-0 shadow-lg" id="formCadastroClienteGP" style="border-radius: 24px; overflow: hidden;">
             <input type="hidden" name="redirect_to" value="monitoramento_gestaopro.php">
+            <input type="hidden" name="abrir_ficha_contato" value="1">
             <div class="modal-header p-4 border-0" style="background: linear-gradient(135deg, #16a34a, #22c55e);">
                 <div>
                     <h5 class="modal-title fw-bold text-white d-flex align-items-center gap-2">
@@ -727,6 +734,20 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                     </div>
                 </div>
                 <div class="mb-3 mt-3">
+                    <label class="form-label small fw-bold text-muted">SERIAL</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-upc-scan text-success"></i></span>
+                        <input type="text" name="serial" id="cadastroSerial" class="form-control border-start-0 ps-0" placeholder="Ex: GP-00001">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">CNPJ</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-card-text text-success"></i></span>
+                        <input type="text" name="cnpj" id="cadastroCnpj" class="form-control border-start-0 ps-0" placeholder="CNPJ do cliente">
+                    </div>
+                </div>
+                <div class="mb-3">
                     <label class="form-label small fw-bold text-muted">ID Cliente API (GestãoPro)</label>
                     <div class="input-group">
                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-braces-asterisk text-success"></i></span>
@@ -740,10 +761,14 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                         <input type="text" name="anexo" id="cadastroLinkCadastro" class="form-control border-start-0 ps-0" placeholder="Ex: https://interno.gestaopro.srv.br/clientes/7618" required>
                     </div>
                 </div>
+                <!-- campo oculto para link do Drive → salvo em Link Vídeos Passo a Passo -->
+                <input type="hidden" name="link_videos" id="cadastroLinkDrive">
+                <!-- Alerta de status da criação da pasta -->
+                <div id="alertDriveCadastro" class="alert d-none py-2 px-3 small border-0 rounded-3" role="alert"></div>
             </div>
             <div class="modal-footer border-0 p-4">
                 <button type="button" class="btn btn-link text-muted fw-bold text-decoration-none me-auto" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-success px-5 fw-bold" style="border-radius: 12px; height: 46px;">
+                <button type="submit" id="btnSubmitCadastroGP" class="btn btn-success px-5 fw-bold" style="border-radius: 12px; height: 46px;">
                     <i class="bi bi-check-lg me-2"></i> Cadastrar
                 </button>
             </div>
@@ -817,7 +842,7 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
 
 <script>
 
-function abrirModalCadastroCliente(nome, vendedor, servidor, idClienteApi, dataInicio, numLicencas) {
+function abrirModalCadastroCliente(nome, vendedor, servidor, idClienteApi, dataInicio, numLicencas, serial, cnpj) {
     const idApi = idClienteApi ? String(idClienteApi).trim() : '';
     const linkCadastro = idApi ? `https://interno.gestaopro.srv.br/clientes/${idApi}` : '';
 
@@ -828,6 +853,13 @@ function abrirModalCadastroCliente(nome, vendedor, servidor, idClienteApi, dataI
     document.getElementById('cadastroNumLicencas').value = numLicencas ? Number(numLicencas) : 0;
     document.getElementById('cadastroIdClienteApi').value = idApi;
     document.getElementById('cadastroLinkCadastro').value = linkCadastro;
+    document.getElementById('cadastroSerial').value = serial || '';
+    document.getElementById('cadastroCnpj').value = cnpj || '';
+    document.getElementById('cadastroLinkDrive').value = '';
+    // Limpa alerta
+    const alerta = document.getElementById('alertDriveCadastro');
+    alerta.className = 'alert d-none py-2 px-3 small border-0 rounded-3';
+    alerta.textContent = '';
     bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCadastroClienteGP')).show();
 }
 
@@ -838,6 +870,53 @@ if (cadastroIdClienteApiInput) {
         const linkInput = document.getElementById('cadastroLinkCadastro');
         if (linkInput) {
             linkInput.value = idApi ? `https://interno.gestaopro.srv.br/clientes/${idApi}` : '';
+        }
+    });
+}
+
+// ── Intercepta o submit do modal para criar pasta no Drive antes de cadastrar ──
+const formCadastroGP = document.getElementById('formCadastroClienteGP');
+if (formCadastroGP) {
+    formCadastroGP.addEventListener('submit', async function(e) {
+        const serial = document.getElementById('cadastroSerial').value.trim();
+        // Se não tiver serial, envia direto sem criar pasta
+        if (!serial) { return; }
+
+        e.preventDefault();
+        const btn = document.getElementById('btnSubmitCadastroGP');
+        const alerta = document.getElementById('alertDriveCadastro');
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Criando pasta no Drive...';
+        alerta.className = 'alert alert-info py-2 px-3 small border-0 rounded-3';
+        alerta.textContent = 'Criando pasta no Google Drive...';
+
+        try {
+            const fd = new FormData();
+            fd.append('serial', serial);
+            const resp = await fetch('criar_pasta_drive.php', { method: 'POST', body: fd });
+            const data = await resp.json();
+
+            if (data.sucesso) {
+                document.getElementById('cadastroLinkDrive').value = data.link || '';
+                alerta.className = 'alert alert-success py-2 px-3 small border-0 rounded-3';
+                alerta.textContent = '✅ Pasta criada no Google Drive! Salvando cadastro...';
+                // Aguarda 600ms para o usuário ver o sucesso, depois envia o form
+                setTimeout(() => { formCadastroGP.submit(); }, 600);
+            } else {
+                alerta.className = 'alert alert-warning py-2 px-3 small border-0 rounded-3';
+                alerta.textContent = '⚠️ Não foi possível criar a pasta no Drive: ' + (data.erro || 'Erro desconhecido') + '. O cadastro será salvo sem o link.';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check-lg me-2"></i> Cadastrar mesmo assim';
+                // Permite que o usuário tente enviar manualmente
+                formCadastroGP.removeEventListener('submit', arguments.callee);
+            }
+        } catch (err) {
+            alerta.className = 'alert alert-warning py-2 px-3 small border-0 rounded-3';
+            alerta.textContent = '⚠️ Erro de conexão ao criar pasta no Drive. O cadastro será salvo sem o link.';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg me-2"></i> Cadastrar mesmo assim';
+            formCadastroGP.removeEventListener('submit', arguments.callee);
         }
     });
 }
