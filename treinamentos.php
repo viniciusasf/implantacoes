@@ -391,6 +391,29 @@ function garantirTabelaPendenciasTreinamentos(PDO $pdo)
     }
 }
 
+function garantirTabelaMateriaisTreinamentos(PDO $pdo)
+{
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS materiais_treinamentos (
+            id_material INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            id_treinamento INT NOT NULL,
+            id_cliente INT NULL,
+            cliente_nome VARCHAR(255) NOT NULL,
+            tema_solicitado TEXT NOT NULL,
+            data_solicitacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            status_material VARCHAR(20) NOT NULL DEFAULT 'ABERTO',
+            data_envio DATETIME NULL,
+            UNIQUE KEY uq_material_treinamento (id_treinamento),
+            KEY idx_status_material (status_material),
+            KEY idx_cliente_material (id_cliente)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        return true;
+    } catch (Throwable $e) {
+        error_log('Erro ao preparar materiais_treinamentos: ' . $e->getMessage());
+        return false;
+    }
+}
+
 function criarServicoGoogleCalendarStatus()
 {
     $autoloadPath = __DIR__ . '/vendor/autoload.php';
@@ -920,6 +943,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['confirmar_encerramento'])) {
         $id = (int) ($_POST['id_treinamento'] ?? 0);
         $obs = trim((string) ($_POST['observacoes'] ?? ''));
+        $solicitouMaterial = trim((string) ($_POST['solicitou_material'] ?? ''));
+        $temaMaterial = trim((string) ($_POST['tema_material'] ?? ''));
         $temPendencia = trim((string) ($_POST['tem_pendencia'] ?? ''));
         $tipoPendencia = null;
         if ($temPendencia === 'sim') {
@@ -929,7 +954,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
         $data_hoje = date('Y-m-d H:i:s');
 
-        if ($id <= 0 || $obs === '' || $tipoPendencia === null) {
+        if ($id <= 0 || $obs === '' || $tipoPendencia === null || !in_array($solicitouMaterial, ['sim', 'nao'], true) || ($solicitouMaterial === 'sim' && $temaMaterial === '')) {
             header("Location: treinamentos.php?msg=" . urlencode("Preencha os campos obrigatorios para encerrar o treinamento.") . "&tipo=warning");
             exit;
         }
@@ -937,6 +962,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $colunaMarcacaoDisponivel = garantirColunaMarcacaoPendencia($pdo);
         $colunaRealizadoDisponivel = garantirColunaTreinamentoRealizado($pdo);
         $tabelaPendenciasDisponivel = garantirTabelaPendenciasTreinamentos($pdo);
+        $tabelaMateriaisDisponivel = garantirTabelaMateriaisTreinamentos($pdo);
         $mensagemRetorno = "Treinamento encerrado com sucesso.";
 
         $treinamentoRealizado = isset($_POST['treinamento_realizado']) && $_POST['treinamento_realizado'] === 'nao' ? 0 : 1;
@@ -957,7 +983,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             $stmtCliente = $pdo->prepare("SELECT id_cliente FROM treinamentos WHERE id_treinamento = ?");
             $stmtCliente->execute([$id]);
-            $idCliente = (int) ($stmtCliente->fetchColumn() ?: 0);
+            $treinoCliente = $stmtCliente->fetchColumn();
+            $idCliente = (int) ($treinoCliente ?: 0);
+
+            if ($solicitouMaterial === 'sim') {
+                if (!$tabelaMateriaisDisponivel) {
+                    throw new RuntimeException('Não foi possível preparar a lista de materiais solicitados.');
+                }
+                $stmtNome = $pdo->prepare("SELECT fantasia FROM clientes WHERE id_cliente = ?");
+                $stmtNome->execute([$idCliente]);
+                $nomeClienteMaterial = trim((string) ($stmtNome->fetchColumn() ?: 'Cliente'));
+                $stmtMaterial = $pdo->prepare(
+                    "INSERT INTO materiais_treinamentos
+                        (id_treinamento, id_cliente, cliente_nome, tema_solicitado, data_solicitacao, status_material, data_envio)
+                     VALUES (?, ?, ?, ?, ?, 'ABERTO', NULL)
+                     ON DUPLICATE KEY UPDATE
+                        id_cliente = VALUES(id_cliente), cliente_nome = VALUES(cliente_nome),
+                        tema_solicitado = VALUES(tema_solicitado), data_solicitacao = VALUES(data_solicitacao),
+                        status_material = 'ABERTO', data_envio = NULL"
+                );
+                $stmtMaterial->execute([$id, $idCliente > 0 ? $idCliente : null, $nomeClienteMaterial, $temaMaterial, $data_hoje]);
+            }
 
             if ($tipoPendencia === 'COM_PENDENCIA' && $tabelaPendenciasDisponivel) {
                 $stmtPendencia = $pdo->prepare(
@@ -2613,6 +2659,24 @@ include 'header.php';
                     <textarea name="observacoes" class="form-control" rows="4"
                         placeholder="Descreva os detalhes da sessão..." required></textarea>
                 </div>
+                <div class="mb-3 p-3 rounded-3 border bg-light">
+                    <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">O cliente solicitou material passo a passo?</label>
+                    <div class="d-flex flex-wrap gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input material-opcao" type="radio" name="solicitou_material" id="solicitou_material_sim" value="sim" required>
+                            <label class="form-check-label fw-semibold" for="solicitou_material_sim">Sim, enviar vídeo/apostila</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input material-opcao" type="radio" name="solicitou_material" id="solicitou_material_nao" value="nao" required>
+                            <label class="form-check-label fw-semibold" for="solicitou_material_nao">Não</label>
+                        </div>
+                    </div>
+                    <div id="tema-material-wrap" class="mt-3 d-none">
+                        <label for="tema_material" class="form-label small fw-bold text-muted text-uppercase">Tema solicitado</label>
+                            <textarea name="tema_material" id="tema_material" class="form-control" rows="2" placeholder="Informe o procedimento do sistema para o vídeo ou apostila" disabled></textarea>
+                        <div class="form-text">A solicitação ficará acumulada na tela de materiais até ser marcada como enviada.</div>
+                    </div>
+                </div>
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Pendências após o
                         fim?</label>
@@ -2642,11 +2706,11 @@ include 'header.php';
                 <div class="form-text small opacity-75">A marcacao com/sem pendencia e obrigatoria para concluir o
                     treinamento.</div>
             </div>
-            <div class="modal-footer border-0 p-4 d-flex justify-content-between align-items-center gap-2">
-                <button type="button" id="btn-abrir-avaliacao-efetiva" class="btn btn-outline-primary px-4 fw-bold">
+            <div class="modal-footer border-0 p-4 d-flex justify-content-end align-items-center flex-wrap gap-2">
+                <button type="button" id="btn-abrir-avaliacao-efetiva" class="btn btn-outline-primary px-4 fw-bold d-inline-flex align-items-center">
                     <i class="bi bi-clipboard-check me-2"></i>Avaliação efetiva
                 </button>
-                <div class="d-flex gap-2 ms-auto">
+                <div class="d-flex align-items-center gap-2">
                     <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-success px-4 fw-bold shadow-sm">Encerrar e Salvar</button>
                 </div>
@@ -3212,8 +3276,27 @@ include 'header.php';
             document.querySelectorAll('.pendencia-opcao').forEach(radio => {
                 radio.checked = false;
             });
+            document.querySelectorAll('.material-opcao').forEach(radio => {
+                radio.checked = false;
+            });
+            const temaMaterial = document.getElementById('tema_material');
+            temaMaterial.value = '';
+            temaMaterial.required = false;
+            temaMaterial.disabled = true;
+            document.getElementById('tema-material-wrap').classList.add('d-none');
 
             new bootstrap.Modal(document.getElementById('modalEncerrar')).show();
+        });
+    });
+
+    document.querySelectorAll('.material-opcao').forEach(radio => {
+        radio.addEventListener('change', function () {
+            const solicitado = document.getElementById('solicitou_material_sim').checked;
+            const campo = document.getElementById('tema_material');
+            document.getElementById('tema-material-wrap').classList.toggle('d-none', !solicitado);
+            campo.required = solicitado;
+            campo.disabled = !solicitado;
+            if (!solicitado) campo.value = '';
         });
     });
 

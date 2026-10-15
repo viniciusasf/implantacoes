@@ -527,10 +527,76 @@ document.addEventListener('DOMContentLoaded', function() {
   </style></head><body><div class="accent-bar"></div><div class="wrapper"><header class="header">${logoImg}<h1>Relatório de Chamados</h1><p class="client-name">${escapeHTML(clienteNome)}</p><p class="generated-at">Gerado em ${dataGeracao}</p></header><section class="dashboard"><div class="dashboard-title">Resumo por Status</div><div class="dashboard-grid" style="margin-bottom: 20px;">${resumo}</div><div class="dashboard-title">Resumo por Tipo</div><div class="dashboard-grid">${resumoTipo}</div></section>${secoes}<footer class="footer-note"><p class="highlight">Total de chamados: ${chamadosFiltrados.length}</p><p>Aguarde, novas instruções serão enviadas.</p><p class="highlight">Qualquer dúvida, estou à disposição! 🚀</p></footer></div></body></html>`;
     }
 
+    // Layout atual do relatório para envio ao cliente.
+    function criarHTMLWhatsAppLayout(cliente, chamados) {
+        const clienteNome = cliente || 'Cliente';
+        const itens = chamados;
+        if (!itens.length) return '';
+
+        const escapeHTML = valor => String(valor ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const data = valor => {
+            const texto = String(valor || '').trim();
+            const iso = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+            const brasileira = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+            return brasileira ? `${brasileira[1]}/${brasileira[2]}/${brasileira[3]}` : '';
+        };
+        const grupos = {};
+        itens.forEach(ch => {
+            const status = String(ch.status_chamado || 'Sem status').trim();
+            (grupos[status] ||= []).push(ch);
+        });
+        Object.values(grupos).forEach(lista => lista.sort((a,b) => {
+            const timestamp = valor => {
+                const texto = String(valor || '');
+                const iso = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])).getTime();
+                const brasileira = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+                return brasileira ? new Date(Number(brasileira[3]), Number(brasileira[2]) - 1, Number(brasileira[1])).getTime() : Number.MAX_SAFE_INTEGER;
+            };
+            return timestamp(a.data_prev_retorno) - timestamp(b.data_prev_retorno);
+        }));
+        const resumoStatus = Object.entries(grupos).map(([status, lista]) => `<div class="stat a"><div class="big">${lista.length}</div><p>${escapeHTML(status)}</p></div>`).join('');
+        const tipos = [...new Set(itens.map(ch => String(ch.tipo_acompanhamento || 'Não informado').trim()))];
+        const resumoTipos = tipos.map(tipo => `<span>${escapeHTML(tipo)}</span>`).join('');
+        const dataGeracao = new Date().toLocaleString('pt-BR', {dateStyle:'short', timeStyle:'short'});
+        const logo = window.appDataLogo ? `<div class="logo"><img src="${window.appDataLogo}" alt="Logo"></div>` : '';
+
+        function camposDescricao(ch) {
+            const linhas = limparTextoTecnico(ch.descricao_problema).split(/\r\n|\r|\n/);
+            const campos = [];
+            let atual = null;
+            linhas.forEach(linha => {
+                const m = linha.match(/^\s*([^:：]{2,80})\s*[:：]\s*(.*)$/);
+                if (m) { atual = {rotulo:m[1].trim(), valor:m[2].trim()}; campos.push(atual); }
+                else if (linha.trim() && atual) atual.valor += `${atual.valor ? '\n' : ''}${linha.trim()}`;
+                else if (linha.trim()) { atual = {rotulo:'Descrição', valor:linha.trim()}; campos.push(atual); }
+            });
+            return campos.length ? campos : [{rotulo:'Descrição', valor:'Sem descrição'}];
+        }
+        const secoes = Object.entries(grupos).map(([status, lista]) => {
+            const cards = lista.map(ch => {
+                const campos = camposDescricao(ch).map(c => {
+                    const valor = escapeHTML(c.valor || '—').replace(/\n/g, '<br>').replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+                    const arquivo = /\.(pdf|docx?|xlsx?|csv|png|jpe?g|zip)$/i.test(c.valor || '');
+                    return `<div><dt>${escapeHTML(c.rotulo)}</dt><dd${arquivo ? ' class="file"' : ''}>${valor}</dd></div>`;
+                }).join('');
+                const prev = data(ch.data_prev_retorno);
+                return `<article class="ticket"><div class="top"><div><span class="num">#${escapeHTML(ch.id_chamado_api)}</span><span class="st">${escapeHTML(status)}</span></div><div class="tags">${prev ? `<span class="tag prev">Prev: ${prev}</span>` : ''}<span class="tag">${escapeHTML(ch.tipo_acompanhamento || 'Não informado')}</span></div></div><dl>${campos}</dl></article>`;
+            }).join('');
+            return `<section><h2>${escapeHTML(status)} <small>${lista.length} CHAMADO${lista.length === 1 ? '' : 'S'}</small></h2><div class="rail"><div class="fill"></div>${cards}</div></section>`;
+        }).join('');
+
+        return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Chamados — ${escapeHTML(clienteNome)}</title>
+<style>
+:root{--bg:#070b1a;--ink:#eef1ff;--mute:#9aa3c7;--line:rgba(255,255,255,.1);--card:rgba(255,255,255,.045);--blue:#7c9cff;--mint:#2de2b0;--amber:#ffb347}*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,system-ui,sans-serif;background:radial-gradient(ellipse at 20% 0,rgba(124,156,255,.14),transparent 55%),radial-gradient(ellipse at 90% 90%,rgba(45,226,176,.09),transparent 50%),var(--bg);color:var(--ink);line-height:1.6}main{max-width:860px;margin:auto;padding:72px 20px 80px}h1,h2,.num,.big,footer .big{font-family:'Bricolage Grotesque',Inter,sans-serif}.hero{min-height:72vh;display:flex;flex-direction:column;justify-content:center}.logo{background:#fff;border-radius:14px;padding:10px 16px;width:max-content;margin-bottom:40px}.logo img{display:block;max-width:180px;height:36px;width:auto}.eyebrow{font-size:.75rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mint);font-weight:600;margin-bottom:14px}h1{font-size:clamp(2.6rem,9vw,5.2rem);line-height:.98;font-weight:800;letter-spacing:-.03em}h1 span{background:linear-gradient(90deg,var(--blue),var(--mint));-webkit-background-clip:text;background-clip:text;color:transparent}.client{margin-top:22px;font-size:1.15rem}.gen,.scroll-hint{color:var(--mute);font-size:.85rem;margin-top:4px}.scroll-hint{margin-top:48px;display:flex;gap:10px;align-items:center}.scroll-hint i{width:1px;height:36px;background:linear-gradient(var(--mint),transparent)}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:30px 0 72px}.stat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px}.stat .big{font-size:3rem;font-weight:800;line-height:1;color:var(--amber)}.stat p{margin-top:8px;font-size:.78rem;text-transform:uppercase;letter-spacing:.07em;color:var(--mute);font-weight:600}.stat.b .big{color:var(--blue)}.types{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.types span{font-size:.75rem;border:1px solid var(--line);border-radius:100px;padding:4px 10px;color:var(--ink)}h2{font-size:clamp(1.5rem,4vw,2rem);margin-bottom:28px}h2 small{font:600 .7rem Inter;color:var(--amber);border:1px solid rgba(255,179,71,.4);border-radius:100px;padding:3px 10px;margin-left:10px}.rail{position:relative;padding-left:44px}.rail:before,.fill{content:'';position:absolute;left:11px;top:6px;bottom:6px;width:2px;background:var(--line)}.fill{background:linear-gradient(var(--blue),var(--mint))}.ticket{position:relative;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px;margin-bottom:22px;break-inside:avoid}.ticket:before{content:'';position:absolute;left:-40px;top:30px;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--mint);box-shadow:0 0 0 5px rgba(45,226,176,.15)}.top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px}.num{font-size:1.9rem;font-weight:800}.st{display:inline-block;margin-left:10px;font:600 .62rem Inter;text-transform:uppercase;color:var(--amber);background:rgba(255,179,71,.12);border-radius:100px;padding:4px 9px}.tags{display:flex;flex-wrap:wrap;gap:8px}.tag{font-size:.75rem;border-radius:100px;padding:4px 11px;background:rgba(124,156,255,.14);color:#b9c8ff}.tag.prev{background:rgba(45,226,176,.13);color:var(--mint)}dl{display:grid;gap:14px}dt{font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--mute);font-weight:600}dd{font-size:.95rem;margin-top:2px;white-space:pre-line;overflow-wrap:anywhere}dd.file{display:inline-block;font: .82rem ui-monospace,Menlo,monospace;background:rgba(255,255,255,.07);padding:3px 9px;border-radius:8px}dd a{color:var(--blue);overflow-wrap:anywhere}footer{margin-top:60px;text-align:center;border:1px solid var(--line);background:var(--card);border-radius:22px;padding:34px 22px}footer .big{font-size:1.6rem;font-weight:800}footer p{color:var(--mute);margin-top:6px}@media(max-width:540px){main{padding:40px 14px}.hero{min-height:62vh}.ticket{padding:18px}.rail{padding-left:34px}.ticket:before{left:-31px}.rail:before,.fill{left:6px}}@media print{body{background:#fff;color:#111}main{padding:20px}.stat,.ticket,footer{background:#fff;border-color:#ccc}dd,.num,.client{color:#111}}
+</style></head><body><main><header class="hero">${logo}<p class="eyebrow">Suporte · Chamados em aberto</p><h1>Relatório de <span>Chamados</span></h1><p class="client">${escapeHTML(clienteNome)}</p><p class="gen">Gerado em ${escapeHTML(dataGeracao)}</p><div class="scroll-hint"><i></i>Role para ver os chamados</div></header><section class="summary" aria-label="Resumo">${resumoStatus}<div class="stat b"><p style="margin:0">Resumo por tipo</p><div class="types">${resumoTipos}</div></div></section>${secoes}<footer><div class="big">Total de chamados: ${itens.length}</div><p>Aguarde, novas instruções serão enviadas.</p><p style="color:var(--ink);font-weight:600">Qualquer dúvida, estou à disposição! 🚀</p></footer></main></body></html>`;
+    }
+
     // Função legada mantida para compatibilidade interna
     function criarHTMLWhatsApp(cliente, chamados) {
         const clienteNome = cliente ? cliente : 'Cliente';
-        const chamadosFiltrados = chamados.filter(ch => (ch.tipo_acompanhamento || '').trim().toLowerCase() !== 'erro de sistema');
+        const chamadosFiltrados = chamados;
         
         if (chamadosFiltrados.length === 0) return '';
 
@@ -755,10 +821,10 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             const cliente = this.dataset.cliente;
             const chamados = JSON.parse(this.dataset.chamados);
-            const msg = criarHTMLWhatsAppModelo(cliente, chamados);
+            const msg = criarHTMLWhatsAppLayout(cliente, chamados);
             
             if (!msg) {
-                alert("Nenhum chamado relevante para envio. (Chamados do tipo 'Erro de Sistema' são ignorados).");
+                alert("Nenhum chamado disponível para gerar o HTML.");
                 return;
             }
 

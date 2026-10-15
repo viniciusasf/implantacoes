@@ -184,7 +184,7 @@ try {
                 }
             }
 
-            if ($descricaoDetalhe !== '' && (mb_strlen($descricaoAtual, 'UTF-8') < mb_strlen($descricaoDetalhe, 'UTF-8'))) {
+            if ($descricaoDetalhe !== '' && $descricaoDetalhe !== $descricaoAtual) {
                 $chamado['descricao_problema'] = $descricaoDetalhe;
 
                 $stmtDescricao = $pdo->prepare('UPDATE chamados_espelho_local SET descricao_problema = ? WHERE id_chamado_api = ?');
@@ -364,6 +364,153 @@ function sanitizeFilePart(string $text): string
 }
 
 function gerarHtmlComprovanteChamado(array $chamado)
+{
+    $idChamado = (int) ($chamado['id_chamado_api'] ?? 0);
+    $cliente = trim((string) ($chamado['nome_fantasia'] ?? '')) ?: 'Cliente';
+    $status = trim((string) ($chamado['status_chamado'] ?? '')) ?: 'Aguardando Suporte';
+    $servidor = trim((string) ($chamado['servidor'] ?? ''));
+    $tipo = trim((string) ($chamado['tipo_acompanhamento'] ?? '')) ?: 'Não informado';
+    $responsavel = trim((string) ($chamado['responsavel'] ?? '')) ?: 'Não informado';
+    $descricao = trim((string) ($chamado['descricao_problema'] ?? '')) ?: 'Sem descrição';
+    $dataPrev = '—';
+    if (!empty($chamado['data_prev_retorno']) && $chamado['data_prev_retorno'] !== '0000-00-00 00:00:00') {
+        try { $dataPrev = (new DateTime($chamado['data_prev_retorno']))->format('d/m/Y'); } catch (Throwable $e) {}
+    }
+    $dataImportacao = date('d/m/Y H:i');
+    if (!empty($chamado['data_importacao']) && $chamado['data_importacao'] !== '0000-00-00 00:00:00') {
+        try { $dataImportacao = (new DateTime($chamado['data_importacao']))->format('d/m/Y H:i'); } catch (Throwable $e) {}
+    }
+
+    $esc = static fn($valor) => htmlspecialchars((string) $valor, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $clienteEscHtml = $esc($cliente);
+    $tipoEscHtml = $esc($tipo);
+    $statusEscHtml = $esc($status);
+    $dataPrevEscHtml = $esc($dataPrev);
+    $dataImportacaoEscHtml = $esc($dataImportacao);
+    $responsavelEscHtml = $esc($responsavel);
+    $logoPath = __DIR__ . '/css/pics/logo.webp';
+    $logoBase64 = is_file($logoPath) ? 'data:image/webp;base64,' . base64_encode((string) file_get_contents($logoPath)) : '';
+    $logoHtml = $logoBase64 !== ''
+        ? '<div class="brand"><img src="' . $logoBase64 . '" alt="GestãoPro"></div>'
+        : '<div class="brand brand-text">GestãoPro</div>';
+    $serverHtml = $servidor !== '' ? '<span class="server-badge">' . $esc($servidor) . '</span>' : '';
+
+    $titulosConhecidos = [
+        'tela/rotina', 'necessidade do cliente', 'funcionamento atual', 'funcionamento desejado',
+        'objetivo da solicitação', 'informações necessárias', 'resultado esperado', 'exemplo',
+        'impressão/relatório', 'como localizar a impressão', 'o que precisa ser alterado',
+        'como deve ficar', 'exemplo/modelo desejado', 'módulo/rotina', 'solicitação',
+        'detalhes da solicitação', 'observações'
+    ];
+    $secoesDescricao = [];
+    $tituloAtual = null;
+    $linhasAtual = [];
+    foreach (preg_split('/\r\n|\r|\n/', $descricao) as $linha) {
+        $textoLinha = trim($linha);
+        $chaveTitulo = mb_strtolower(preg_replace('/[:：\s]+$/u', '', $textoLinha), 'UTF-8');
+        if ($textoLinha !== '' && in_array($chaveTitulo, $titulosConhecidos, true)) {
+            if ($tituloAtual !== null || $linhasAtual) {
+                $secoesDescricao[] = [$tituloAtual ?: 'Detalhes da solicitação', $linhasAtual];
+            }
+            $tituloAtual = preg_replace('/[:：\s]+$/u', '', $textoLinha);
+            $linhasAtual = [];
+            continue;
+        }
+        $linhasAtual[] = $linha;
+    }
+    if ($tituloAtual !== null || $linhasAtual) {
+        $secoesDescricao[] = [$tituloAtual ?: 'Detalhes da solicitação', $linhasAtual];
+    }
+    if (!$secoesDescricao) $secoesDescricao[] = ['Detalhes da solicitação', [$descricao]];
+
+    $formatarLinhas = static function (array $linhas) use ($esc): string {
+        $html = '';
+        $textoParagrafo = [];
+        $lista = null;
+        $fecharLista = static function () use (&$html, &$lista): void {
+            if ($lista !== null) { $html .= '</' . $lista . '>'; $lista = null; }
+        };
+        $flushParagrafo = static function () use (&$html, &$textoParagrafo, $esc): void {
+            if ($textoParagrafo) {
+                $valor = implode("\n", $textoParagrafo);
+                $valor = preg_replace_callback('/(https?:\/\/[^\s<]+)/u', static function ($m) use ($esc) {
+                    $url = rtrim($m[1], '.,;:)');
+                    $sufixo = substr($m[1], strlen($url));
+                    $seguro = $esc($url);
+                    return '<a href="' . $seguro . '" target="_blank" rel="noopener noreferrer">' . $seguro . '</a>' . $esc($sufixo);
+                }, $esc($valor));
+                $html .= '<p>' . nl2br($valor, false) . '</p>';
+                $textoParagrafo = [];
+            }
+        };
+        foreach ($linhas as $linha) {
+            $linha = trim((string) $linha);
+            if ($linha === '') { $flushParagrafo(); $fecharLista(); continue; }
+            if (preg_match('/^\d+[.)]\s*(.*)$/u', $linha, $m)) {
+                $flushParagrafo();
+                if ($lista !== 'ol') { $fecharLista(); $html .= '<ol>'; $lista = 'ol'; }
+                $html .= '<li>' . $esc($m[1]) . '</li>';
+            } elseif (preg_match('/^[•*-]\s*(.*)$/u', $linha, $m)) {
+                $flushParagrafo();
+                if ($lista !== 'ul') { $fecharLista(); $html .= '<ul>'; $lista = 'ul'; }
+                $html .= '<li>' . $esc($m[1]) . '</li>';
+            } else {
+                $fecharLista();
+                $textoParagrafo[] = $linha;
+            }
+        }
+        $flushParagrafo();
+        $fecharLista();
+        return $html !== '' ? $html : '<p>Sem descrição.</p>';
+    };
+
+    $descricaoHtml = '';
+    foreach ($secoesDescricao as [$titulo, $linhas]) {
+        $descricaoHtml .= '<article class="ticket"><h3>' . $esc($titulo) . '</h3>' . $formatarLinhas($linhas) . '</article>';
+    }
+
+    $prazo = '';
+    if ($dataPrev !== '—') {
+        try {
+            $inicio = new DateTime('today');
+            $fim = new DateTime($chamado['data_prev_retorno']);
+            $dias = (int) $inicio->diff($fim)->format('%r%a');
+            $prazo = $dias < 0 ? 'atrasado ' . abs($dias) . (abs($dias) === 1 ? ' dia' : ' dias') : ($dias === 0 ? 'hoje' : 'em ' . $dias . ($dias === 1 ? ' dia' : ' dias'));
+        } catch (Throwable $e) {}
+    }
+    $prazoHtml = $prazo !== '' ? '<span class="note">' . $esc($prazo) . '</span>' : '';
+
+    return <<<HTML
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chamado #{$idChamado} · GestãoPro</title>
+<style>
+:root{--bg:#070b1a;--ink:#eef1ff;--mute:#9aa3c7;--line:rgba(255,255,255,.1);--card:rgba(255,255,255,.045);--blue:#7c9cff;--mint:#2de2b0;--amber:#ffb347}*{box-sizing:border-box;margin:0;padding:0}html{scroll-behavior:smooth}body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:radial-gradient(ellipse at 20% 0,rgba(124,156,255,.14),transparent 55%),radial-gradient(ellipse at 90% 90%,rgba(45,226,176,.09),transparent 50%),var(--bg);color:var(--ink);line-height:1.6;overflow-x:hidden}main{max-width:860px;margin:0 auto;padding:72px 20px 80px}h1,h2,.num,.big{font-family:"Segoe UI",Inter,system-ui,sans-serif}.hero{min-height:70vh;display:flex;flex-direction:column;justify-content:center}.brand{background:#fff;border-radius:14px;padding:10px 16px;width:max-content;margin-bottom:40px}.brand img{display:block;height:36px;width:auto}.brand-text{font-weight:800;color:#070b1a}.eyebrow{font-size:.75rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mint);font-weight:600;margin-bottom:14px}h1{font-size:clamp(2.6rem,9vw,5.2rem);line-height:.98;font-weight:800;letter-spacing:-.03em;text-transform:uppercase;overflow-wrap:anywhere}h1 span{background:linear-gradient(90deg,var(--blue),var(--mint));-webkit-background-clip:text;background-clip:text;color:transparent}.client{margin-top:22px;font-size:1.15rem;font-weight:500}.gen{color:var(--mute);font-size:.85rem;margin-top:4px}.server-badge{display:inline-block;margin-top:12px;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--amber);background:rgba(255,179,71,.12);border:1px solid rgba(255,179,71,.35);border-radius:100px;padding:4px 11px}.summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:30px 0 72px}.stat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;backdrop-filter:blur(10px);text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;min-width:0}.stat p{margin:0 0 8px;font-size:.78rem;text-transform:uppercase;letter-spacing:.07em;color:var(--mute);font-weight:600}.stat .val{font-size:1.35rem;line-height:1.25;font-weight:800;overflow-wrap:anywhere}.stat.status .val{color:var(--amber)}.eta{grid-column:1/-1;text-align:center;background:linear-gradient(135deg,rgba(255,179,71,.12),rgba(124,156,255,.06));border-color:rgba(255,179,71,.35)}.eta .val{font-size:clamp(1.9rem,7vw,3rem);font-weight:800;color:var(--amber)}.note{display:inline-block;margin-top:10px;font-size:.72rem;color:var(--amber);border:1px solid rgba(255,179,71,.4);border-radius:100px;padding:2px 9px}.section-heading{font-size:clamp(1.5rem,4vw,2rem);margin-bottom:10px;letter-spacing:-.02em}.path{color:var(--mute);font-size:.8rem;margin-bottom:18px}.path strong{color:var(--ink)}.rail{position:relative;padding-left:44px}.rail:before,.fill{content:"";position:absolute;left:11px;top:6px;bottom:6px;width:2px;background:var(--line);border-radius:2px}.fill{background:linear-gradient(var(--blue),var(--mint))}.ticket{position:relative;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px;margin-bottom:22px;backdrop-filter:blur(10px);break-inside:avoid}.ticket:before{content:"";position:absolute;left:-40px;top:30px;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--mint);box-shadow:0 0 0 5px rgba(45,226,176,.15)}.ticket h3{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--mint);margin-bottom:10px}.ticket p,.ticket li{font-size:.95rem;overflow-wrap:anywhere}.ticket p+p{margin-top:10px}.ticket ol,.ticket ul{list-style:none;counter-reset:step;display:grid;gap:12px}.ticket ol li{counter-increment:step;position:relative;padding-left:38px}.ticket ol li:before{content:counter(step);position:absolute;left:0;top:1px;width:26px;height:26px;border-radius:50%;background:rgba(124,156,255,.16);color:#b9c8ff;font:700 .75rem Inter,system-ui,sans-serif;display:flex;align-items:center;justify-content:center}.ticket ul li{position:relative;padding-left:24px}.ticket ul li:before{content:"•";position:absolute;left:5px;color:var(--mint)}.ticket a{color:var(--blue);overflow-wrap:anywhere}.foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;text-align:left;padding:22px 26px;margin-top:40px;color:var(--mute);font-size:.85rem;border:1px solid var(--line);background:var(--card);border-radius:22px}.foot a{color:var(--blue);font-weight:600;text-decoration:none}@media(max-width:640px){main{padding:40px 14px 48px}.hero{min-height:62vh}.summary{gap:10px;margin-bottom:52px}.summary .stat{padding:16px 10px}.summary .stat .val{font-size:1.05rem}.eta .val{font-size:2rem}.rail{padding-left:34px}.ticket{padding:18px}.ticket:before{left:-31px}.rail:before,.fill{left:6px}.foot{padding:18px}}@media print{body{background:#fff;color:#111}main{padding:20px}.stat,.ticket,.foot{background:#fff;border-color:#ccc}.client,.gen,.path,.ticket p,.ticket li{color:#333}.rail:before{background:#ccc}.ticket:before{background:#fff}}
+</style></head><body>
+<main>
+  <header class="hero">
+    {$logoHtml}
+    <p class="eyebrow">Cliente · Chamado #{$idChamado}</p>
+    <h1>{$clienteEscHtml}</h1>
+    <p class="client">Solicitação registrada no painel de suporte GestãoPro</p>
+    <p class="gen">Chamado #{$idChamado} · gerado em {$dataImportacaoEscHtml} · Responsável: {$responsavelEscHtml}</p>
+    {$serverHtml}
+  </header>
+  <section class="summary" aria-label="Resumo do chamado">
+    <div class="stat"><p>Tipo</p><div class="val">{$tipoEscHtml}</div></div>
+    <div class="stat status"><p>Status</p><div class="val">{$statusEscHtml}</div></div>
+    <div class="stat eta"><p>Previsão de retorno</p><div class="val">{$dataPrevEscHtml}</div>{$prazoHtml}</div>
+  </section>
+  <h2 class="section-heading">Descrição da solicitação</h2>
+  <p class="path">Suporte › Chamado › <strong>#{$idChamado}</strong></p>
+  <div class="rail"><div class="fill"></div>{$descricaoHtml}</div>
+  <footer class="foot"><span>Documento gerado por GestãoPro</span><a href="https://gestaopro.com.br/" target="_blank" rel="noopener noreferrer">gestaopro.com.br</a></footer>
+</main>
+</body></html>
+HTML;
+}
+
+function gerarHtmlComprovanteChamadoLegado(array $chamado)
 {
     $idChamado = (int) ($chamado['id_chamado_api'] ?? 0);
     $cliente = trim((string) ($chamado['nome_fantasia'] ?: 'Cliente'));

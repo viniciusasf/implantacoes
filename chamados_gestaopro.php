@@ -614,7 +614,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             window.chamadosLocais = respLocais.sucesso ? (respLocais.dados || {}) : {};
 
             const statusValores = [...new Set(lista.map(r => normalizarStatus(r.CHAMADO_STATUS)).filter(Boolean))].sort();
-            const statusPadrao = ['Aguardando Desenvolvimento', 'Aguardando Testes', 'Aguardando Autorização', 'Aguardando Fila'];
+            const statusPadrao = ['Aguardando Desenvolvimento', 'Aguardando Testes', 'Aguardando Fila'];
             populaDropdownCheckboxes('filtro-status-menu', 'filtro-status-label', 'filtro-status-cb', statusValores, statusPadrao, 'Todos os status');
             populaDropdownCheckboxes('filtro-tipo-menu', 'filtro-tipo-label', 'filtro-tipo-cb', lista.map(r=>r.TIPOACOMP), [], 'Todos os tipos');
             populaSelect('filtro-responsavel', lista.map(r=>r.RESPONSAVEL), 'VINICIUS');
@@ -745,6 +745,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
                     status: chamado.CHAMADO_STATUS,
                     tipo: chamado.TIPOACOMP,
                     descricao: descricaoCompleta || chamado.DESCRICAO || '',
+                    descricao_completa: descricaoCompleta !== null,
                     dataprev: chamado.DATAPREV_RETORNO,
                     responsavel: chamado.RESPONSAVEL
                 };
@@ -791,6 +792,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
                     status: chamado.CHAMADO_STATUS,
                     tipo: chamado.TIPOACOMP,
                     descricao: descricaoCompleta || chamado.DESCRICAO || '',
+                    descricao_completa: descricaoCompleta !== null,
                     dataprev: chamado.DATAPREV_RETORNO,
                     responsavel: chamado.RESPONSAVEL
                 };

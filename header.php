@@ -46,6 +46,13 @@ try {
     $total_pendencias_treinamentos = 0;
 }
 
+$total_materiais_abertos = 0;
+try {
+    $total_materiais_abertos = (int) $pdo->query("SELECT COUNT(*) FROM materiais_treinamentos WHERE status_material = 'ABERTO'")->fetchColumn();
+} catch (Throwable $e) {
+    $total_materiais_abertos = 0;
+}
+
 // 9. CONTADOR DE ORIENTAÇÕES
 $total_orientacoes = $pdo->query("SELECT COUNT(*) FROM orientacoes")->fetchColumn();
 
@@ -685,6 +692,15 @@ try {
                         <i class="bi bi-exclamation-diamond"></i> <span>Pendências</span>
                         <?php if ($total_pendencias_treinamentos > 0): ?>
                             <span class="badge-notify text-white ms-auto" style="padding: 2px 6px; border-radius: 6px;" title="Pendências Abertas"><?= $total_pendencias_treinamentos ?></span>
+                        <?php endif; ?>
+                    </a>
+                </li>
+
+                <li class="<?= $current_page == 'materiais_treinamentos.php' ? 'active' : '' ?>">
+                    <a href="materiais_treinamentos.php">
+                        <i class="bi bi-play-btn"></i> <span>Vídeos / Apostilas</span>
+                        <?php if ($total_materiais_abertos > 0): ?>
+                            <span class="badge-notify text-white ms-auto" style="padding: 2px 6px; border-radius: 6px;" title="Materiais aguardando envio"><?= $total_materiais_abertos ?></span>
                         <?php endif; ?>
                     </a>
                 </li>

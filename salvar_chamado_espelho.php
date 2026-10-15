@@ -45,7 +45,7 @@ try {
         id_cliente_api = VALUES(id_cliente_api),
         status_chamado = VALUES(status_chamado),
         tipo_acompanhamento = VALUES(tipo_acompanhamento),
-        descricao_problema = IF(CHAR_LENGTH(VALUES(descricao_problema)) >= CHAR_LENGTH(descricao_problema), VALUES(descricao_problema), descricao_problema),
+        descricao_problema = IF(:descricao_completa = 1 OR CHAR_LENGTH(VALUES(descricao_problema)) >= CHAR_LENGTH(descricao_problema), VALUES(descricao_problema), descricao_problema),
         data_prev_retorno = VALUES(data_prev_retorno),
         responsavel = VALUES(responsavel),
         data_importacao = NOW()
@@ -58,6 +58,7 @@ try {
         ':status' => $dados['status'] ?? '',
         ':tipo' => $dados['tipo'] ?? '',
         ':descricao' => (string) ($dados['descricao'] ?? ''),
+        ':descricao_completa' => !empty($dados['descricao_completa']) ? 1 : 0,
         ':dataprev' => (!empty($dados['dataprev'])) ? $dados['dataprev'] : null,
         ':responsavel' => $dados['responsavel'] ?? ''
     ]);
