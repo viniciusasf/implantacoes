@@ -25,7 +25,7 @@ define('GP_LOGIN',     appRequiredConfig('gestaopro', 'login'));
 define('GP_SENHA',     appRequiredConfig('gestaopro', 'password'));
 define('GP_CACHE_TTL', 300); // 5 minutos
 
-$ENDPOINTS_VALIDOS = ['implantacoes', 'chamados'];
+$ENDPOINTS_VALIDOS = ['implantacoes', 'chamados', 'uso'];
 $endpoint = $_GET['endpoint'] ?? 'implantacoes';
 $base_endpoint = explode('/', explode('?', $endpoint)[0])[0];
 
@@ -301,6 +301,154 @@ function buscarEndpointsEmLote(array $paths, string $cookieStr): array {
 
 // ── Fluxo principal ───────────────────────────────────────────────────────────
 try {
+    if ($base_endpoint === 'uso') {
+        require_once __DIR__ . '/config.php';
+        $dias = filter_var($_GET['dias'] ?? 30, FILTER_VALIDATE_INT);
+        if (!$dias || $dias < 1 || $dias > 90) {
+            http_response_code(400);
+            echo json_encode(['sucesso' => false, 'erro' => 'O período deve ser de 1 a 90 dias.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $usoCacheFile = __DIR__ . '/logs/gp_cache_uso_' . $dias . '.json';
+        $forcar = !empty($_GET['forcar']);
+        $somenteCache = !empty($_GET['somente_cache']);
+        $idClienteApi = !empty($_GET['id_cliente_api']) ? trim((string)$_GET['id_cliente_api']) : null;
+
+        // --- Consulta individual de um cliente por ID API ---
+        if ($idClienteApi !== null && ctype_digit($idClienteApi)) {
+            $cliCacheFile = __DIR__ . '/logs/gp_cache_uso_cli_' . $idClienteApi . '_' . $dias . '.json';
+            if ($forcar && file_exists($cliCacheFile)) @unlink($cliCacheFile);
+
+            $cliCached = lerCache($cliCacheFile, $somenteCache);
+            $dadosGerais = lerCache($usoCacheFile, true);
+
+            // 1. Se não estamos forçando e temos cache individual
+            if (!$forcar && $cliCached !== null) {
+                echo json_encode([
+                    'sucesso'   => true,
+                    'origem'    => 'cache',
+                    'gerado_em' => date('d/m/Y H:i:s', filemtime($cliCacheFile)),
+                    'id_cliente_api' => $idClienteApi,
+                    'dados'     => $cliCached,
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            // 2. Se não estamos forçando, podemos verificar se os dados existem no cache geral
+            if (!$forcar && $dadosGerais !== null && isset($dadosGerais['clientes']) && is_array($dadosGerais['clientes'])) {
+                foreach ($dadosGerais['clientes'] as $clItem) {
+                    if ((string)($clItem['id_cliente_api'] ?? '') === $idClienteApi && !empty($clItem['dados'])) {
+                        salvarCache($cliCacheFile, $clItem['dados']);
+                        echo json_encode([
+                            'sucesso'   => true,
+                            'origem'    => 'cache',
+                            'gerado_em' => date('d/m/Y H:i:s', filemtime($usoCacheFile)),
+                            'id_cliente_api' => $idClienteApi,
+                            'dados'     => $clItem['dados'],
+                        ], JSON_UNESCAPED_UNICODE);
+                        exit;
+                    }
+                }
+            }
+
+            if ($somenteCache) {
+                http_response_code(404);
+                echo json_encode(['sucesso' => false, 'erro' => 'Nenhum dado em cache para este cliente.'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            // 3. Consultar diretamente a API GestãoPro
+            $cookieUso = fazerLogin();
+            if (!$cookieUso) {
+                http_response_code(401);
+                echo json_encode(['sucesso' => false, 'erro' => 'Falha na autenticação com a API GestãoPro.'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            $dadosApiCli = buscarEndpoint('/api/clientes/' . rawurlencode($idClienteApi) . '/uso?' . http_build_query(['dias' => $dias]), $cookieUso);
+            if ($dadosApiCli === null) {
+                http_response_code(502);
+                echo json_encode(['sucesso' => false, 'erro' => 'Não foi possível obter dados de uso do cliente.'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            salvarCache($cliCacheFile, $dadosApiCli);
+
+            // Atualiza também no cache geral se existir
+            if ($dadosGerais !== null && isset($dadosGerais['clientes']) && is_array($dadosGerais['clientes'])) {
+                $encontrou = false;
+                foreach ($dadosGerais['clientes'] as &$clItem) {
+                    if ((string)($clItem['id_cliente_api'] ?? '') === $idClienteApi) {
+                        $clItem['dados'] = $dadosApiCli;
+                        $encontrou = true;
+                        break;
+                    }
+                }
+                unset($clItem);
+                if (!$encontrou) {
+                    $dadosGerais['clientes'][] = [
+                        'id_cliente' => 0,
+                        'fantasia' => '',
+                        'id_cliente_api' => $idClienteApi,
+                        'serial_cadastro' => '',
+                        'dados' => $dadosApiCli,
+                    ];
+                }
+                salvarCache($usoCacheFile, $dadosGerais);
+            }
+
+            echo json_encode([
+                'sucesso'   => true,
+                'origem'    => 'api',
+                'gerado_em' => date('d/m/Y H:i:s'),
+                'id_cliente_api' => $idClienteApi,
+                'dados'     => $dadosApiCli,
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        // --- Consulta geral de todos os clientes ---
+        if ($forcar && file_exists($usoCacheFile)) @unlink($usoCacheFile);
+        $usoCached = lerCache($usoCacheFile, $somenteCache);
+        if ($usoCached !== null) {
+            echo json_encode(['sucesso' => true, 'origem' => 'cache', 'gerado_em' => date('d/m/Y H:i:s', filemtime($usoCacheFile)), 'dados' => $usoCached], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($somenteCache) {
+            http_response_code(404);
+            echo json_encode(['sucesso' => false, 'erro' => 'Ainda não há uma consulta de uso em cache.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $clientesUso = $pdo->query("SELECT id_cliente, fantasia, id_cliente_api, serial FROM clientes WHERE UPPER(TRIM(status)) = 'EM ANDAMENTO' AND id_cliente_api IS NOT NULL AND id_cliente_api <> '' ORDER BY fantasia")->fetchAll(PDO::FETCH_ASSOC);
+        $cookieUso = fazerLogin();
+        if (!$cookieUso) {
+            http_response_code(401);
+            echo json_encode(['sucesso' => false, 'erro' => 'Falha na autenticação com a API GestãoPro.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $pathsUso = [];
+        foreach ($clientesUso as $clienteUso) {
+            $idApi = trim((string)$clienteUso['id_cliente_api']);
+            if (ctype_digit($idApi)) $pathsUso[$idApi] = '/api/clientes/' . rawurlencode($idApi) . '/uso?' . http_build_query(['dias' => $dias]);
+        }
+        $respostasUso = buscarEndpointsEmLote($pathsUso, $cookieUso);
+        $registrosUso = [];
+        foreach ($clientesUso as $clienteUso) {
+            $idApi = (string)$clienteUso['id_cliente_api'];
+            $registrosUso[] = [
+                'id_cliente' => (int)$clienteUso['id_cliente'],
+                'fantasia' => $clienteUso['fantasia'],
+                'id_cliente_api' => $idApi,
+                'serial_cadastro' => $clienteUso['serial'],
+                'dados' => $respostasUso[$idApi] ?? null,
+            ];
+        }
+        $payloadUso = ['dias' => $dias, 'clientes' => $registrosUso];
+        salvarCache($usoCacheFile, $payloadUso);
+        echo json_encode(['sucesso' => true, 'origem' => 'api', 'gerado_em' => date('d/m/Y H:i:s'), 'dados' => $payloadUso], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     if ($base_endpoint === 'chamados' && isset($_GET['detalhe'])) {
         $idDetalhe = filter_var($_GET['detalhe'], FILTER_VALIDATE_INT);
         if (!$idDetalhe || $idDetalhe < 1) {

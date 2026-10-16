@@ -345,7 +345,17 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
             const vendedorCliente = r.VENDEDOR || r.RESPONSAVEL || '';
             const servidorCliente = r.SERVIDOR || r.SERVIDORNUVEM || '';
             const dataInicioPadrao = r.DATA_INICIO || r.INICIO || r.DATAINICIO || '';
-            const licencasCliente = r.NUMLIC || r.NUMLIC_GPT || r.NUM_LICENCAS || r.LICENCAS || r.NUM_LICENCIAS || 0;
+            const licencasApi = r.NUMLIC ?? r.NUMLIC_GPT ?? r.NUM_LICENCAS ?? r.LICENCAS ?? r.NUM_LICENCIAS;
+            const licencasCliente = licencasApi ?? 0;
+            const dadosAtualizacao = {
+                fantasia: nomeCliente,
+                vendedor: r.VENDEDOR || r.VENDEDOR2 || r.RESPONSAVEL || '',
+                servidor: servidorCliente,
+                num_licencas: licencasApi,
+                serial: r.SERIAL || '',
+                cnpj: r.CNPJ || r.CNPJ_CPF || r.DOCUMENTO || ''
+            };
+            const btnAtualizar = isVinculado ? `<button type="button" class="btn btn-sm btn-outline-warning fw-bold btn-atualizar-cliente-gp" data-id-cliente-api="${escapeHtmlAttribute(String(r.ID_CLIENTE || ''))}" data-dados="${escapeHtmlAttribute(JSON.stringify(dadosAtualizacao))}" title="Atualizar cadastro local com os dados da API"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>` : '';
 
 
             const btnCadastrar = !isVinculado ? `<button class="btn btn-sm btn-success fw-bold btn-cadastrar-gp" data-nome="${escapeHtmlAttribute(nomeCliente)}" data-vendedor="${escapeHtmlAttribute(vendedorCliente)}" data-servidor="${escapeHtmlAttribute(servidorCliente)}" data-id-cliente-api="${escapeHtmlAttribute(String(r.ID_CLIENTE || ''))}" data-data-inicio="${escapeHtmlAttribute(dataInicioPadrao)}" data-licencas="${escapeHtmlAttribute(String(licencasCliente))}" data-serial="${escapeHtmlAttribute(String(r.SERIAL || ''))}" data-cnpj="${escapeHtmlAttribute(String(r.CNPJ || r.CNPJ_CPF || r.DOCUMENTO || ''))}" title="Cadastrar cliente local">
@@ -419,6 +429,7 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                 <td style="text-align:center">
                     <div class="d-flex justify-content-center align-items-center flex-nowrap gap-1">
                         ${btnCadastrar}                        
+                        ${btnAtualizar}
                         ${btnChamados}
                         ${btnWhatsapp}
                         ${btnEnviarResolvidos}
@@ -632,6 +643,35 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
     });
 
     document.addEventListener('click', function(event){
+        const atualizarBtn = event.target.closest('.btn-atualizar-cliente-gp');
+        if (atualizarBtn) {
+            event.preventDefault();
+            let dados = {};
+            try { dados = JSON.parse(atualizarBtn.dataset.dados || '{}'); }
+            catch (error) { alert('Não foi possível ler os dados da API para atualização.'); return; }
+            const idApi = (atualizarBtn.dataset.idClienteApi || '').trim();
+            if (!idApi || !confirm(`Atualizar o cadastro local de ${dados.fantasia || 'este cliente'} com os dados da API GestãoPro?`)) return;
+
+            const textoOriginal = atualizarBtn.innerHTML;
+            atualizarBtn.disabled = true;
+            atualizarBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Atualizando';
+            fetch('api_atualizar_cliente_gestaopro.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                body: JSON.stringify({id_cliente_api: idApi, dados})
+            }).then(async response => {
+                const resultado = await response.json();
+                if (!response.ok || !resultado.sucesso) throw new Error(resultado.erro || 'Falha ao atualizar o cadastro.');
+                alert(resultado.mensagem || 'Cadastro local atualizado com sucesso.');
+                window.location.reload();
+            }).catch(error => {
+                alert(error.message || 'Falha ao atualizar o cadastro local.');
+                atualizarBtn.disabled = false;
+                atualizarBtn.innerHTML = textoOriginal;
+            });
+            return;
+        }
+
         const btn = event.target.closest('.copy-chamados-whatsapp');
         if (btn) {
             const msg = btn.dataset.message;

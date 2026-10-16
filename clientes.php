@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 date_default_timezone_set('America/Sao_Paulo');
 require_once 'config.php';
 
@@ -237,6 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 // 5. Consulta de Dados e Filtros - FILTRAR CLIENTES NÃO ENCERRADOS
 $sql = "SELECT c.*, 
+               COALESCE(c.ID_CLIENTE_API, c.id_cliente_api) as id_cliente_api,
                COUNT(t.id_treinamento) as total_treinamentos,
                MAX(t.data_treinamento) as ultimo_treinamento,
                SUM(CASE WHEN t.status = 'PENDENTE' THEN 1 ELSE 0 END) as treinamentos_pendentes
@@ -272,6 +273,191 @@ if (!empty($ids_clientes)) {
     $stmtCt->execute($ids_clientes);
     foreach ($stmtCt->fetchAll() as $ct) {
         $contatos_por_cliente[$ct['id_cliente']][] = ['id' => $ct['id_contato'], 'nome' => $ct['nome']];
+    }
+}
+
+// Função para extrair ID API com fallback para link do anexo
+function extrairIdClienteApi(array $cliente): string {
+    $id = trim((string)($cliente['ID_CLIENTE_API'] ?? $cliente['id_cliente_api'] ?? ''));
+    if ($id !== '' && ctype_digit($id)) {
+        return $id;
+    }
+    $anexo = trim((string)($cliente['anexo'] ?? ''));
+    if ($anexo !== '') {
+        $caminho = parse_url($anexo, PHP_URL_PATH) ?: '';
+        if (preg_match('~/([0-9]+)/?$~', $caminho, $m)) {
+            return $m[1];
+        }
+    }
+    return '';
+}
+
+// Buscar dados de uso do sistema em cache (da API GestãoPro)
+$uso_clientes_map = [];
+$cache_uso_file = __DIR__ . '/logs/gp_cache_uso_30.json';
+if (file_exists($cache_uso_file)) {
+    $conteudo_cache_uso = @json_decode(file_get_contents($cache_uso_file), true);
+    if (!empty($conteudo_cache_uso['clientes']) && is_array($conteudo_cache_uso['clientes'])) {
+        foreach ($conteudo_cache_uso['clientes'] as $itemUso) {
+            $idApi = trim((string)($itemUso['id_cliente_api'] ?? ''));
+            if ($idApi !== '') {
+                $uso_clientes_map[$idApi] = $itemUso['dados'] ?? null;
+            }
+            $idCli = (int)($itemUso['id_cliente'] ?? 0);
+            if ($idCli > 0) {
+                $uso_clientes_map['id_' . $idCli] = $itemUso['dados'] ?? null;
+            }
+            $serialCad = strtoupper(trim((string)($itemUso['serial_cadastro'] ?? '')));
+            if ($serialCad !== '') {
+                $uso_clientes_map['serial_' . $serialCad] = $itemUso['dados'] ?? null;
+            }
+            if (!empty($itemUso['dados']['seriais']) && is_array($itemUso['dados']['seriais'])) {
+                foreach ($itemUso['dados']['seriais'] as $s) {
+                    $sUpper = strtoupper(trim((string)$s));
+                    if ($sUpper !== '') {
+                        $uso_clientes_map['serial_' . $sUpper] = $itemUso['dados'] ?? null;
+                    }
+                }
+            }
+        }
+    }
+}
+
+function obterInfoUsoCliente(array $cliente, array $usoMap): array {
+    $idApi = extrairIdClienteApi($cliente);
+    $idCli = (int)($cliente['id_cliente'] ?? 0);
+    $serialCli = strtoupper(trim((string)($cliente['serial'] ?? '')));
+    $dadosUso = null;
+
+    if ($idApi !== '' && isset($usoMap[$idApi])) {
+        $dadosUso = $usoMap[$idApi];
+    } elseif ($idCli > 0 && isset($usoMap['id_' . $idCli])) {
+        $dadosUso = $usoMap['id_' . $idCli];
+    } elseif ($serialCli !== '' && isset($usoMap['serial_' . $serialCli])) {
+        $dadosUso = $usoMap['serial_' . $serialCli];
+    }
+
+    if (empty($idApi) && !$dadosUso) {
+        return [
+            'tem_id_api' => false,
+            'id_api_usado' => '',
+            'texto' => 'Sem ID API',
+            'badge' => 'bg-secondary bg-opacity-10 text-secondary',
+            'badge_label' => 'Sem ID API',
+            'ultimo_dt' => null,
+            'pageviews' => 0,
+            'logins' => 0,
+            'atritos' => 0,
+            'erros' => 0,
+            'ativo_hoje' => false,
+        ];
+    }
+
+    if (!$dadosUso || empty($dadosUso['resumo'])) {
+        return [
+            'tem_id_api' => !empty($idApi),
+            'id_api_usado' => $idApi,
+            'texto' => 'Aguardando sincronização',
+            'badge' => 'bg-secondary bg-opacity-10 text-secondary',
+            'badge_label' => 'Sem leitura',
+            'ultimo_dt' => null,
+            'pageviews' => 0,
+            'logins' => 0,
+            'atritos' => 0,
+            'erros' => 0,
+            'ativo_hoje' => false,
+        ];
+    }
+
+    $resumo = $dadosUso['resumo'];
+    $ultimoIso = $resumo['ULTIMO'] ?? null;
+    $pageviews = (int)($resumo['PAGEVIEWS'] ?? 0);
+    $logins = (int)($resumo['LOGINS'] ?? 0);
+    $atritos = (int)($resumo['ATRITOS'] ?? 0);
+    $erros = (int)($resumo['ERROS'] ?? 0);
+
+    if (empty($ultimoIso)) {
+        return [
+            'tem_id_api' => true,
+            'id_api_usado' => $idApi,
+            'texto' => 'Sem acessos nos 30d',
+            'badge' => 'bg-secondary bg-opacity-10 text-secondary',
+            'badge_label' => 'Sem acessos',
+            'ultimo_dt' => null,
+            'pageviews' => $pageviews,
+            'logins' => $logins,
+            'atritos' => $atritos,
+            'erros' => $erros,
+            'ativo_hoje' => false,
+        ];
+    }
+
+    try {
+        $tz = new DateTimeZone('America/Sao_Paulo');
+        $dt = new DateTime($ultimoIso);
+        $dt->setTimezone($tz);
+        $agora = new DateTime('now', $tz);
+
+        $diffDias = (int)$agora->diff($dt)->days;
+        $mesmoDia = ($dt->format('Y-m-d') === $agora->format('Y-m-d'));
+        $ontem = (new DateTime('yesterday', $tz))->format('Y-m-d');
+        $ehOntem = ($dt->format('Y-m-d') === $ontem);
+
+        if ($mesmoDia) {
+            $tempo = 'Hoje às ' . $dt->format('H:i');
+            $badge = 'bg-success bg-opacity-15 text-success border border-success border-opacity-25';
+            $badge_label = 'Ativo Hoje';
+            $ativo_hoje = true;
+        } elseif ($ehOntem) {
+            $tempo = 'Ontem às ' . $dt->format('H:i');
+            $badge = 'bg-primary bg-opacity-10 text-primary';
+            $badge_label = 'Ativo Ontem';
+            $ativo_hoje = false;
+        } elseif ($diffDias <= 3) {
+            $tempo = "Há {$diffDias} dias ({$dt->format('d/m H:i')})";
+            $badge = 'bg-info bg-opacity-10 text-info';
+            $badge_label = "Há {$diffDias}d";
+            $ativo_hoje = false;
+        } elseif ($diffDias <= 7) {
+            $tempo = "Há {$diffDias} dias ({$dt->format('d/m H:i')})";
+            $badge = 'bg-warning bg-opacity-10 text-warning';
+            $badge_label = "Há {$diffDias}d";
+            $ativo_hoje = false;
+        } else {
+            $tempo = "Há {$diffDias} dias ({$dt->format('d/m/Y')})";
+            $badge = 'bg-danger bg-opacity-10 text-danger';
+            $badge_label = "Inativo há {$diffDias}d";
+            $ativo_hoje = false;
+        }
+
+        return [
+            'tem_id_api' => true,
+            'id_api_usado' => $idApi,
+            'texto' => $tempo,
+            'data_fmt' => $dt->format('d/m/Y H:i'),
+            'badge' => $badge,
+            'badge_label' => $badge_label,
+            'ultimo_dt' => $ultimoIso,
+            'pageviews' => $pageviews,
+            'logins' => $logins,
+            'atritos' => $atritos,
+            'erros' => $erros,
+            'ativo_hoje' => $ativo_hoje,
+        ];
+    } catch (Throwable $e) {
+        return [
+            'tem_id_api' => true,
+            'id_api_usado' => $idApi,
+            'texto' => 'Registro presente',
+            'badge' => 'bg-secondary bg-opacity-10 text-secondary',
+            'badge_label' => 'Atividade',
+            'ultimo_dt' => $ultimoIso,
+            'pageviews' => $pageviews,
+            'logins' => $logins,
+            'atritos' => $atritos,
+            'erros' => $erros,
+            'ativo_hoje' => false,
+        ];
     }
 }
 
@@ -542,6 +728,67 @@ body, html {
 .btn-action.chamados { color: #10b981; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); }
 .btn-action.chamados:hover { background: #10b981; color: white; }
 
+.btn-action.uso { color: #06b6d4; background: rgba(6, 182, 212, 0.15); border-color: rgba(6, 182, 212, 0.3); }
+.btn-action.uso:hover { background: #06b6d4; color: white; }
+
+/* Box de Resumo de Uso do Cliente */
+.client-usage-pill {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 0.6rem 0.8rem;
+    transition: all 0.25s ease;
+    cursor: pointer;
+}
+.client-usage-pill:hover {
+    background: rgba(6, 182, 212, 0.08);
+    border-color: rgba(6, 182, 212, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(6, 182, 212, 0.12);
+}
+
+.pulse-dot-green {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    animation: pulse-green 1.8s infinite;
+}
+@keyframes pulse-green {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    70% { box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+/* Modal Dashboard Premium */
+.dash-kpi-card {
+    background: var(--bg-body);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.25rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 100%;
+}
+.dash-kpi-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(6, 182, 212, 0.4);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+.dash-nav-pill {
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    padding: 0.5rem 1rem;
+    transition: all 0.2s ease;
+}
+.dash-nav-pill.active {
+    background: rgba(6, 182, 212, 0.15) !important;
+    color: #06b6d4 !important;
+}
+
 /* Grid & Table Animations */
 .gsap-reveal {
     opacity: 0;
@@ -719,6 +966,11 @@ body, html {
                         <div class="d-flex align-items-center mb-1">
                             <i class="bi bi-server me-2 text-muted"></i> <?= htmlspecialchars($c['servidor']) ?>
                         </div>
+                        <?php if (!empty($c['serial'])): ?>
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-upc-scan me-2 text-muted"></i> SERIAL: <?= htmlspecialchars($c['serial'], ENT_QUOTES, 'UTF-8') ?>
+                        </div>
+                        <?php endif; ?>
                         <?php if (!empty($c['id_cliente_api'])): ?>
                         <div class="d-flex align-items-center mb-1">
                             <i class="bi bi-braces-asterisk me-2 text-muted"></i> ID API: <?= htmlspecialchars($c['id_cliente_api']) ?>
@@ -730,6 +982,37 @@ body, html {
                             <span class="text-truncate"><?= htmlspecialchars(implode(', ', array_column($contatos_por_cliente[$c['id_cliente']], 'nome'))) ?></span>
                         </div>
                         <?php endif; ?>
+                    </div>
+
+                    <?php 
+                        $infoUso = obterInfoUsoCliente($c, $uso_clientes_map);
+                        $idApiUsado = ($infoUso['id_api_usado'] ?? '') ?: extrairIdClienteApi($c);
+                    ?>
+                    <div class="client-usage-pill mt-3 mb-3 client-usage-box" 
+                         onclick="abrirDashboardUso(this)" 
+                         data-id-api="<?= htmlspecialchars($idApiUsado, ENT_QUOTES, 'UTF-8') ?>" 
+                         data-id-cliente="<?= $c['id_cliente'] ?>" 
+                         data-fantasia="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>" 
+                         data-serial="<?= htmlspecialchars($c['serial'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                         title="Clique para abrir o Dashboard de Uso do GestãoPro">
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <div class="d-flex align-items-center text-truncate me-2">
+                                <i class="bi bi-speedometer2 text-info me-2 fs-6"></i>
+                                <span class="small fw-semibold text-truncate" style="font-size: 0.78rem;">Uso do Sistema</span>
+                            </div>
+                            <span class="badge rounded-pill px-2 py-1 usage-status-badge <?= $infoUso['badge'] ?>" style="font-size: 0.68rem;">
+                                <?php if ($infoUso['ativo_hoje']): ?>
+                                    <span class="pulse-dot-green me-1"></span>
+                                <?php endif; ?>
+                                <?= htmlspecialchars($infoUso['badge_label']) ?>
+                            </span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between small text-muted" style="font-size: 0.72rem;">
+                            <span class="text-truncate me-2"><i class="bi bi-clock-history me-1"></i>Último: <strong class="text-main"><?= htmlspecialchars($infoUso['texto']) ?></strong></span>
+                            <?php if ($infoUso['pageviews'] > 0): ?>
+                            <span class="fw-semibold text-info flex-shrink-0"><i class="bi bi-eye me-1"></i><?= number_format($infoUso['pageviews'], 0, ',', '.') ?> views</span>
+                            <?php endif; ?>
+                        </div>
                     </div>
 
                     <div class="mt-auto">
@@ -761,6 +1044,15 @@ body, html {
                         <?php endif; ?>
 
                         <div class="control-bar p-2 mb-0" style="background: var(--bg-body); border-radius: 12px; border: none; gap: 4px;">
+                            <button class="btn btn-sm btn-action uso btn-dashboard-uso" 
+                                    data-id-api="<?= htmlspecialchars($idApiUsado, ENT_QUOTES, 'UTF-8') ?>" 
+                                    data-id-cliente="<?= $c['id_cliente'] ?>" 
+                                    data-fantasia="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>" 
+                                    data-serial="<?= htmlspecialchars($c['serial'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                    title="Dashboard de Uso do Sistema" 
+                                    onclick="abrirDashboardUso(this)">
+                                <i class="bi bi-speedometer2"></i>
+                            </button>
                             <button class="btn btn-sm btn-action edit edit-trigger" 
                                     data-id="<?= $c['id_cliente'] ?>" 
                                     data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>" 
@@ -896,6 +1188,19 @@ body, html {
                                         <?php if (!empty($contatos_por_cliente[$c['id_cliente']])): ?>
                                         <div class="text-muted small"><i class="bi bi-person-lines-fill me-1"></i><?= htmlspecialchars(implode(', ', array_column($contatos_por_cliente[$c['id_cliente']], 'nome'))) ?></div>
                                         <?php endif; ?>
+                                        <?php 
+                                            $infoUsoT = obterInfoUsoCliente($c, $uso_clientes_map);
+                                            $idApiUsadoT = ($infoUsoT['id_api_usado'] ?? '') ?: extrairIdClienteApi($c);
+                                        ?>
+                                        <div class="mt-1 d-flex align-items-center gap-1" style="font-size: 0.74rem;">
+                                            <i class="bi bi-speedometer2 text-info"></i>
+                                            <span class="text-muted">Último acesso:</span>
+                                            <strong class="text-main"><?= htmlspecialchars($infoUsoT['texto']) ?></strong>
+                                            <span class="badge rounded-pill px-2 <?= $infoUsoT['badge'] ?>" style="font-size: 0.65rem;">
+                                                <?php if ($infoUsoT['ativo_hoje']): ?><span class="pulse-dot-green me-1"></span><?php endif; ?>
+                                                <?= htmlspecialchars($infoUsoT['badge_label']) ?>
+                                            </span>
+                                        </div>
                                     </td>
                                     <td class="text-center">
                                         <span class="badge bg-light text-dark rounded-pill px-3 shadow-sm"><?= $d ?> dias</span>
@@ -905,6 +1210,15 @@ body, html {
                                     </td>
                                     <td class="text-end pe-4">
                                         <div class="d-flex justify-content-end gap-1">
+                                            <button class="btn btn-sm btn-action uso btn-dashboard-uso" 
+                                                    data-id-api="<?= htmlspecialchars($idApiUsadoT, ENT_QUOTES, 'UTF-8') ?>" 
+                                                    data-id-cliente="<?= $c['id_cliente'] ?>" 
+                                                    data-fantasia="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>" 
+                                                    data-serial="<?= htmlspecialchars($c['serial'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                                    title="Dashboard de Uso do Sistema" 
+                                                    onclick="abrirDashboardUso(this)">
+                                                <i class="bi bi-speedometer2"></i>
+                                            </button>
                                             <button class="btn btn-sm btn-action edit edit-trigger" 
                                                     data-id="<?= $c['id_cliente'] ?>" 
                                                     data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>" 
@@ -1216,6 +1530,834 @@ body, html {
         </form>
     </div>
 </div>
+
+<!-- Modal Dashboard de Uso do Cliente -->
+<div class="modal fade" id="modalDashboardUso" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 24px; background: var(--bg-card); overflow: hidden;">
+            <!-- Modal Header com gradiente moderno -->
+            <div class="modal-header p-4 border-0 position-relative text-white" style="background: linear-gradient(135deg, #0b1437 0%, #11235a 50%, #0284c7 100%);">
+                <div class="d-flex align-items-center gap-3 flex-grow-1">
+                    <div class="indicator-icon rounded-3 text-white shadow-sm flex-shrink-0" style="background: rgba(255,255,255,0.18); width: 48px; height: 48px; display:flex; align-items:center; justify-content:center; font-size: 1.5rem;">
+                        <i class="bi bi-speedometer2"></i>
+                    </div>
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                            <h4 class="modal-title fw-bold text-white mb-0" id="dashNomeCliente">Dashboard de Uso</h4>
+                            <span class="badge rounded-pill px-3 py-1" id="dashBadgeStatus" style="background: rgba(255,255,255,0.2); font-size: 0.75rem;">—</span>
+                        </div>
+                        <div class="small text-white-50 d-flex align-items-center gap-3 flex-wrap">
+                            <span><i class="bi bi-braces-asterisk me-1"></i>ID API: <strong class="text-white" id="dashIdApi">—</strong></span>
+                            <span><i class="bi bi-upc-scan me-1"></i>SERIAL: <strong class="text-white" id="dashSerial">—</strong></span>
+                            <span id="dashOrigemAtualizacao"><i class="bi bi-clock me-1"></i>Atualizado: —</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
+                    <div class="btn-group btn-group-sm bg-black bg-opacity-25 p-1 rounded-3">
+                        <button type="button" class="btn btn-sm btn-outline-light border-0 dash-btn-dias active" data-dias="30" onclick="alterarDiasDashboard(30)">30 dias</button>
+                        <button type="button" class="btn btn-sm btn-outline-light border-0 dash-btn-dias" data-dias="15" onclick="alterarDiasDashboard(15)">15 dias</button>
+                        <button type="button" class="btn btn-sm btn-outline-light border-0 dash-btn-dias" data-dias="7" onclick="alterarDiasDashboard(7)">7 dias</button>
+                    </div>
+                    <button class="btn btn-sm btn-light fw-bold px-3 d-flex align-items-center gap-2 shadow-sm" id="dashBtnRecarregar" onclick="recarregarDashboardAtual(true)" title="Consultar dados em tempo real na API">
+                        <i class="bi bi-arrow-clockwise" id="dashSpinIcon"></i> <span>Atualizar</span>
+                    </button>
+                    <button type="button" class="btn-close btn-close-white ms-2" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+            </div>
+
+            <div class="modal-body p-4" style="background: var(--bg-body); min-height: 520px;">
+                <!-- Estado Carregando -->
+                <div id="dashLoading" class="py-5 text-center">
+                    <div class="spinner-border text-info mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                    <h5 class="fw-bold text-main mb-1">Consultando dados de uso no GestãoPro…</h5>
+                    <p class="text-muted small mb-0">Analisando histórico de acessos, módulos e usuários deste cliente.</p>
+                </div>
+
+                <!-- Estado Vazio / Sem dados -->
+                <div id="dashEmpty" class="py-5 text-center d-none">
+                    <div class="indicator-icon mx-auto rounded-circle mb-3 text-muted" style="width: 64px; height: 64px; font-size: 2rem; background: var(--bg-card); display: flex; align-items:center; justify-content:center; border: 1px dashed var(--border-color);">
+                        <i class="bi bi-inbox"></i>
+                    </div>
+                    <h5 class="fw-bold text-main mb-2" id="dashEmptyTitle">Nenhum registro de atividade encontrado</h5>
+                    <p class="text-muted small mx-auto mb-4" style="max-width: 480px;" id="dashEmptyText">
+                        O cliente ainda não possui acessos registrados ou a API GestãoPro não retornou telemetria para este ID no período consultado.
+                    </p>
+                    <button class="btn btn-primary px-4 fw-bold" onclick="recarregarDashboardAtual(true)">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Tentar Forçar Consulta na API
+                    </button>
+                </div>
+
+                <!-- Conteúdo do Dashboard -->
+                <div id="dashBody" class="d-none">
+                    <!-- Grade de KPIs Resumo -->
+                    <div class="row g-3 mb-4">
+                        <!-- KPI 1: Último Acesso -->
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="dash-kpi-card position-relative overflow-hidden">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="small text-muted fw-semibold">Último Acesso</span>
+                                    <div class="rounded-3 p-2 text-info" style="background: rgba(6, 182, 212, 0.12);">
+                                        <i class="bi bi-clock-history fs-5"></i>
+                                    </div>
+                                </div>
+                                <h4 class="fw-bold text-main mb-1" id="kpiUltimoAcesso">—</h4>
+                                <div class="small" id="kpiUltimoRecencia"><span class="badge bg-secondary">Sem dados</span></div>
+                            </div>
+                        </div>
+
+                        <!-- KPI 2: Pageviews -->
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="dash-kpi-card position-relative overflow-hidden">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="small text-muted fw-semibold">Visualizações (Pageviews)</span>
+                                    <div class="rounded-3 p-2 text-primary" style="background: rgba(67, 97, 238, 0.12);">
+                                        <i class="bi bi-eye fs-5"></i>
+                                    </div>
+                                </div>
+                                <h4 class="fw-bold text-main mb-1" id="kpiPageviews">0</h4>
+                                <div class="small text-muted" id="kpiMediaDiaria">0 views / dia ativo</div>
+                            </div>
+                        </div>
+
+                        <!-- KPI 3: Logins & Usuários -->
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="dash-kpi-card position-relative overflow-hidden">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="small text-muted fw-semibold">Logins & Operadores</span>
+                                    <div class="rounded-3 p-2 text-purple" style="background: rgba(139, 92, 246, 0.12); color: #8b5cf6;">
+                                        <i class="bi bi-people fs-5"></i>
+                                    </div>
+                                </div>
+                                <h4 class="fw-bold text-main mb-1" id="kpiLogins">0</h4>
+                                <div class="small text-muted" id="kpiUsuariosCount">0 operadores ativos</div>
+                            </div>
+                        </div>
+
+                        <!-- KPI 4: Atritos & Saúde -->
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="dash-kpi-card position-relative overflow-hidden">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="small text-muted fw-semibold">Atritos & Alertas</span>
+                                    <div class="rounded-3 p-2" id="kpiSaudeIconWrap" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b;">
+                                        <i class="bi bi-exclamation-triangle fs-5" id="kpiSaudeIcon"></i>
+                                    </div>
+                                </div>
+                                <h4 class="fw-bold text-main mb-1" id="kpiAtritos">0</h4>
+                                <div class="small text-muted" id="kpiErrosCount">0 erros no sistema</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Navegação por Abas -->
+                    <ul class="nav nav-pills gap-2 p-1 rounded-3 mb-4 border" style="background: var(--bg-card); width: fit-content;" id="dashTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link dash-nav-pill active" id="tab-visao-btn" data-bs-toggle="pill" data-bs-target="#tab-visao" type="button" role="tab">
+                                <i class="bi bi-graph-up me-1"></i> Visão Geral & Módulos
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link dash-nav-pill" id="tab-usuarios-btn" data-bs-toggle="pill" data-bs-target="#tab-usuarios" type="button" role="tab">
+                                <i class="bi bi-person-workspace me-1"></i> Usuários (<span id="tabCountUsuarios">0</span>)
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link dash-nav-pill" id="tab-rotas-btn" data-bs-toggle="pill" data-bs-target="#tab-rotas" type="button" role="tab">
+                                <i class="bi bi-signpost-split me-1"></i> Telas Mais Usadas (<span id="tabCountRotas">0</span>)
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link dash-nav-pill" id="tab-atritos-btn" data-bs-toggle="pill" data-bs-target="#tab-atritos" type="button" role="tab">
+                                <i class="bi bi-shield-exclamation me-1"></i> Dificuldades & Atritos (<span id="tabCountAtritos">0</span>)
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link dash-nav-pill" id="tab-json-btn" data-bs-toggle="pill" data-bs-target="#tab-json" type="button" role="tab">
+                                <i class="bi bi-code-slash me-1"></i> Resposta da API
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- Conteúdo das Abas -->
+                    <div class="tab-content" id="dashTabsContent">
+                        <!-- ABA 1: Visão Geral -->
+                        <div class="tab-pane fade show active" id="tab-visao" role="tabpanel">
+                            <div class="row g-4">
+                                <!-- Gráfico Linha do Tempo (ApexCharts) -->
+                                <div class="col-lg-8">
+                                    <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                        <div class="d-flex align-items-center justify-content-between mb-3">
+                                            <div>
+                                                <h6 class="fw-bold text-main mb-0"><i class="bi bi-calendar3 me-2 text-info"></i>Evolução de Acessos Diários</h6>
+                                                <small class="text-muted">Volume de telas acessadas por dia pelo cliente</small>
+                                            </div>
+                                            <span class="badge bg-info bg-opacity-10 text-info px-3 py-2 rounded-pill small" id="dashDiasAtivosLabel">0 dias com atividade</span>
+                                        </div>
+                                        <div id="chart-uso-timeline" style="min-height: 280px;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Gráfico de Módulos (Donut / Rosca) -->
+                                <div class="col-lg-4">
+                                    <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                        <h6 class="fw-bold text-main mb-1"><i class="bi bi-pie-chart me-2 text-primary"></i>Uso por Módulo</h6>
+                                        <small class="text-muted d-block mb-3">Onde o cliente mais passa tempo</small>
+                                        <div id="chart-uso-modulos" style="min-height: 280px;" class="d-flex align-items-center justify-content-center"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Tabela Detalhada de Módulos -->
+                                <div class="col-12">
+                                    <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                        <h6 class="fw-bold text-main mb-3"><i class="bi bi-grid-3x3-gap me-2 text-info"></i>Detalhamento por Módulo / Aplicativo</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-hover align-middle mb-0">
+                                                <thead style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted);">
+                                                    <tr>
+                                                        <th class="ps-3">Módulo</th>
+                                                        <th>Participação</th>
+                                                        <th class="text-center">Pageviews</th>
+                                                        <th class="text-center">Operadores</th>
+                                                        <th class="pe-3 text-end">Último Acesso no Módulo</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="dashTbodyModulos"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ABA 2: Usuários / Operadores -->
+                        <div class="tab-pane fade" id="tab-usuarios" role="tabpanel">
+                            <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                <div class="d-flex align-items-center justify-content-between mb-4">
+                                    <div>
+                                        <h6 class="fw-bold text-main mb-0"><i class="bi bi-people me-2 text-purple"></i>Operadores e Usuários Ativos</h6>
+                                        <small class="text-muted">Acessos individuais por login do cliente no período</small>
+                                    </div>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted);">
+                                            <tr>
+                                                <th class="ps-3">Operador / Login</th>
+                                                <th class="text-center">Pageviews</th>
+                                                <th class="text-center">Logins Efetuados</th>
+                                                <th class="text-center">Atritos</th>
+                                                <th class="text-center">Derrubadas</th>
+                                                <th class="pe-3 text-end">Último Acesso Deste Usuário</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="dashTbodyUsuarios"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ABA 3: Rotas & Telas -->
+                        <div class="tab-pane fade" id="tab-rotas" role="tabpanel">
+                            <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                <h6 class="fw-bold text-main mb-1"><i class="bi bi-signpost-split me-2 text-info"></i>Funcionalidades e Telas Mais Acessadas</h6>
+                                <small class="text-muted d-block mb-3">Ranking das ações e rotas executadas no sistema</small>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted);">
+                                            <tr>
+                                                <th class="ps-3">Módulo</th>
+                                                <th>Tela / Rota</th>
+                                                <th style="width: 35%;">Volume Relativo</th>
+                                                <th class="pe-3 text-end">Total de Acessos</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="dashTbodyRotas"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ABA 4: Atritos & Dificuldades -->
+                        <div class="tab-pane fade" id="tab-atritos" role="tabpanel">
+                            <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                <div class="alert alert-warning border-0 d-flex align-items-center rounded-3 p-3 mb-4">
+                                    <i class="bi bi-info-circle-fill fs-5 me-3 flex-shrink-0"></i>
+                                    <div class="small">
+                                        <strong>O que são Atritos?</strong> São mensagens de aviso, bloqueio ou validação exibidas ao cliente enquanto operava o sistema (ex: falta de dados obrigatórios, produtos não encontrados, parcelas pendentes). Use isso no treinamento para orientar o cliente onde ele mais tem dúvidas!
+                                    </div>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted);">
+                                            <tr>
+                                                <th class="ps-3">Módulo / Tela</th>
+                                                <th>Mensagem Recebida pelo Cliente</th>
+                                                <th class="pe-3 text-end">Ocorrências</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="dashTbodyAtritos"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ABA 5: JSON Bruto -->
+                        <div class="tab-pane fade" id="tab-json" role="tabpanel">
+                            <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="fw-bold text-main mb-0"><i class="bi bi-code me-2 text-muted"></i>Resposta Bruta da API GestãoPro</h6>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="copiarJsonDashboard()">
+                                        <i class="bi bi-clipboard me-1"></i> Copiar JSON
+                                    </button>
+                                </div>
+                                <pre id="dashJsonPre" class="p-3 rounded-3 small mb-0 border" style="background: var(--bg-body); max-height: 480px; overflow-y: auto; color: var(--text-main); font-family: monospace;"></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer p-3 border-0" style="background: var(--bg-card);">
+                <button type="button" class="btn btn-secondary px-4 fw-bold" style="border-radius: 10px;" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Biblioteca ApexCharts para gráficos dinâmicos do Dashboard -->
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+<script>
+    // --- GERENCIADOR DO DASHBOARD POR CLIENTE ---
+    let dashClienteAtivo = null;
+    let dashDiasAtivos = 30;
+    let chartTimelineInstancia = null;
+    let chartModulosInstancia = null;
+    let cacheDadosDashboard = {};
+
+    function formatarDataHoraIso(isoStr) {
+        if (!isoStr) return null;
+        try {
+            const dt = new Date(isoStr);
+            if (isNaN(dt.getTime())) return null;
+            return dt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        } catch (e) { return null; }
+    }
+
+    function formatarTempoRelativo(isoStr) {
+        if (!isoStr) return { texto: 'Sem registros', badge: 'bg-secondary', badgeLabel: 'Sem dados', ehHoje: false };
+        try {
+            const dt = new Date(isoStr);
+            if (isNaN(dt.getTime())) return { texto: 'Inválido', badge: 'bg-secondary', badgeLabel: 'Inválido', ehHoje: false };
+            const agora = new Date();
+            const diffMs = agora.getTime() - dt.getTime();
+            const diffMin = Math.floor(diffMs / 60000);
+            const diffHoras = Math.floor(diffMs / 3600000);
+            const diffDias = Math.floor(diffMs / 86400000);
+
+            const dtFmt = dt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const mesmoDia = dt.toDateString() === agora.toDateString();
+
+            if (mesmoDia) {
+                const tempo = diffMin < 5 ? 'Agora mesmo' : (diffMin < 60 ? `Há ${diffMin} min` : `Há ${diffHoras}h (Hoje às ${dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})`);
+                return { texto: tempo, dataCompleta: dtFmt, badge: 'bg-success bg-opacity-15 text-success border border-success border-opacity-25', badgeLabel: 'Ativo Hoje', ehHoje: true };
+            }
+
+            const ontem = new Date();
+            ontem.setDate(ontem.getDate() - 1);
+            if (dt.toDateString() === ontem.toDateString()) {
+                return { texto: `Ontem às ${dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`, dataCompleta: dtFmt, badge: 'bg-primary bg-opacity-10 text-primary', badgeLabel: 'Ativo Ontem', ehHoje: false };
+            }
+
+            if (diffDias <= 3) {
+                return { texto: `Há ${diffDias} dias (${dtFmt})`, dataCompleta: dtFmt, badge: 'bg-info bg-opacity-10 text-info', badgeLabel: `Há ${diffDias}d`, ehHoje: false };
+            }
+            if (diffDias <= 7) {
+                return { texto: `Há ${diffDias} dias (${dtFmt})`, dataCompleta: dtFmt, badge: 'bg-warning bg-opacity-10 text-warning', badgeLabel: `Atenção (${diffDias}d)`, ehHoje: false };
+            }
+            return { texto: `Há ${diffDias} dias (${dtFmt})`, dataCompleta: dtFmt, badge: 'bg-danger bg-opacity-10 text-danger', badgeLabel: `Inativo há ${diffDias}d`, ehHoje: false };
+        } catch (e) {
+            return { texto: 'Data indisponível', badge: 'bg-secondary', badgeLabel: 'Indisponível', ehHoje: false };
+        }
+    }
+
+    function destruirGraficosDashboard() {
+        if (chartTimelineInstancia) {
+            try { chartTimelineInstancia.destroy(); } catch (e) {}
+            chartTimelineInstancia = null;
+        }
+        if (chartModulosInstancia) {
+            try { chartModulosInstancia.destroy(); } catch (e) {}
+            chartModulosInstancia = null;
+        }
+    }
+
+    async function abrirDashboardUso(elem, dias = 30, forcar = false) {
+        const d = elem.dataset || {};
+        const idApi = (d.idApi || '').trim();
+        const idCliente = d.idCliente || '';
+        const fantasia = d.fantasia || 'Cliente';
+        const serial = d.serial || '';
+
+        dashClienteAtivo = { idApi, idCliente, fantasia, serial };
+        dashDiasAtivos = dias;
+
+        // Atualizar Header do Modal
+        document.getElementById('dashNomeCliente').textContent = fantasia;
+        document.getElementById('dashIdApi').textContent = idApi || 'Não cadastrado';
+        document.getElementById('dashSerial').textContent = serial || 'Não informado';
+        document.getElementById('dashOrigemAtualizacao').innerHTML = '<i class="bi bi-clock me-1"></i>Consultando...';
+        document.getElementById('dashBadgeStatus').className = 'badge rounded-pill px-3 py-1 bg-secondary';
+        document.getElementById('dashBadgeStatus').textContent = 'Carregando...';
+
+        // Atualizar botões de dias
+        document.querySelectorAll('.dash-btn-dias').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.dataset.dias, 10) === dias);
+        });
+
+        // Exibir Modal
+        const modalEl = document.getElementById('modalDashboardUso');
+        const modalInst = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalInst.show();
+
+        if (!idApi) {
+            document.getElementById('dashLoading').classList.add('d-none');
+            document.getElementById('dashBody').classList.add('d-none');
+            document.getElementById('dashEmpty').classList.remove('d-none');
+            document.getElementById('dashEmptyTitle').textContent = 'Cliente sem ID Cliente API';
+            document.getElementById('dashEmptyText').textContent = 'Para visualizar as estatísticas de uso em tempo real do GestãoPro, informe o ID API ou o link do GestãoPro na ficha de edição deste cliente.';
+            document.getElementById('dashBadgeStatus').textContent = 'Sem ID API';
+            return;
+        }
+
+        await consultarDadosUsoCliente(idApi, dias, forcar);
+    }
+
+    async function alterarDiasDashboard(dias) {
+        dashDiasAtivos = dias;
+        document.querySelectorAll('.dash-btn-dias').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.dataset.dias, 10) === dias);
+        });
+        if (dashClienteAtivo && dashClienteAtivo.idApi) {
+            await consultarDadosUsoCliente(dashClienteAtivo.idApi, dias, false);
+        }
+    }
+
+    async function recarregarDashboardAtual(forcar = true) {
+        if (!dashClienteAtivo || !dashClienteAtivo.idApi) return;
+        const icon = document.getElementById('dashSpinIcon');
+        const btn = document.getElementById('dashBtnRecarregar');
+        if (icon) icon.classList.add('spin-animation');
+        if (btn) btn.disabled = true;
+        try {
+            await consultarDadosUsoCliente(dashClienteAtivo.idApi, dashDiasAtivos, forcar);
+        } finally {
+            if (icon) icon.classList.remove('spin-animation');
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    async function consultarDadosUsoCliente(idApi, dias, forcar = false) {
+        const loadingEl = document.getElementById('dashLoading');
+        const emptyEl = document.getElementById('dashEmpty');
+        const bodyEl = document.getElementById('dashBody');
+
+        loadingEl.classList.remove('d-none');
+        emptyEl.classList.add('d-none');
+        bodyEl.classList.add('d-none');
+
+        destruirGraficosDashboard();
+
+        try {
+            const url = `api_gestaopro_bridge.php?endpoint=uso&id_cliente_api=${encodeURIComponent(idApi)}&dias=${dias}${forcar ? '&forcar=1' : ''}`;
+            const resp = await fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+            const json = await resp.json();
+
+            if (!resp.ok || !json.sucesso) {
+                throw new Error(json.erro || 'Não foi possível carregar os dados de uso deste cliente.');
+            }
+
+            const dados = json.dados;
+            if (!dados || (typeof dados === 'object' && Object.keys(dados).length === 0)) {
+                loadingEl.classList.add('d-none');
+                emptyEl.classList.remove('d-none');
+                document.getElementById('dashEmptyTitle').textContent = 'Nenhum dado retornado para este cliente';
+                document.getElementById('dashEmptyText').textContent = 'A API do GestãoPro retornou resposta vazia para o período selecionado.';
+                document.getElementById('dashBadgeStatus').textContent = 'Sem dados';
+                return;
+            }
+
+            renderizarDashboardUso(dados, dias, json.origem || 'api', json.gerado_em || 'agora');
+
+            loadingEl.classList.add('d-none');
+            bodyEl.classList.remove('d-none');
+
+        } catch (err) {
+            console.error('Erro no Dashboard de uso:', err);
+            loadingEl.classList.add('d-none');
+            emptyEl.classList.remove('d-none');
+            document.getElementById('dashEmptyTitle').textContent = 'Falha ao consultar uso';
+            document.getElementById('dashEmptyText').textContent = err.message || 'Houve um erro na comunicação com a API GestãoPro.';
+            document.getElementById('dashBadgeStatus').textContent = 'Erro';
+        }
+    }
+
+    function renderizarDashboardUso(dados, dias, origem, geradoEm) {
+        const resumo = dados.resumo || {};
+        const diario = Array.isArray(dados.diario) ? dados.diario : [];
+        const modulos = Array.isArray(dados.modulos) ? dados.modulos : [];
+        const usuarios = Array.isArray(dados.usuarios) ? dados.usuarios : [];
+        const rotas = Array.isArray(dados.rotas) ? dados.rotas : [];
+        const atritos = Array.isArray(dados.atritos) ? dados.atritos : [];
+        const erros = Array.isArray(dados.erros) ? dados.erros : [];
+
+        // Origem & Atualização
+        const origemTexto = origem === 'cache' ? 'Em cache local' : 'API em tempo real';
+        document.getElementById('dashOrigemAtualizacao').innerHTML = `<i class="bi bi-clock me-1"></i>Atualizado: <strong>${geradoEm}</strong> (${origemTexto})`;
+
+        // Status e KPIs
+        const ultimoIso = resumo.ULTIMO;
+        const statusUso = formatarTempoRelativo(ultimoIso);
+
+        const badgeStatusEl = document.getElementById('dashBadgeStatus');
+        badgeStatusEl.className = `badge rounded-pill px-3 py-1 ${statusUso.badge}`;
+        badgeStatusEl.innerHTML = statusUso.ehHoje ? `<span class="pulse-dot-green me-1"></span>${statusUso.badgeLabel}` : statusUso.badgeLabel;
+
+        // KPI 1: Último Acesso
+        const kpiUltimoEl = document.getElementById('kpiUltimoAcesso');
+        const kpiUltimoRecenciaEl = document.getElementById('kpiUltimoRecencia');
+        if (ultimoIso) {
+            const dataFmt = formatarDataHoraIso(ultimoIso);
+            kpiUltimoEl.textContent = dataFmt || statusUso.texto;
+            kpiUltimoRecenciaEl.innerHTML = `<span class="badge rounded-pill ${statusUso.badge}">${statusUso.texto}</span>`;
+        } else {
+            kpiUltimoEl.textContent = 'Sem acessos';
+            kpiUltimoRecenciaEl.innerHTML = '<span class="badge bg-secondary">Nenhum login nos últimos 30d</span>';
+        }
+
+        // KPI 2: Pageviews
+        const totalPageviews = parseInt(resumo.PAGEVIEWS || 0, 10);
+        document.getElementById('kpiPageviews').textContent = totalPageviews.toLocaleString('pt-BR');
+        const diasComAtividade = diario.filter(d => (parseInt(d.PAGEVIEWS, 10) || 0) > 0).length;
+        const mediaDiaria = diasComAtividade > 0 ? Math.round(totalPageviews / diasComAtividade) : 0;
+        document.getElementById('kpiMediaDiaria').textContent = `${mediaDiaria.toLocaleString('pt-BR')} views / dia ativo (${diasComAtividade}d ativos)`;
+        document.getElementById('dashDiasAtivosLabel').textContent = `${diasComAtividade} de ${dias} dias com atividade`;
+
+        // KPI 3: Logins & Usuários
+        const totalLogins = parseInt(resumo.LOGINS || 0, 10);
+        const qtdUsuarios = parseInt(resumo.USUARIOS || usuarios.length || 0, 10);
+        document.getElementById('kpiLogins').textContent = totalLogins.toLocaleString('pt-BR');
+        document.getElementById('kpiUsuariosCount').textContent = `${qtdUsuarios} operador(es) ativo(s)`;
+
+        // KPI 4: Atritos & Saúde
+        const totalAtritos = parseInt(resumo.ATRITOS || 0, 10);
+        const totalErros = parseInt(resumo.ERROS || erros.length || 0, 10);
+        document.getElementById('kpiAtritos').textContent = totalAtritos.toLocaleString('pt-BR');
+        document.getElementById('kpiErrosCount').textContent = totalErros > 0 ? `${totalErros} erro(s) técnico(s)` : 'Nenhum erro registrado';
+
+        const saudeWrap = document.getElementById('kpiSaudeIconWrap');
+        if (totalErros > 0) {
+            saudeWrap.style.background = 'rgba(239, 68, 68, 0.15)';
+            saudeWrap.style.color = '#ef4444';
+        } else if (totalAtritos > 20) {
+            saudeWrap.style.background = 'rgba(245, 158, 11, 0.15)';
+            saudeWrap.style.color = '#f59e0b';
+        } else {
+            saudeWrap.style.background = 'rgba(16, 185, 129, 0.15)';
+            saudeWrap.style.color = '#10b981';
+        }
+
+        // Atualizar Badges das Abas
+        document.getElementById('tabCountUsuarios').textContent = usuarios.length;
+        document.getElementById('tabCountRotas').textContent = rotas.length;
+        document.getElementById('tabCountAtritos').textContent = atritos.length;
+
+        // Renderizar Gráficos ApexCharts
+        destruirGraficosDashboard();
+        renderizarGraficoTimeline(diario);
+        renderizarGraficoModulos(modulos);
+
+        // Renderizar Tabelas
+        renderizarTabelaModulos(modulos, totalPageviews);
+        renderizarTabelaUsuarios(usuarios);
+        renderizarTabelaRotas(rotas, totalPageviews);
+        renderizarTabelaAtritos(atritos);
+
+        // Renderizar JSON Bruto
+        document.getElementById('dashJsonPre').textContent = JSON.stringify(dados, null, 2);
+    }
+
+    function renderizarGraficoTimeline(diario) {
+        const container = document.querySelector("#chart-uso-timeline");
+        if (!container) return;
+        container.innerHTML = '';
+
+        if (!diario || diario.length === 0) {
+            container.innerHTML = '<div class="text-center py-5 text-muted small"><i class="bi bi-calendar-x fs-4 d-block mb-2"></i>Sem histórico diário no período</div>';
+            return;
+        }
+
+        const datas = diario.map(d => {
+            const partes = (d.DIA || '').split('-');
+            return partes.length === 3 ? `${partes[2]}/${partes[1]}` : d.DIA;
+        });
+        const pageviews = diario.map(d => parseInt(d.PAGEVIEWS || 0, 10));
+
+        const options = {
+            series: [{ name: 'Pageviews', data: pageviews }],
+            chart: {
+                type: 'area',
+                height: 280,
+                toolbar: { show: false },
+                zoom: { enabled: false },
+                fontFamily: 'Inter, sans-serif',
+                foreColor: 'var(--text-muted)',
+                background: 'transparent'
+            },
+            colors: ['#06b6d4'],
+            dataLabels: { enabled: false },
+            stroke: { curve: 'smooth', width: 2.5 },
+            fill: {
+                type: 'gradient',
+                gradient: {
+                    shadeIntensity: 1,
+                    opacityFrom: 0.45,
+                    opacityTo: 0.05,
+                    stops: [0, 95, 100]
+                }
+            },
+            xaxis: {
+                categories: datas,
+                axisBorder: { show: false },
+                axisTicks: { show: false }
+            },
+            yaxis: {
+                labels: {
+                    formatter: val => Math.round(val)
+                }
+            },
+            grid: {
+                borderColor: 'rgba(255,255,255,0.06)',
+                strokeDashArray: 3
+            },
+            tooltip: {
+                theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light',
+                y: { formatter: val => `${val} acessos a telas` }
+            }
+        };
+
+        chartTimelineInstancia = new ApexCharts(container, options);
+        chartTimelineInstancia.render();
+    }
+
+    function renderizarGraficoModulos(modulos) {
+        const container = document.querySelector("#chart-uso-modulos");
+        if (!container) return;
+        container.innerHTML = '';
+
+        if (!modulos || modulos.length === 0) {
+            container.innerHTML = '<div class="text-center py-5 text-muted small"><i class="bi bi-pie-chart fs-4 d-block mb-2"></i>Sem dados de módulos</div>';
+            return;
+        }
+
+        const labels = modulos.map(m => (m.APP || 'Outros').toUpperCase());
+        const series = modulos.map(m => parseInt(m.PAGEVIEWS || 0, 10));
+        const cores = ['#06b6d4', '#4361ee', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#64748b'];
+
+        const options = {
+            series: series,
+            labels: labels,
+            chart: {
+                type: 'donut',
+                height: 280,
+                fontFamily: 'Inter, sans-serif',
+                foreColor: 'var(--text-muted)'
+            },
+            colors: cores.slice(0, series.length),
+            dataLabels: { enabled: false },
+            legend: { position: 'bottom', fontSize: '11px' },
+            plotOptions: {
+                pie: {
+                    donut: {
+                        size: '72%',
+                        labels: {
+                            show: true,
+                            total: {
+                                show: true,
+                                label: 'Total',
+                                color: 'var(--text-muted)',
+                                formatter: w => w.globals.seriesTotals.reduce((a, b) => a + b, 0).toLocaleString('pt-BR')
+                            }
+                        }
+                    }
+                }
+            },
+            tooltip: {
+                theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
+            }
+        };
+
+        chartModulosInstancia = new ApexCharts(container, options);
+        chartModulosInstancia.render();
+    }
+
+    function renderizarTabelaModulos(modulos, totalGeral) {
+        const tbody = document.getElementById('dashTbodyModulos');
+        if (!tbody) return;
+        if (!modulos || modulos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">Nenhum módulo utilizado no período.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = modulos.map(m => {
+            const pviews = parseInt(m.PAGEVIEWS || 0, 10);
+            const pct = totalGeral > 0 ? Math.round((pviews / totalGeral) * 100) : 0;
+            const ultimo = formatarDataHoraIso(m.ULTIMO) || '—';
+            const usuariosQtd = m.USUARIOS || 1;
+
+            return `
+                <tr>
+                    <td class="ps-3 fw-bold text-main">
+                        <span class="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill me-2">${escapeHtml((m.APP || 'core').toUpperCase())}</span>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2" style="max-width: 220px;">
+                            <div class="progress flex-grow-1" style="height: 6px; border-radius: 10px; background: rgba(255,255,255,0.06);">
+                                <div class="progress-bar bg-info" style="width: ${pct}%"></div>
+                            </div>
+                            <span class="small fw-semibold text-muted">${pct}%</span>
+                        </div>
+                    </td>
+                    <td class="text-center fw-bold text-main">${pviews.toLocaleString('pt-BR')}</td>
+                    <td class="text-center"><span class="badge bg-secondary bg-opacity-10 text-secondary">${usuariosQtd}</span></td>
+                    <td class="pe-3 text-end text-muted small"><i class="bi bi-clock me-1"></i>${ultimo}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderizarTabelaUsuarios(usuarios) {
+        const tbody = document.getElementById('dashTbodyUsuarios');
+        if (!tbody) return;
+        if (!usuarios || usuarios.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">Nenhum usuário registrado.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = usuarios.map(u => {
+            const login = u.LOGIN || `Usuário #${u.ID_USUARIO || ''}`;
+            const pviews = parseInt(u.PAGEVIEWS || 0, 10);
+            const logins = parseInt(u.LOGINS || 0, 10);
+            const atritos = parseInt(u.ATRITOS || 0, 10);
+            const derrubadas = parseInt(u.DERRUBADAS || 0, 10);
+            const ultimo = formatarDataHoraIso(u.ULTIMO) || '—';
+
+            return `
+                <tr>
+                    <td class="ps-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold shadow-sm" style="width: 32px; height: 32px; font-size: 0.8rem; background: linear-gradient(135deg, #0ea5e9, #6366f1);">
+                                ${escapeHtml(login.charAt(0).toUpperCase())}
+                            </div>
+                            <div>
+                                <strong class="text-main d-block">${escapeHtml(login)}</strong>
+                                <small class="text-muted" style="font-size: 0.72rem;">Serial: ${escapeHtml(u.SERIAL || '—')}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-center fw-bold text-main">${pviews.toLocaleString('pt-BR')}</td>
+                    <td class="text-center"><span class="badge bg-primary bg-opacity-10 text-primary">${logins}</span></td>
+                    <td class="text-center"><span class="badge ${atritos > 0 ? 'bg-warning bg-opacity-10 text-warning' : 'bg-light text-muted'}">${atritos}</span></td>
+                    <td class="text-center"><span class="badge ${derrubadas > 0 ? 'bg-danger bg-opacity-10 text-danger' : 'bg-light text-muted'}">${derrubadas}</span></td>
+                    <td class="pe-3 text-end text-muted small"><i class="bi bi-clock me-1"></i>${ultimo}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderizarTabelaRotas(rotas, totalGeral) {
+        const tbody = document.getElementById('dashTbodyRotas');
+        if (!tbody) return;
+        if (!rotas || rotas.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted">Nenhuma rota registrada no período.</td></tr>';
+            return;
+        }
+
+        const maxAcessos = Math.max(...rotas.map(r => parseInt(r.N || 0, 10)), 1);
+
+        tbody.innerHTML = rotas.map(r => {
+            const n = parseInt(r.N || 0, 10);
+            const pct = Math.round((n / maxAcessos) * 100);
+
+            return `
+                <tr>
+                    <td class="ps-3">
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary">${escapeHtml((r.APP || '').toUpperCase())}</span>
+                    </td>
+                    <td>
+                        <code class="text-main fw-semibold" style="font-size: 0.85rem;">${escapeHtml(r.ROTA || '')}</code>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height: 6px; border-radius: 10px; background: rgba(255,255,255,0.06);">
+                                <div class="progress-bar bg-info" style="width: ${pct}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="pe-3 text-end fw-bold text-main">${n.toLocaleString('pt-BR')}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderizarTabelaAtritos(atritos) {
+        const tbody = document.getElementById('dashTbodyAtritos');
+        if (!tbody) return;
+        if (!atritos || atritos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-success"><i class="bi bi-check-circle me-1"></i>Nenhum atrito ou mensagem de bloqueio enfrentada pelo cliente! Operação fluida.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = atritos.map(a => {
+            const n = parseInt(a.N || 1, 10);
+            return `
+                <tr>
+                    <td class="ps-3" style="width: 25%;">
+                        <span class="badge bg-warning bg-opacity-10 text-warning me-1">${escapeHtml((a.APP || '').toUpperCase())}</span>
+                        <div class="small text-muted mt-1"><code>${escapeHtml(a.ROTA || '')}</code></div>
+                    </td>
+                    <td>
+                        <div class="text-main fw-semibold">${escapeHtml(a.MENSAGEM || '')}</div>
+                    </td>
+                    <td class="pe-3 text-end">
+                        <span class="badge bg-warning text-dark px-3 py-1 rounded-pill fw-bold">${n}x</span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function copiarJsonDashboard() {
+        const pre = document.getElementById('dashJsonPre');
+        if (!pre) return;
+        navigator.clipboard.writeText(pre.textContent).then(() => {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({ icon: 'success', title: 'Copiado!', text: 'JSON copiado para a área de transferência.', timer: 1500, showConfirmButton: false });
+            } else {
+                alert('JSON copiado!');
+            }
+        });
+    }
+
+    function escapeHtml(str) {
+        return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+</script>
+
+<style>
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .spin-animation { animation: spin 1s linear infinite; }
+</style>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {

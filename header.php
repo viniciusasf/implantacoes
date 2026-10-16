@@ -667,6 +667,12 @@ try {
                     </a>
                 </li>
 
+                <li class="<?= $current_page == 'uso_clientes.php' ? 'active' : '' ?>">
+                    <a href="uso_clientes.php">
+                        <i class="bi bi-activity"></i> <span>GP · Uso dos clientes</span>
+                    </a>
+                </li>
+
                 <li class="<?= $current_page == 'relatorio_mensal_implantacao.php' ? 'active' : '' ?>">
                     <a href="relatorio_mensal_implantacao.php">
                         <i class="bi bi-calendar-range"></i> <span>Relat. Encerramentos</span>
