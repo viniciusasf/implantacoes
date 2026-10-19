@@ -37,11 +37,19 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
             <i class="bi bi-cloud-arrow-down-fill me-2" style="color:var(--primary)"></i>
             Monitoramento GestãoPro
         </h1>
-        <p class="mb-0" style="color:var(--text-muted);font-size:.85rem;">
-            Dados em tempo real da API <strong>interno.gestaopro.srv.br</strong>
+        <p class="mb-0" style="color:var(--text-muted);font-size:.85rem;" id="subtitulo-monitoramento">
+            Dados em tempo real da API <strong>interno.gestaopro.srv.br/api/mesa?usuario=53&secoes=clientes</strong>
         </p>
     </div>
-    <div class="d-flex gap-2 align-items-center">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div class="btn-group btn-group-sm p-1 rounded-3" style="background:var(--bg-body); border:1px solid var(--border-color);" role="group" id="btn-group-fonte">
+            <button type="button" class="btn btn-sm btn-primary fw-bold" id="btn-fonte-mesa" data-fonte="mesa" title="Carregar clientes da Mesa (Vinicius #53)">
+                <i class="bi bi-kanban me-1"></i> Mesa (#53)
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" id="btn-fonte-geral" data-fonte="implantacoes" title="Carregar todos os clientes da API Geral de Implantações">
+                <i class="bi bi-globe me-1"></i> Geral (/api/implantacoes)
+            </button>
+        </div>
         <span id="badge-origem" class="badge rounded-pill" style="font-size:.75rem;background:var(--primary-light);color:var(--primary)">—</span>
         <span id="badge-atualizacao" style="font-size:.75rem;color:var(--text-muted)"></span>
         <button id="btn-refresh" class="btn btn-primary btn-sm">
@@ -97,14 +105,26 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
                         </li>
                         <li>
                             <div class="form-check mb-1">
+                                <input class="form-check-input filtro-status-cb" type="checkbox" value="CLIENTE.OK" id="chk-status-cliente-ok" checked>
+                                <label class="form-check-label w-100" for="chk-status-cliente-ok" style="cursor:pointer;">Cliente OK</label>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="form-check mb-1">
+                                <input class="form-check-input filtro-status-cb" type="checkbox" value="RISCO CANC" id="chk-status-risco-canc" checked>
+                                <label class="form-check-label w-100" for="chk-status-risco-canc" style="cursor:pointer;">Risco Cancelamento</label>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="form-check mb-1">
                                 <input class="form-check-input filtro-status-cb" type="checkbox" value="AGUARD.CLI" id="chk-status-aguardando" checked>
                                 <label class="form-check-label w-100" for="chk-status-aguardando" style="cursor:pointer;">Aguard. Cliente</label>
                             </div>
                         </li>
                         <li>
                             <div class="form-check mb-1">
-                                <input class="form-check-input filtro-status-cb" type="checkbox" value="CLIENTE.OK" id="chk-status-cliente-ok" checked>
-                                <label class="form-check-label w-100" for="chk-status-cliente-ok" style="cursor:pointer;">Cliente OK</label>
+                                <input class="form-check-input filtro-status-cb" type="checkbox" value="OUTROS" id="chk-status-outros" checked>
+                                <label class="form-check-label w-100" for="chk-status-outros" style="cursor:pointer;">Outros / Sem Status</label>
                             </div>
                         </li>
                         <li>
@@ -279,17 +299,19 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
     }
 
     function badgeStatus(s){
-        if (!s) return '<span class="badge-status badge-outros">—</span>';
+        if (!s || s === 'OUTROS') return '<span class="badge-status badge-outros">—</span>';
         const mapa = {
             'ANDAMENTO':'badge-andamento',
             'AGUARD.CLI':'badge-aguardando',
             'CLIENTE.OK':'badge-clienteok',
             'ENCERRADA':'badge-encerrada',
+            'RISCO CANC':'badge-aguardando',
         };
         const cls = mapa[s] || 'badge-outros';
         let label = s.charAt(0)+s.slice(1).toLowerCase();
         if (s === 'AGUARD.CLI') label = 'Aguard. Cliente';
         if (s === 'CLIENTE.OK') label = 'Cliente OK';
+        if (s === 'RISCO CANC') label = 'Risco Canc';
         return `<span class="badge-status ${cls}">${label}</span>`;
     }
 
@@ -482,8 +504,8 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
     function atualizarKPIs(lista){
         document.getElementById('kpi-andamento').textContent = lista.filter(r=>r.STATUS_IMPLANTACAO==='ANDAMENTO').length;
         document.getElementById('kpi-clienteok').textContent = lista.filter(r=>r.STATUS_IMPLANTACAO==='CLIENTE.OK').length;
-        document.getElementById('kpi-aguardando').textContent= lista.filter(r=>r.STATUS_IMPLANTACAO==='AGUARD.CLI').length;
-        document.getElementById('kpi-encerrado').textContent = todosRegistros.filter(r=>r.STATUS_IMPLANTACAO==='ENCERRADA' && r.VENDEDOR2 === 'VINICIUS').length;
+        document.getElementById('kpi-aguardando').textContent= lista.filter(r=>r.STATUS_IMPLANTACAO==='AGUARD.CLI' || r.STATUS_IMPLANTACAO==='RISCO CANC').length;
+        document.getElementById('kpi-encerrado').textContent = todosRegistros.filter(r=>r.STATUS_IMPLANTACAO==='ENCERRADA' && (r.VENDEDOR2 === 'VINICIUS' || r.VENDEDOR === 'VINICIUS')).length;
     }
 
     function criarMensagemWhatsappChamados(nomeCliente, chamados){
@@ -525,34 +547,91 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                `\r\n\r\nE para que receba essa atualização, *deslogue do sistema e logue novamente.*`;
     }
 
+    function getFonteAtiva() {
+        return localStorage.getItem('gp_monitoramento_fonte') || 'mesa';
+    }
+
+    function atualizarBotoesFonte(fonte) {
+        const btnMesa = document.getElementById('btn-fonte-mesa');
+        const btnGeral = document.getElementById('btn-fonte-geral');
+        const subtitulo = document.getElementById('subtitulo-monitoramento');
+
+        if (fonte === 'mesa') {
+            if (btnMesa) btnMesa.className = 'btn btn-sm btn-primary fw-bold';
+            if (btnGeral) btnGeral.className = 'btn btn-sm btn-outline-secondary fw-bold';
+            if (subtitulo) {
+                subtitulo.innerHTML = 'Leitura em tempo real de <strong>interno.gestaopro.srv.br/api/mesa?usuario=53&secoes=clientes</strong>';
+            }
+        } else {
+            if (btnMesa) btnMesa.className = 'btn btn-sm btn-outline-secondary fw-bold';
+            if (btnGeral) btnGeral.className = 'btn btn-sm btn-primary fw-bold';
+            if (subtitulo) {
+                subtitulo.innerHTML = 'Leitura em tempo real de <strong>interno.gestaopro.srv.br/api/implantacoes</strong>';
+            }
+        }
+    }
+
     // ── carregar dados ─────────────────────────────────────────────────────────
     function carregarDados(forcar, somenteCache = false){
+        const fonte = getFonteAtiva();
+        atualizarBotoesFonte(fonte);
+
         document.getElementById('estado-carregando').classList.remove('d-none');
         document.getElementById('estado-erro').classList.add('d-none');
         document.getElementById('wrapper-tabela').classList.add('d-none');
         document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise';
 
-        const url = forcar
-            ? 'api_gestaopro_bridge.php?forcar=1'
-            : (somenteCache ? 'api_gestaopro_bridge.php?somente_cache=1' : 'api_gestaopro_bridge.php');
-        const urlChamados = forcar
-            ? 'api_gestaopro_bridge.php?endpoint=chamados&forcar=1'
-            : (somenteCache ? 'api_gestaopro_bridge.php?endpoint=chamados&somente_cache=1' : 'api_gestaopro_bridge.php?endpoint=chamados');
+        let pClientes, pChamados;
 
-        Promise.all([
-            fetch(url).then(r => r.json()),
-            fetch(urlChamados).then(r => r.json())
-        ])
+        if (fonte === 'mesa') {
+            const urlMesa = 'api_gestaopro_bridge.php?endpoint=mesa&usuario=53&secoes=clientes,chamados' + (forcar ? '&forcar=1' : (somenteCache ? '&somente_cache=1' : ''));
+            pClientes = fetch(urlMesa).then(r => r.json());
+            pChamados = Promise.resolve({ sucesso: true, dados: { chamados: [] } });
+        } else {
+            const url = forcar
+                ? 'api_gestaopro_bridge.php?forcar=1'
+                : (somenteCache ? 'api_gestaopro_bridge.php?somente_cache=1' : 'api_gestaopro_bridge.php');
+            const urlChamados = forcar
+                ? 'api_gestaopro_bridge.php?endpoint=chamados&forcar=1'
+                : (somenteCache ? 'api_gestaopro_bridge.php?endpoint=chamados&somente_cache=1' : 'api_gestaopro_bridge.php?endpoint=chamados');
+
+            pClientes = fetch(url).then(r => r.json());
+            pChamados = fetch(urlChamados)
+                .then(r => r.json())
+                .catch(err => ({ sucesso: false, erro: err.message || 'Falha de conexão' }));
+        }
+
+        Promise.all([pClientes, pChamados])
             .then(([resp, respChamados]) => {
-                if (!resp.sucesso) throw new Error(resp.erro || 'Erro desconhecido em implantações');
-                if (!respChamados.sucesso) throw new Error(respChamados.erro || 'Erro desconhecido em chamados');
+                if (!resp.sucesso) throw new Error(resp.erro || 'Erro ao carregar clientes');
 
-                const clientes = resp.dados.clientes || resp.dados || [];
+                let clientes = resp.dados.clientes || resp.dados || [];
+                clientes = clientes.map(c => {
+                    const idApi = c.ID_CLIENTE || c.ID;
+                    const st = (c.STATUS_IMPLANTACAO || '').trim().toUpperCase();
+                    return {
+                        ...c,
+                        ID_CLIENTE: idApi,
+                        ID: c.ID || idApi,
+                        FANTASIA: c.FANTASIA || c.RAZAOSOCIAL || '',
+                        RAZAOSOCIAL: c.RAZAOSOCIAL || c.FANTASIA || '',
+                        VENDEDOR: c.VENDEDOR || c.IMPLANTADOR || 'VINICIUS',
+                        VENDEDOR2: c.VENDEDOR2 || '',
+                        SERVIDOR: c.SERVIDOR || '',
+                        NUVEM: c.NUVEM || ((c.SERVIDOR && c.SERVIDOR.toUpperCase() !== 'LOCAL') ? 'T' : 'F'),
+                        NUM_LICENCAS: c.NUM_LICENCAS ?? c.NUMLIC ?? 0,
+                        STATUS_IMPLANTACAO: st || 'OUTROS',
+                    };
+                });
                 todosRegistros = clientes;
 
                 window.chamadosValidos = {};
                 window.chamadosByCliente = {};
-                const chamadosList = respChamados.dados.chamados || respChamados.dados || [];
+
+                const chamadosList = (fonte === 'mesa' && resp.dados && Array.isArray(resp.dados.chamados))
+                    ? resp.dados.chamados
+                    : ((respChamados && respChamados.sucesso && respChamados.dados) ? (respChamados.dados.chamados || respChamados.dados || []) : []);
+
                 chamadosList.forEach(ch => {
                     if (!window.chamadosByCliente[ch.ID_CLIENTE]) {
                         window.chamadosByCliente[ch.ID_CLIENTE] = [];
@@ -584,7 +663,11 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
             .catch(err => {
                 document.getElementById('estado-carregando').classList.add('d-none');
                 document.getElementById('estado-erro').classList.remove('d-none');
-                document.getElementById('msg-erro').textContent = err.message;
+                let msg = err.message;
+                if (fonte === 'implantacoes') {
+                    msg += ' <br><br><button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="alternarParaMesaMonitoramento()"><i class="bi bi-kanban me-1"></i> Carregar Clientes da Mesa (#53)</button>';
+                }
+                document.getElementById('msg-erro').innerHTML = msg;
             })
             .finally(() => {
                 document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise';
@@ -592,7 +675,27 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
             });
     }
 
+    window.alternarParaMesaMonitoramento = function() {
+        localStorage.setItem('gp_monitoramento_fonte', 'mesa');
+        carregarDados(false);
+    };
+
     // ── eventos ────────────────────────────────────────────────────────────────
+    const btnMesa = document.getElementById('btn-fonte-mesa');
+    if (btnMesa) {
+        btnMesa.addEventListener('click', function(){
+            localStorage.setItem('gp_monitoramento_fonte', 'mesa');
+            carregarDados(false);
+        });
+    }
+
+    const btnGeral = document.getElementById('btn-fonte-geral');
+    if (btnGeral) {
+        btnGeral.addEventListener('click', function(){
+            localStorage.setItem('gp_monitoramento_fonte', 'implantacoes');
+            carregarDados(false);
+        });
+    }
     document.getElementById('btn-refresh').addEventListener('click', function(){
         this.disabled = true;
         document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise spin';

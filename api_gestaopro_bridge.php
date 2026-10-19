@@ -25,7 +25,7 @@ define('GP_LOGIN',     appRequiredConfig('gestaopro', 'login'));
 define('GP_SENHA',     appRequiredConfig('gestaopro', 'password'));
 define('GP_CACHE_TTL', 300); // 5 minutos
 
-$ENDPOINTS_VALIDOS = ['implantacoes', 'chamados', 'uso'];
+$ENDPOINTS_VALIDOS = ['implantacoes', 'chamados', 'uso', 'mesa'];
 $endpoint = $_GET['endpoint'] ?? 'implantacoes';
 $base_endpoint = explode('/', explode('?', $endpoint)[0])[0];
 
@@ -246,6 +246,7 @@ function fazerLogin($tentativa = 1): ?string {
 
 // ── Buscar qualquer endpoint autenticado ──────────────────────────────────────
 function buscarEndpoint(string $path, string $cookieStr): ?array {
+    global $ultimoErroBuscaEndpoint;
     $ch = curl_init(GP_BASE_URL . $path);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
@@ -257,11 +258,28 @@ function buscarEndpoint(string $path, string $cookieStr): ?array {
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlErrno = curl_errno($ch);
     curl_close($ch);
 
-    if ($httpCode !== 200 || !$response) return null;
+    if ($response === false) {
+        $ultimoErroBuscaEndpoint = 'falha de conexão cURL (' . $curlErrno . ')';
+        return null;
+    }
+    if ($httpCode !== 200) {
+        $ultimoErroBuscaEndpoint = 'a API respondeu HTTP ' . $httpCode;
+        return null;
+    }
+    if ($response === '') {
+        $ultimoErroBuscaEndpoint = 'a API respondeu sem conteúdo (HTTP 200)';
+        return null;
+    }
     $dados = @json_decode($response, true);
-    return is_array($dados) ? $dados : null;
+    if (is_array($dados)) {
+        $ultimoErroBuscaEndpoint = null;
+        return $dados;
+    }
+    $ultimoErroBuscaEndpoint = 'JSON inválido (' . json_last_error_msg() . ')';
+    return null;
 }
 
 /** Busca várias páginas em paralelo para manter a atualização dentro do tempo do PHP. */
@@ -449,6 +467,86 @@ try {
         exit;
     }
 
+    if ($base_endpoint === 'mesa') {
+        $usuario = filter_var($_GET['usuario'] ?? 53, FILTER_VALIDATE_INT) ?: 53;
+        $secoes = !empty($_GET['secoes']) ? trim((string)$_GET['secoes']) : 'chamados,clientes';
+        $mesaCacheFile = __DIR__ . "/logs/gp_cache_mesa_{$usuario}.json";
+        $forcar = !empty($_GET['forcar']);
+        $somenteCache = !empty($_GET['somente_cache']);
+
+        if ($forcar && file_exists($mesaCacheFile)) {
+            @unlink($mesaCacheFile);
+        }
+
+        $cached = lerCache($mesaCacheFile, $somenteCache);
+        if (!$forcar && $cached !== null) {
+            echo json_encode([
+                'sucesso'   => true,
+                'origem'    => 'cache',
+                'endpoint'  => 'mesa',
+                'gerado_em' => date('d/m/Y H:i:s', filemtime($mesaCacheFile)),
+                'dados'     => $cached,
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        if ($somenteCache && $cached === null) {
+            http_response_code(404);
+            echo json_encode(['sucesso' => false, 'erro' => 'Nenhuma leitura anterior da mesa está disponível.']);
+            exit;
+        }
+
+        $cookieMesa = fazerLogin();
+        if (!$cookieMesa) {
+            http_response_code(401);
+            echo json_encode(['sucesso' => false, 'erro' => 'Falha na autenticação com a API GestãoPro.']);
+            exit;
+        }
+
+        $secoesArray = array_unique(array_filter(array_merge(explode(',', $secoes), ['clientes', 'chamados'])));
+        $queryMesa = http_build_query([
+            'usuario' => $usuario,
+            'secoes'  => implode(',', $secoesArray),
+        ]);
+        $dadosMesa = buscarEndpoint('/api/mesa?' . $queryMesa, $cookieMesa);
+
+        if ($dadosMesa === null) {
+            $detalhe = $ultimoErroBuscaEndpoint ?? 'a API não retornou dados válidos';
+            $cacheContingencia = lerCache($mesaCacheFile, true);
+            if ($cacheContingencia !== null) {
+                echo json_encode([
+                    'sucesso'   => true,
+                    'origem'    => 'cache',
+                    'contingencia' => true,
+                    'aviso'     => "A API da mesa respondeu com erro ({$detalhe}). Exibindo última leitura em cache.",
+                    'endpoint'  => 'mesa',
+                    'gerado_em' => date('d/m/Y H:i:s', filemtime($mesaCacheFile)),
+                    'dados'     => $cacheContingencia,
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            http_response_code(502);
+            echo json_encode(['sucesso' => false, 'erro' => "Endpoint /api/mesa falhou: {$detalhe}."]);
+            exit;
+        }
+
+        if (!isset($dadosMesa['chamados']) || !is_array($dadosMesa['chamados'])) {
+            $dadosMesa['chamados'] = [];
+        }
+
+        salvarCache($mesaCacheFile, $dadosMesa);
+
+        echo json_encode([
+            'sucesso'   => true,
+            'origem'    => 'api',
+            'endpoint'  => 'mesa',
+            'gerado_em' => date('d/m/Y H:i:s'),
+            'dados'     => $dadosMesa,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     if ($base_endpoint === 'chamados' && isset($_GET['detalhe'])) {
         $idDetalhe = filter_var($_GET['detalhe'], FILTER_VALIDATE_INT);
         if (!$idDetalhe || $idDetalhe < 1) {
@@ -474,14 +572,11 @@ try {
 
     $somenteCache = !empty($_GET['somente_cache']);
 
-    // Invalidar cache se solicitado
-    if (!empty($_GET['forcar']) && file_exists($cacheFile)) {
-        @unlink($cacheFile);
-    }
+    $forcar = !empty($_GET['forcar']);
 
     // 1. Cache
     $cached = lerCache($cacheFile, $somenteCache);
-    if ($cached !== null && ($base_endpoint !== 'chamados' || isset($cached['chamados']))) {
+    if (!$forcar && $cached !== null && ($base_endpoint !== 'chamados' || isset($cached['chamados']))) {
         echo json_encode([
             'sucesso'   => true,
             'origem'    => 'cache',
@@ -514,9 +609,29 @@ try {
     $dados = $base_endpoint === 'chamados'
         ? buscarTodasPaginas("/api/{$endpoint}", $cookieStr, 'chamados')
         : buscarEndpoint("/api/{$endpoint}", $cookieStr);
-    if (!$dados) {
+
+    // Uma resposta JSON vazia ([]) e valida; apenas falha de HTTP ou JSON
+    // invalido retorna null em buscarEndpoint/buscarTodasPaginas.
+    if ($dados === null) {
+        $detalhe = $ultimoErroBuscaEndpoint ?? 'a API não retornou uma coleção JSON válida';
+
+        // Se houver leitura anterior em cache, utilize-a como contingência
+        $cacheContingencia = lerCache($cacheFile, true);
+        if ($cacheContingencia !== null) {
+            echo json_encode([
+                'sucesso'   => true,
+                'origem'    => 'cache',
+                'contingencia' => true,
+                'aviso'     => "A API externa respondeu com erro ({$detalhe}). Exibindo última leitura disponível em cache.",
+                'endpoint'  => $endpoint,
+                'gerado_em' => date('d/m/Y H:i:s', filemtime($cacheFile)),
+                'dados'     => $cacheContingencia,
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
         http_response_code(502);
-        echo json_encode(['sucesso' => false, 'erro' => "Endpoint /api/{$endpoint} retornou resposta inválida."]);
+        echo json_encode(['sucesso' => false, 'erro' => "Endpoint /api/{$endpoint} falhou: {$detalhe}."]);
         exit;
     }
 

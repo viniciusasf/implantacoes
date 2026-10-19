@@ -20,11 +20,19 @@ $stmt_map = $pdo->query("SELECT id_cliente, id_cliente_api, servidor FROM client
         <h1 class="mb-1" style="font-size:1.6rem;">
             <i class="bi bi-headset me-2" style="color:var(--danger)"></i>Chamados de Suporte
         </h1>
-        <p class="mb-0" style="color:var(--text-muted);font-size:.85rem;">
-            Leitura em tempo real de <strong>interno.gestaopro.srv.br/api/chamados</strong>
+        <p class="mb-0" style="color:var(--text-muted);font-size:.85rem;" id="subtitulo-api">
+            Leitura em tempo real de <strong>interno.gestaopro.srv.br/api/mesa?usuario=53&secoes=chamados,clientes</strong>
         </p>
     </div>
-    <div class="d-flex gap-2 align-items-center">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div class="btn-group btn-group-sm p-1 rounded-3" style="background:var(--bg-body); border:1px solid var(--border-color);" role="group" id="btn-group-fonte">
+            <button type="button" class="btn btn-sm btn-primary fw-bold" id="btn-fonte-mesa" data-fonte="mesa" title="Carregar chamados da Mesa de Trabalho (Vinicius #53)">
+                <i class="bi bi-kanban me-1"></i> Mesa (#53)
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" id="btn-fonte-geral" data-fonte="chamados" title="Carregar todos os chamados da API Geral">
+                <i class="bi bi-globe me-1"></i> Todos (/api/chamados)
+            </button>
+        </div>
         <a href="chamados_acumulados.php" class="btn btn-success btn-sm fw-bold">
             <i class="bi bi-inbox"></i> Acumulados
         </a>
@@ -593,15 +601,44 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         document.getElementById('kpi-aguard-fila').textContent=lista.filter(r=>normalizarStatus(r.CHAMADO_STATUS)==='Aguardando Fila').length;
     }
 
+    function getFonteAtiva() {
+        return localStorage.getItem('gp_chamados_fonte') || 'mesa';
+    }
+
+    function atualizarBotoesFonte(fonte) {
+        const btnMesa = document.getElementById('btn-fonte-mesa');
+        const btnGeral = document.getElementById('btn-fonte-geral');
+        const subtitulo = document.getElementById('subtitulo-api');
+
+        if (fonte === 'mesa') {
+            btnMesa.className = 'btn btn-sm btn-primary fw-bold';
+            btnGeral.className = 'btn btn-sm btn-outline-secondary fw-bold';
+            if (subtitulo) {
+                subtitulo.innerHTML = 'Leitura em tempo real de <strong>interno.gestaopro.srv.br/api/mesa?usuario=53&secoes=chamados,clientes</strong>';
+            }
+        } else {
+            btnMesa.className = 'btn btn-sm btn-outline-secondary fw-bold';
+            btnGeral.className = 'btn btn-sm btn-primary fw-bold';
+            if (subtitulo) {
+                subtitulo.innerHTML = 'Leitura em tempo real de <strong>interno.gestaopro.srv.br/api/chamados</strong>';
+            }
+        }
+    }
+
     function carregarDados(forcar){
         forcar = !!forcar;
+        const fonte = getFonteAtiva();
+        atualizarBotoesFonte(fonte);
+
         document.getElementById('estado-carregando').classList.remove('d-none');
         document.getElementById('estado-erro').classList.add('d-none');
         document.getElementById('wrapper-tabela').classList.add('d-none');
         document.getElementById('btn-refresh').disabled=true;
         document.getElementById('msg-carregando').textContent = forcar ? 'Buscando chamados da API...' : 'Carregando última leitura...';
 
-        const url='api_gestaopro_bridge.php?endpoint=chamados'+(forcar ? '&forcar=1' : '&somente_cache=1');
+        const url = fonte === 'mesa'
+            ? 'api_gestaopro_bridge.php?endpoint=mesa&usuario=53&secoes=chamados,clientes' + (forcar ? '&forcar=1' : '&somente_cache=1')
+            : 'api_gestaopro_bridge.php?endpoint=chamados' + (forcar ? '&forcar=1' : '&somente_cache=1');
 
         Promise.all([
             fetch(url).then(r=>r.json()),
@@ -631,12 +668,31 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         }).catch(err=>{
             document.getElementById('estado-carregando').classList.add('d-none');
             document.getElementById('estado-erro').classList.remove('d-none');
-            document.getElementById('msg-erro').textContent=err.message;
+            let msg = err.message;
+            if (fonte === 'chamados') {
+                msg += ' <br><br><button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="alternarParaMesa()"><i class="bi bi-kanban me-1"></i> Carregar Chamados da Mesa (#53)</button>';
+            }
+            document.getElementById('msg-erro').innerHTML = msg;
         }).finally(()=>{
             document.getElementById('btn-refresh').disabled=false;
             document.getElementById('ico-refresh').className='bi bi-arrow-clockwise';
         });
     }
+
+    window.alternarParaMesa = function() {
+        localStorage.setItem('gp_chamados_fonte', 'mesa');
+        carregarDados(false);
+    };
+
+    document.getElementById('btn-fonte-mesa').addEventListener('click', function(){
+        localStorage.setItem('gp_chamados_fonte', 'mesa');
+        carregarDados(false);
+    });
+
+    document.getElementById('btn-fonte-geral').addEventListener('click', function(){
+        localStorage.setItem('gp_chamados_fonte', 'chamados');
+        carregarDados(false);
+    });
 
     document.getElementById('btn-refresh').addEventListener('click',function(){
         document.getElementById('ico-refresh').className='bi bi-arrow-clockwise spin';

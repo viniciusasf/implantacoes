@@ -44,7 +44,8 @@ function calcularScoreGeralCliente(PDO $pdo, $idCliente) {
         'orcamento' => 3,
         'pdv' => 5,
         'boleto' => 2,
-        'nota_fiscal' => 2
+        'nota_fiscal' => 2,
+        'customizacoes' => 5
     ];
 
     $stmt = $pdo->prepare("SELECT processo, utiliza_modulo, nivel, meta_minima, uso_real, operacoes_suporte, erros_retrabalho 
