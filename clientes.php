@@ -642,6 +642,35 @@ body, html {
     font-weight: 500;
 }
 
+.support-ticket-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 1rem;
+    box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04);
+}
+
+.support-ticket-description {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.55;
+}
+
+.support-ticket-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: 0.75rem;
+}
+
+.support-ticket-detail {
+    min-width: 0;
+    padding: 0.65rem 0.75rem;
+    background: var(--bg-body);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    overflow-wrap: anywhere;
+}
+
 .client-badge-soft {
     font-size: 0.65rem;
     font-weight: 800;
@@ -1044,15 +1073,6 @@ body, html {
                         <?php endif; ?>
 
                         <div class="control-bar p-2 mb-0" style="background: var(--bg-body); border-radius: 12px; border: none; gap: 4px;">
-                            <button class="btn btn-sm btn-action uso btn-dashboard-uso" 
-                                    data-id-api="<?= htmlspecialchars($idApiUsado, ENT_QUOTES, 'UTF-8') ?>" 
-                                    data-id-cliente="<?= $c['id_cliente'] ?>" 
-                                    data-fantasia="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>" 
-                                    data-serial="<?= htmlspecialchars($c['serial'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                                    title="Dashboard de Uso do Sistema" 
-                                    onclick="abrirDashboardUso(this)">
-                                <i class="bi bi-speedometer2"></i>
-                            </button>
                             <button class="btn btn-sm btn-action edit edit-trigger" 
                                     data-id="<?= $c['id_cliente'] ?>" 
                                     data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>" 
@@ -1072,6 +1092,15 @@ body, html {
                                     data-link-videos="<?= htmlspecialchars($c['link_videos'] ?? '') ?>" 
                                     title="Editar" onclick="openEditModal(this)">
                                 <i class="bi bi-pencil"></i>
+                            </button>
+                            <?php $idApiChamados = extrairIdClienteApi($c); ?>
+                            <button type="button" class="btn btn-sm btn-action chamados btn-suporte-cliente"
+                                    data-id-api="<?= htmlspecialchars($idApiChamados, ENT_QUOTES, 'UTF-8') ?>"
+                                    data-fantasia="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                    aria-label="Chamados de suporte de <?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                    title="<?= $idApiChamados === '' ? 'Cadastre o ID Cliente API para consultar os chamados' : 'Chamados de suporte' ?>"
+                                    onclick="abrirChamadosSuporte(this)" <?= $idApiChamados === '' ? 'disabled' : '' ?>>
+                                <i class="bi bi-headset"></i>
                             </button>
                             <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos" title="Ver Treinamentos">
                                 <i class="bi bi-calendar-check"></i>
@@ -1187,10 +1216,9 @@ body, html {
                                         <?php endif; ?>
                                         <?php if (!empty($contatos_por_cliente[$c['id_cliente']])): ?>
                                         <div class="text-muted small"><i class="bi bi-person-lines-fill me-1"></i><?= htmlspecialchars(implode(', ', array_column($contatos_por_cliente[$c['id_cliente']], 'nome'))) ?></div>
-                                        <?php endif; ?>
+                                        <?php endif;                                         ?>
                                         <?php 
                                             $infoUsoT = obterInfoUsoCliente($c, $uso_clientes_map);
-                                            $idApiUsadoT = ($infoUsoT['id_api_usado'] ?? '') ?: extrairIdClienteApi($c);
                                         ?>
                                         <div class="mt-1 d-flex align-items-center gap-1" style="font-size: 0.74rem;">
                                             <i class="bi bi-speedometer2 text-info"></i>
@@ -1210,15 +1238,6 @@ body, html {
                                     </td>
                                     <td class="text-end pe-4">
                                         <div class="d-flex justify-content-end gap-1">
-                                            <button class="btn btn-sm btn-action uso btn-dashboard-uso" 
-                                                    data-id-api="<?= htmlspecialchars($idApiUsadoT, ENT_QUOTES, 'UTF-8') ?>" 
-                                                    data-id-cliente="<?= $c['id_cliente'] ?>" 
-                                                    data-fantasia="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>" 
-                                                    data-serial="<?= htmlspecialchars($c['serial'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                                                    title="Dashboard de Uso do Sistema" 
-                                                    onclick="abrirDashboardUso(this)">
-                                                <i class="bi bi-speedometer2"></i>
-                                            </button>
                                             <button class="btn btn-sm btn-action edit edit-trigger" 
                                                     data-id="<?= $c['id_cliente'] ?>" 
                                                     data-fantasia="<?= htmlspecialchars($c['fantasia']) ?>" 
@@ -1239,6 +1258,15 @@ body, html {
                                                     data-link-videos="<?= htmlspecialchars($c['link_videos'] ?? '') ?>" 
                                                     onclick="openEditModal(this)">
                                                 <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <?php $idApiChamadosTabela = extrairIdClienteApi($c); ?>
+                                            <button type="button" class="btn btn-sm btn-action chamados btn-suporte-cliente"
+                                                    data-id-api="<?= htmlspecialchars($idApiChamadosTabela, ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-fantasia="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                                    aria-label="Chamados de suporte de <?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                                    title="<?= $idApiChamadosTabela === '' ? 'Cadastre o ID Cliente API para consultar os chamados' : 'Chamados de suporte' ?>"
+                                                    onclick="abrirChamadosSuporte(this)" <?= $idApiChamadosTabela === '' ? 'disabled' : '' ?>>
+                                                <i class="bi bi-headset"></i>
                                             </button>
                                             <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos" title="Ver Treinamentos">
                                                 <i class="bi bi-calendar-check"></i>
@@ -1528,6 +1556,98 @@ body, html {
                 </button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- Modal de chamados de suporte do cliente -->
+<div class="modal fade" id="modalChamadosSuporte" tabindex="-1" aria-labelledby="supportTicketsTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 22px; background: var(--bg-card); overflow: hidden;">
+            <div class="modal-header border-0 p-4 text-white" style="background: linear-gradient(135deg, #10234f 0%, #174a79 55%, #0f9f9a 100%);">
+                <div class="d-flex align-items-center gap-3 min-w-0">
+                    <div class="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 48px; height: 48px; background: rgba(255,255,255,.16); font-size: 1.4rem;">
+                        <i class="bi bi-headset"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <h4 class="modal-title fw-bold mb-1 text-truncate" id="supportTicketsTitle">Chamados de suporte</h4>
+                        <div class="small text-white-50">
+                            <span id="supportTicketsClient">Cliente</span>
+                            <span class="mx-1">·</span>
+                            ID GestãoPro <strong class="text-white" id="supportTicketsClientId">—</strong>
+                            <span class="mx-1">·</span>
+                            <span id="supportTicketsUpdated">Aguardando consulta</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2 ms-auto">
+                    <button type="button" class="btn btn-sm btn-light fw-semibold" id="supportTicketsRefresh" onclick="carregarChamadosSuporteAtual(true)">
+                        <i class="bi bi-arrow-clockwise me-1" id="supportTicketsRefreshIcon"></i>Atualizar
+                    </button>
+                    <button type="button" class="btn-close btn-close-white ms-1" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+            </div>
+            <div class="modal-body p-4" style="background: var(--bg-body); min-height: 430px;">
+                <div class="row g-3 mb-4" id="supportTicketsSummary" hidden>
+                    <div class="col-12 col-sm-4">
+                        <div class="dash-kpi-card py-3">
+                            <div class="text-muted small">Total de chamados</div>
+                            <div class="fs-3 fw-bold text-main" id="supportTicketsTotal">0</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-4">
+                        <div class="dash-kpi-card py-3">
+                            <div class="text-muted small">Em aberto</div>
+                            <div class="fs-3 fw-bold text-warning" id="supportTicketsOpen">0</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-4">
+                        <div class="dash-kpi-card py-3">
+                            <div class="text-muted small">Resolvidos</div>
+                            <div class="fs-3 fw-bold text-success" id="supportTicketsResolved">0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-2 align-items-center mb-3" id="supportTicketsFilters" hidden>
+                    <div class="col-12 col-md">
+                        <div class="input-group">
+                            <span class="input-group-text bg-card border-end-0"><i class="bi bi-search text-muted"></i></span>
+                            <input type="search" class="form-control border-start-0" id="supportTicketsSearch" placeholder="Buscar por número, descrição ou informação...">
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <select class="form-select" id="supportTicketsStatusFilter" aria-label="Filtrar chamados por status">
+                            <option value="todos">Todos os chamados</option>
+                            <option value="aberto">Em aberto</option>
+                            <option value="resolvido">Resolvidos</option>
+                            <option value="outro">Outros status</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="supportTicketsLoading" class="py-5 text-center" role="status">
+                    <div class="spinner-border text-info mb-3" aria-hidden="true"></div>
+                    <h5 class="fw-bold text-main mb-1">Carregando chamados</h5>
+                    <p class="text-muted small mb-0">Consultando os registros de suporte deste cliente no GestãoPro.</p>
+                </div>
+                <div id="supportTicketsError" class="alert alert-danger d-none" role="alert"></div>
+                <div id="supportTicketsEmpty" class="py-5 text-center d-none">
+                    <i class="bi bi-inbox fs-1 text-muted"></i>
+                    <h5 class="fw-bold text-main mt-3 mb-1">Nenhum chamado encontrado</h5>
+                    <p class="text-muted small mb-0">A API não retornou chamados para este cliente.</p>
+                </div>
+                <div id="supportTicketsNoMatches" class="py-5 text-center d-none">
+                    <i class="bi bi-search fs-1 text-muted"></i>
+                    <h5 class="fw-bold text-main mt-3 mb-1">Nenhum resultado para os filtros</h5>
+                    <p class="text-muted small mb-0">Tente outro termo ou selecione “Todos os chamados”.</p>
+                </div>
+                <div id="supportTicketsList" class="d-grid gap-3" aria-live="polite"></div>
+            </div>
+            <div class="modal-footer border-0 px-4 py-3">
+                <span class="small text-muted me-auto" id="supportTicketsResultCount"></span>
+                <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1828,6 +1948,263 @@ body, html {
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 
 <script>
+    function escaparHtmlChamadosCliente(valor) {
+        return String(valor ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function localizarChamadosCliente(dados) {
+        if (Array.isArray(dados)) {
+            return dados.filter(item => item && typeof item === 'object' && !Array.isArray(item));
+        }
+        if (!dados || typeof dados !== 'object') return null;
+
+        let encontrouColecaoVazia = false;
+        for (const chave of ['chamados', 'implantacao', 'implantacoes', 'tickets', 'data', 'dados', 'items', 'registros', 'results']) {
+            if (dados[chave] !== undefined) {
+                const encontrados = localizarChamadosCliente(dados[chave]);
+                if (encontrados && encontrados.length) return encontrados;
+                if (encontrados !== null) encontrouColecaoVazia = true;
+            }
+        }
+
+        const chavesConhecidas = new Set(['chamados', 'implantacao', 'implantacoes', 'tickets', 'data', 'dados', 'items', 'registros', 'results']);
+        for (const [chave, valor] of Object.entries(dados)) {
+            if (!chavesConhecidas.has(chave.toLowerCase()) && valor && typeof valor === 'object') {
+                const encontrados = localizarChamadosCliente(valor);
+                if (encontrados && encontrados.length) return encontrados;
+                if (encontrados !== null) encontrouColecaoVazia = true;
+            }
+        }
+
+        const chaves = Object.keys(dados).map(chave => chave.toLowerCase());
+        if (chaves.some(chave => ['id_chamado', 'numero', 'ticket_id'].includes(chave))) {
+            return [dados];
+        }
+        if (chaves.includes('id') && !Object.values(dados).some(valor => valor && typeof valor === 'object')) {
+            return [dados];
+        }
+
+        return encontrouColecaoVazia ? [] : null;
+    }
+
+    function campoChamadoCliente(chamado, alternativas) {
+        for (const chave of alternativas) {
+            if (chamado[chave] !== undefined && chamado[chave] !== null && String(chamado[chave]).trim() !== '') {
+                return chamado[chave];
+            }
+        }
+        const chavesLowercase = new Map(Object.keys(chamado).map(chave => [chave.toLowerCase(), chave]));
+        for (const chave of alternativas) {
+            const chaveReal = chavesLowercase.get(chave.toLowerCase());
+            if (chaveReal && chamado[chaveReal] !== null && String(chamado[chaveReal]).trim() !== '') {
+                return chamado[chaveReal];
+            }
+        }
+        return '';
+    }
+
+    function valorLegivelChamadoCliente(valor) {
+        if (valor === null || valor === undefined || valor === '') return 'Não informado';
+        if (typeof valor === 'object') {
+            return Array.isArray(valor)
+                ? valor.map(valorLegivelChamadoCliente).join(', ')
+                : JSON.stringify(valor);
+        }
+        return String(valor);
+    }
+
+    function rotuloCampoChamadoCliente(chave) {
+        return String(chave)
+            .replace(/_/g, ' ')
+            .toLowerCase()
+            .replace(/\b\w/g, letra => letra.toUpperCase());
+    }
+
+    let chamadosSuporteAtivos = { idApi: '', fantasia: '', chamados: [], origem: 'api' };
+    let requisicaoChamadosSuporte = 0;
+
+    function classificarStatusChamadoCliente(status) {
+        const normalizado = String(status || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        if (/nao\s+(resolvid|concluid|finalizad|fechad|encerrad)/.test(normalizado)) return 'aberto';
+        if (/(resolvid|concluid|finalizad|fechad|encerrad)/.test(normalizado)) return 'resolvido';
+        if (/(abert|pendente|andamento|atendimento|aguard|novo)/.test(normalizado)) return 'aberto';
+        return 'outro';
+    }
+
+    function formatarDataChamadoCliente(valor) {
+        if (!valor) return '';
+        const texto = String(valor);
+        const data = new Date(texto);
+        if (Number.isNaN(data.getTime())) return texto;
+        return data.toLocaleString('pt-BR', {
+            timeZone: 'America/Sao_Paulo',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function atualizarResumoChamadosCliente(chamados) {
+        const abertos = chamados.filter(chamado => classificarStatusChamadoCliente(campoChamadoCliente(chamado, ['CHAMADO_STATUS', 'STATUS_CHAMADO', 'STATUS', 'status'])) === 'aberto').length;
+        const resolvidos = chamados.filter(chamado => classificarStatusChamadoCliente(campoChamadoCliente(chamado, ['CHAMADO_STATUS', 'STATUS_CHAMADO', 'STATUS', 'status'])) === 'resolvido').length;
+        document.getElementById('supportTicketsTotal').textContent = chamados.length.toLocaleString('pt-BR');
+        document.getElementById('supportTicketsOpen').textContent = abertos.toLocaleString('pt-BR');
+        document.getElementById('supportTicketsResolved').textContent = resolvidos.toLocaleString('pt-BR');
+        document.getElementById('supportTicketsSummary').hidden = false;
+    }
+
+    function renderizarChamadoSuporte(chamado) {
+        const id = campoChamadoCliente(chamado, ['ID', 'ID_CHAMADO', 'id_chamado', 'numero', 'ticket_id']);
+        const status = campoChamadoCliente(chamado, ['CHAMADO_STATUS', 'STATUS_CHAMADO', 'STATUS', 'status']);
+        const assunto = campoChamadoCliente(chamado, ['ASSUNTO', 'TITULO', 'TEMA', 'assunto']);
+        const descricao = campoChamadoCliente(chamado, ['DESCRICAO', 'DESCRICAO_PROBLEMA', 'MENSAGEM', 'descricao']);
+        const data = campoChamadoCliente(chamado, ['DATA_ABERTURA', 'DATA_CRIACAO', 'DATA', 'CRIADO_EM', 'created_at']);
+        const categoria = classificarStatusChamadoCliente(status);
+        const classeStatus = categoria === 'resolvido' ? 'bg-success-subtle text-success' : (categoria === 'aberto' ? 'bg-warning-subtle text-warning-emphasis' : 'bg-secondary-subtle text-secondary');
+        const ignorados = new Set([
+            'id', 'id_chamado', 'numero', 'ticket_id',
+            'chamado_status', 'status_chamado', 'status',
+            'descricao', 'descricao_problema', 'mensagem',
+            'assunto', 'titulo', 'tema',
+            'data_abertura', 'data_criacao', 'data', 'criado_em', 'created_at'
+        ]);
+        const detalhes = Object.entries(chamado)
+            .filter(([chave, valor]) => !ignorados.has(chave.toLowerCase()) && valor !== null && valor !== '')
+            .map(([chave, valor]) => `<div class="support-ticket-detail"><div class="text-muted small mb-1">${escaparHtmlChamadosCliente(rotuloCampoChamadoCliente(chave))}</div><div class="fw-medium">${escaparHtmlChamadosCliente(valorLegivelChamadoCliente(valor))}</div></div>`)
+            .join('');
+        const textoPrincipal = assunto || descricao || 'Sem descrição disponível.';
+        const descricaoSecundaria = assunto && descricao && assunto !== descricao
+            ? `<div class="support-ticket-description text-muted small mt-2">${escaparHtmlChamadosCliente(descricao)}</div>`
+            : '';
+
+        return `<article class="support-ticket-card" data-support-ticket data-status="${categoria}" data-search="${escaparHtmlChamadosCliente(JSON.stringify(chamado).toLowerCase())}">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="badge rounded-pill bg-primary-subtle text-primary">${id !== '' ? '#' + escaparHtmlChamadosCliente(id) : 'Chamado'}</span>
+                    ${status !== '' ? `<span class="badge rounded-pill ${classeStatus}">${escaparHtmlChamadosCliente(status)}</span>` : '<span class="badge rounded-pill bg-secondary-subtle text-secondary">Status não informado</span>'}
+                </div>
+                ${data !== '' ? `<span class="small text-muted"><i class="bi bi-calendar3 me-1"></i>${escaparHtmlChamadosCliente(formatarDataChamadoCliente(data))}</span>` : ''}
+            </div>
+            <h6 class="fw-bold text-main mt-3 mb-0">${escaparHtmlChamadosCliente(textoPrincipal)}</h6>
+            ${descricaoSecundaria}
+            ${detalhes ? `<details class="mt-3">
+                <summary class="small fw-semibold text-primary" style="cursor:pointer">Ver outras informações</summary>
+                <div class="support-ticket-details mt-3">${detalhes}</div>
+            </details>` : ''}
+        </article>`;
+    }
+
+    function filtrarChamadosSuporte() {
+        const lista = document.getElementById('supportTicketsList');
+        const termo = document.getElementById('supportTicketsSearch').value.trim().toLowerCase();
+        const statusSelecionado = document.getElementById('supportTicketsStatusFilter').value;
+        let exibidos = 0;
+
+        lista.querySelectorAll('[data-support-ticket]').forEach(item => {
+            const correspondeTermo = !termo || item.dataset.search.includes(termo);
+            const correspondeStatus = statusSelecionado === 'todos' || item.dataset.status === statusSelecionado;
+            const visivel = correspondeTermo && correspondeStatus;
+            item.classList.toggle('d-none', !visivel);
+            if (visivel) exibidos++;
+        });
+
+        document.getElementById('supportTicketsNoMatches').classList.toggle('d-none', exibidos > 0 || chamadosSuporteAtivos.chamados.length === 0);
+        document.getElementById('supportTicketsResultCount').textContent = `${exibidos.toLocaleString('pt-BR')} de ${chamadosSuporteAtivos.chamados.length.toLocaleString('pt-BR')} chamado(s)`;
+    }
+
+    function exibirChamadosSuporte(dados, origem, geradoEm) {
+        const chamados = localizarChamadosCliente(dados);
+        if (chamados === null) {
+            throw new Error('A resposta da API veio em um formato que não permite identificar os chamados.');
+        }
+        chamadosSuporteAtivos.chamados = chamados;
+        chamadosSuporteAtivos.origem = origem;
+        document.getElementById('supportTicketsLoading').classList.add('d-none');
+        document.getElementById('supportTicketsError').classList.add('d-none');
+        document.getElementById('supportTicketsList').innerHTML = chamados.map(renderizarChamadoSuporte).join('');
+        document.getElementById('supportTicketsEmpty').classList.toggle('d-none', chamados.length > 0);
+        document.getElementById('supportTicketsFilters').hidden = chamados.length === 0;
+        document.getElementById('supportTicketsSearch').value = '';
+        document.getElementById('supportTicketsStatusFilter').value = 'todos';
+        const atualizacao = geradoEm ? ` · ${geradoEm}` : '';
+        document.getElementById('supportTicketsUpdated').textContent = `${origem === 'cache' ? 'Cache local' : 'GestãoPro'}${atualizacao}`;
+        atualizarResumoChamadosCliente(chamados);
+        filtrarChamadosSuporte();
+    }
+
+    async function abrirChamadosSuporte(elemento) {
+        const idApi = (elemento.dataset.idApi || '').trim();
+        if (!idApi) return;
+
+        chamadosSuporteAtivos = { idApi, fantasia: elemento.dataset.fantasia || 'Cliente', chamados: [], origem: 'api' };
+        document.getElementById('supportTicketsClient').textContent = chamadosSuporteAtivos.fantasia;
+        document.getElementById('supportTicketsClientId').textContent = idApi;
+        document.getElementById('supportTicketsUpdated').textContent = 'Consultando GestãoPro...';
+        document.getElementById('supportTicketsSummary').hidden = true;
+        document.getElementById('supportTicketsFilters').hidden = true;
+        document.getElementById('supportTicketsList').innerHTML = '';
+        document.getElementById('supportTicketsResultCount').textContent = '';
+        document.getElementById('supportTicketsError').classList.add('d-none');
+        document.getElementById('supportTicketsEmpty').classList.add('d-none');
+        document.getElementById('supportTicketsNoMatches').classList.add('d-none');
+
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalChamadosSuporte')).show();
+        await carregarChamadosSuporte(idApi);
+    }
+
+    async function carregarChamadosSuporte(idApi, forcar = false) {
+        const requisicao = ++requisicaoChamadosSuporte;
+        const loading = document.getElementById('supportTicketsLoading');
+        const refreshButton = document.getElementById('supportTicketsRefresh');
+        const refreshIcon = document.getElementById('supportTicketsRefreshIcon');
+        const error = document.getElementById('supportTicketsError');
+        loading.classList.remove('d-none');
+        error.classList.add('d-none');
+        refreshButton.disabled = true;
+        refreshIcon.classList.add('spin-animation');
+
+        try {
+            const query = new URLSearchParams({ endpoint: 'chamados_cliente', id_cliente_api: idApi });
+            if (forcar) query.set('forcar', '1');
+            const resposta = await fetch(`api_gestaopro_bridge.php?${query.toString()}`, {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const json = await resposta.json();
+            if (!resposta.ok || !json.sucesso) {
+                throw new Error(json.erro || 'Não foi possível carregar os chamados deste cliente.');
+            }
+            if (requisicao !== requisicaoChamadosSuporte || chamadosSuporteAtivos.idApi !== idApi) return;
+            exibirChamadosSuporte(json.dados, json.origem || 'api', json.gerado_em || '');
+        } catch (erro) {
+            if (requisicao !== requisicaoChamadosSuporte || chamadosSuporteAtivos.idApi !== idApi) return;
+            loading.classList.add('d-none');
+            error.textContent = `Falha ao carregar os chamados: ${erro.message || 'erro desconhecido'}`;
+            error.classList.remove('d-none');
+            document.getElementById('supportTicketsUpdated').textContent = 'Falha na consulta';
+            console.error('Erro ao carregar chamados do cliente:', erro);
+        } finally {
+            if (requisicao === requisicaoChamadosSuporte) {
+                refreshButton.disabled = false;
+                refreshIcon.classList.remove('spin-animation');
+            }
+        }
+    }
+
+    function carregarChamadosSuporteAtual(forcar = false) {
+        if (!chamadosSuporteAtivos.idApi) return;
+        carregarChamadosSuporte(chamadosSuporteAtivos.idApi, forcar);
+    }
+
+    document.getElementById('supportTicketsSearch').addEventListener('input', filtrarChamadosSuporte);
+    document.getElementById('supportTicketsStatusFilter').addEventListener('change', filtrarChamadosSuporte);
+
     // --- GERENCIADOR DO DASHBOARD POR CLIENTE ---
     let dashClienteAtivo = null;
     let dashDiasAtivos = 30;

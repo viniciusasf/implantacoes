@@ -8,7 +8,7 @@ if (session_status() === PHP_SESSION_ACTIVE) {
 }
 /**
  * bridge: API GestãoPro → JSON
- * Suporta múltiplos endpoints: implantacoes | chamados
+ * Suporta múltiplos endpoints: implantacoes | chamados | chamados_cliente
  * Uso: api_gestaopro_bridge.php?endpoint=implantacoes
  *      api_gestaopro_bridge.php?endpoint=chamados
  *      Adicionar &forcar=1 para atualizar os dados pela API.
@@ -25,7 +25,7 @@ define('GP_LOGIN',     appRequiredConfig('gestaopro', 'login'));
 define('GP_SENHA',     appRequiredConfig('gestaopro', 'password'));
 define('GP_CACHE_TTL', 300); // 5 minutos
 
-$ENDPOINTS_VALIDOS = ['implantacoes', 'chamados', 'uso', 'mesa'];
+$ENDPOINTS_VALIDOS = ['implantacoes', 'chamados', 'chamados_cliente', 'uso', 'mesa'];
 $endpoint = $_GET['endpoint'] ?? 'implantacoes';
 $base_endpoint = explode('/', explode('?', $endpoint)[0])[0];
 
@@ -86,10 +86,41 @@ function mesclarChamados(array $chamados): array {
 }
 
 /** Busca todas as páginas de um endpoint que retorna uma coleção paginada. */
-function buscarTodasPaginas(string $path, string $cookieStr, string $chavePrincipal): ?array {
+function buscarTodasPaginas(string $path, string $cookieStr, string $chavePrincipal = ''): ?array {
     $separador = strpos($path, '?') === false ? '?' : '&';
     $primeira = buscarEndpoint($path, $cookieStr);
-    if (!$primeira || !isset($primeira[$chavePrincipal]) || !is_array($primeira[$chavePrincipal])) {
+    if ($primeira === null) {
+        return null;
+    }
+
+    if ($chavePrincipal === '') {
+        $chavesCandidatas = [];
+        foreach (['chamados', 'implantacao', 'implantacoes', 'tickets', 'data', 'dados', 'items', 'registros', 'results'] as $chave) {
+            if (isset($primeira[$chave]) && is_array($primeira[$chave])) {
+                $chavesCandidatas[] = $chave;
+            }
+        }
+        foreach ($primeira as $chave => $valor) {
+            if (
+                is_array($valor)
+                && !in_array($chave, ['total', 'page', 'count', 'totalPages'], true)
+                && !in_array((string) $chave, $chavesCandidatas, true)
+            ) {
+                $chavesCandidatas[] = (string) $chave;
+            }
+        }
+        foreach ($chavesCandidatas as $chave) {
+            if (!empty($primeira[$chave])) {
+                $chavePrincipal = $chave;
+                break;
+            }
+        }
+        if ($chavePrincipal === '' && !empty($chavesCandidatas)) {
+            $chavePrincipal = $chavesCandidatas[0];
+        }
+    }
+
+    if ($chavePrincipal === '' || !isset($primeira[$chavePrincipal]) || !is_array($primeira[$chavePrincipal])) {
         return $primeira;
     }
 
@@ -319,6 +350,76 @@ function buscarEndpointsEmLote(array $paths, string $cookieStr): array {
 
 // ── Fluxo principal ───────────────────────────────────────────────────────────
 try {
+    if ($base_endpoint === 'chamados_cliente') {
+        $idClienteApi = trim((string) ($_GET['id_cliente_api'] ?? ''));
+        if ($idClienteApi === '' || !ctype_digit($idClienteApi) || (int) $idClienteApi < 1) {
+            http_response_code(400);
+            echo json_encode(['sucesso' => false, 'erro' => 'ID Cliente API inválido.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $chamadosCacheFile = __DIR__ . '/logs/gp_cache_chamados_cliente_' . $idClienteApi . '.json';
+        $forcar = !empty($_GET['forcar']);
+        $somenteCache = !empty($_GET['somente_cache']);
+        $cached = lerCache($chamadosCacheFile, $somenteCache);
+
+        if (!$forcar && $cached !== null) {
+            echo json_encode([
+                'sucesso' => true,
+                'origem' => 'cache',
+                'gerado_em' => date('d/m/Y H:i:s', filemtime($chamadosCacheFile)),
+                'id_cliente_api' => $idClienteApi,
+                'dados' => $cached,
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        if ($somenteCache) {
+            http_response_code(404);
+            echo json_encode(['sucesso' => false, 'erro' => 'Nenhum chamado deste cliente está disponível em cache.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $cookieChamados = fazerLogin();
+        if (!$cookieChamados) {
+            http_response_code(401);
+            echo json_encode(['sucesso' => false, 'erro' => 'Falha na autenticação com a API GestãoPro.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        $dadosChamados = buscarTodasPaginas('/api/clientes/implantacao/' . rawurlencode($idClienteApi), $cookieChamados);
+        if ($dadosChamados === null) {
+            $detalhe = $ultimoErroBuscaEndpoint ?? 'a API não retornou uma resposta válida';
+            $cacheContingencia = lerCache($chamadosCacheFile, true);
+            if ($cacheContingencia !== null) {
+                echo json_encode([
+                    'sucesso' => true,
+                    'origem' => 'cache',
+                    'contingencia' => true,
+                    'aviso' => "A API externa respondeu com erro ({$detalhe}). Exibindo a última leitura disponível em cache.",
+                    'gerado_em' => date('d/m/Y H:i:s', filemtime($chamadosCacheFile)),
+                    'id_cliente_api' => $idClienteApi,
+                    'dados' => $cacheContingencia,
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            http_response_code(502);
+            echo json_encode(['sucesso' => false, 'erro' => "Não foi possível obter os chamados do cliente: {$detalhe}."], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        salvarCache($chamadosCacheFile, $dadosChamados);
+        echo json_encode([
+            'sucesso' => true,
+            'origem' => 'api',
+            'gerado_em' => date('d/m/Y H:i:s'),
+            'id_cliente_api' => $idClienteApi,
+            'dados' => $dadosChamados,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     if ($base_endpoint === 'uso') {
         require_once __DIR__ . '/config.php';
         $dias = filter_var($_GET['dias'] ?? 30, FILTER_VALIDATE_INT);
