@@ -252,6 +252,16 @@ body {
 .table-premium {
     width: 100%;
 }
+.performance-table {
+    max-height: 440px;
+    overflow: auto;
+}
+.performance-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg-body);
+}
 .table-premium th {
     background: var(--bg-body);
     color: var(--text-muted);
@@ -512,7 +522,7 @@ body {
                     <i class="bi bi-award text-warning"></i>
                     Métricas de Performance
                 </h5>
-                <div class="table-responsive">
+                <div class="table-responsive performance-table">
                     <table class="table-premium">
                         <thead>
                             <tr>
@@ -526,7 +536,7 @@ body {
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach(array_slice($vendedores, 0, 5) as $v): 
+                            <?php foreach($vendedores as $v): 
                                 $success_rate = $v['success_rate'];
                                 $score = number_format($v['score_composto'], 1, ',', '.');
                             ?>

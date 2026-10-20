@@ -1,11 +1,12 @@
 <?php
+require_once __DIR__ . '/app_config.php';
 
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/google_oauth_token_helper.php';
 
 function driveTokenPath()
 {
-    $primary = __DIR__ . '/token.json';
+    $primary = appGoogleTokenPath();
     $fallback = __DIR__ . '/token_drive.json';
     if (file_exists($primary)) {
         return $primary;
@@ -15,7 +16,7 @@ function driveTokenPath()
 
 function driveCredentialsPath()
 {
-    return __DIR__ . '/credentials.json';
+    return appGoogleCredentialsPath();
 }
 
 function driveGetClient()
@@ -93,8 +94,22 @@ function driveSanitizeQueryValue($value)
     return str_replace("'", "\\'", $value);
 }
 
+/**
+ * Normaliza o nome da pasta para busca/criação consistente
+ * Remove espaços extras no início/fim e substitui múltiplos espaços por um único
+ */
+function driveNormalizeFolderName($folderName)
+{
+    $folderName = trim($folderName);
+    $folderName = preg_replace('/\s+/', ' ', $folderName);
+    return $folderName;
+}
+
 function driveFindOrCreateFolder(Google\Service\Drive $service, $folderName = 'PDF Chamados', $parentId = null)
 {
+    // Normaliza o nome para evitar duplicatas por diferenças de espaçamento
+    $folderName = driveNormalizeFolderName($folderName);
+
     $query = "mimeType='application/vnd.google-apps.folder' and name='" . driveSanitizeQueryValue($folderName) . "' and trashed=false";
     if ($parentId) {
         $query .= " and '" . driveSanitizeQueryValue($parentId) . "' in parents";

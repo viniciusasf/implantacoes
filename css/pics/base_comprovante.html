@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chamado #102472 · GestãoPro (v2 - Premium Motion)</title>
+  <style>
+    :root {
+      --navy-900: #0a1128;
+      --navy-950: #050a18;
+      --blue-600: #2d6df6;
+      --blue-400: #60a5fa;
+      --blue-100: #eef4ff;
+      --amber-500: #f59e0b;
+      --amber-100: #fef3c7;
+      --amber-800: #92400e;
+      --slate-100: #f8fafc;
+      --slate-200: #e2e8f0;
+      --slate-500: #64748b;
+      --slate-700: #334155;
+      --ink: #0f172a;
+      --white: #ffffff;
+      --accent-glow: rgba(45, 109, 246, 0.15);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 50%, #020617 100%);
+      color: var(--ink);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    body {
+      padding: 24px 16px 32px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .pdf-shell {
+      width: 100%;
+      max-width: 860px;
+      margin: 0 auto;
+      animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-mark {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, var(--blue-600), #1d4ed8);
+      box-shadow: 0 12px 28px -10px rgba(45, 109, 246, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .brand-mark svg {
+      width: 24px;
+      height: 24px;
+      display: block;
+    }
+
+    .brand-name {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: #ffffff;
+    }
+
+    .brand-name span {
+      color: var(--blue-400);
+    }
+
+    .ticket-tag {
+      background: rgba(15, 23, 42, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 11px;
+      color: #94a3b8;
+      letter-spacing: 0.02em;
+    }
+
+    .ticket-tag strong {
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.98);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 24px 28px 20px;
+      background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
+      border-bottom: 1px solid var(--slate-200);
+    }
+
+    .eyebrow {
+      display: inline-block;
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--blue-600);
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .card-header h1 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.25;
+      letter-spacing: -0.03em;
+      font-weight: 800;
+      color: var(--navy-900);
+    }
+
+    .meta-line {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--slate-500);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      background: var(--blue-100);
+      color: var(--blue-600);
+      border-radius: 999px;
+      padding: 5px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      border: 1px solid rgba(45, 109, 246, 0.15);
+    }
+
+    .pill svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: var(--amber-100);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: var(--amber-800);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.1);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--amber-500);
+      box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.2);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 20px 28px 10px;
+    }
+
+    .info-card {
+      background: linear-gradient(180deg, #ffffff, #f8fafc);
+      border: 1px solid var(--slate-200);
+      border-radius: 14px;
+      padding: 14px 16px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .info-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px -10px rgba(0,0,0,0.05);
+    }
+
+    .info-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--slate-500);
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .info-label svg {
+      width: 12px;
+      height: 12px;
+      color: var(--blue-600);
+    }
+
+    .info-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--navy-900);
+      line-height: 1.3;
+    }
+
+    .eta-card {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(45, 109, 246, 0.04));
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 14px;
+      padding: 16px 20px;
+    }
+
+    .eta-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .eta-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--amber-500), #d97706);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--white);
+      box-shadow: 0 8px 16px -6px rgba(245, 158, 11, 0.5);
+    }
+
+    .eta-icon svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .eta-label {
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--slate-500);
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+
+    .eta-value {
+      font-size: 18px;
+      letter-spacing: -0.03em;
+      color: var(--navy-900);
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .eta-note {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: var(--amber-800);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .request-box {
+      padding: 10px 28px 28px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--slate-500);
+      font-weight: 800;
+      margin: 16px 0 8px;
+    }
+
+    .section-title svg {
+      width: 14px;
+      height: 14px;
+      color: var(--blue-600);
+    }
+
+    .request-path {
+      font-size: 11px;
+      color: var(--slate-500);
+      margin-bottom: 10px;
+    }
+
+    .request-path strong {
+      color: var(--navy-900);
+    }
+
+    .request-body {
+      background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+      border: 1px solid var(--slate-200);
+      border-radius: 14px;
+      padding: 18px 20px;
+      font-size: 13px;
+      color: var(--navy-900);
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 380px;
+      overflow-y: auto;
+    }
+
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 20px 28px;
+      color: #94a3b8;
+      font-size: 11px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(15, 23, 42, 0.5);
+    }
+
+    .footer a {
+      color: var(--blue-400);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 12px 8px 20px; }
+      .topbar, .card-header, .footer { flex-direction: column; align-items: flex-start; }
+      .status-badge { width: 100%; justify-content: center; }
+      .summary-grid { grid-template-columns: 1fr; }
+      .eta-card { flex-direction: column; align-items: flex-start; }
+      .eta-value { font-size: 20px; }
+      .ticket-tag { width: 100%; text-align: left; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="pdf-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M4 17V9.5L12 4l8 5.5V17l-8 3-8-3Z" stroke="white" stroke-width="1.8" stroke-linejoin="round" />
+            <path d="M4 9.5 12 13l8-3.5" stroke="white" stroke-width="1.8" stroke-linejoin="round" />
+            <path d="M12 13v7" stroke="white" stroke-width="1.8" />
+          </svg>
+        </div>
+        <div class="brand-name">Gestão<span>Pro</span></div>
+      </div>
+      <div class="ticket-tag">Chamado <strong>#102472</strong> · Versão Premium Refinada (v2)</div>
+    </header>
+
+    <main class="card">
+      <div class="card-header">
+        <div>
+          <div class="eyebrow">Cliente</div>
+          <h1>ACE INDUSTRIAL SOLUTIONS CAN LTDA.</h1>
+          <div class="meta-line">Solicitação registrada no painel de suporte GestãoPro</div>
+          <div class="pill">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M4 6h16M4 12h10M4 18h7" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            Customização de Tela
+          </div>
+        </div>
+        <div class="status-badge"><span class="status-dot"></span>Aguardando Desenvolvimento</div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="info-card">
+          <div class="info-label">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8" />
+              <path d="M4 10h16" stroke="currentColor" stroke-width="1.8" />
+            </svg>
+            Tipo de Solicitação
+          </div>
+          <div class="info-value">Customização de Tela</div>
+        </div>
+
+        <div class="info-card">
+          <div class="info-label">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8" />
+            </svg>
+            Status Atual
+          </div>
+          <div class="info-value">Aguardando Desenvolvimento</div>
+        </div>
+
+        <div class="eta-card">
+          <div class="eta-left">
+            <div class="eta-icon">
+              <svg viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+                <path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </div>
+            <div>
+              <div class="eta-label">Previsão de retorno</div>
+              <div class="eta-value">15/09/2026</div>
+            </div>
+          </div>
+          <div class="eta-note">em 22 dias úteis</div>
+        </div>
+      </div>
+
+      <div class="request-box">
+        <div class="section-title">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M7 8h10M7 12h10M7 16h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          Descrição detalhada da solicitação
+        </div>
+        <div class="request-path">Suporte <span>›</span> Chamado <span>›</span> <strong>#102472</strong></div>
+        <div class="request-body">Especificação de Requisitos:: Modulos de Estoque, Compras e Produção:
+
+          1. Módulo: Estoque > Requisição de Material
+          1.1 Inclusão da Coluna "Nº ITEM"
+          Requisito: Criar uma nova coluna indicando Nº ITEM na listagem de Requisição de Material.
+          Origem do Dado: A informação deve ser herdada diretamente da tela de Orçamento > Orçamentos > Guia Itens do Orçamento (Nº ITEM).
+
+          2. Automação para Envio de Compras:
+          Módulo: Estoque > Requisição de Material
+          Regras de Negócio: Ao alterar o status de um item para "REQ COMPRA" e clicar no botão SALVAR, o sistema deverá enviar automaticamente o respectivo registro para a tela de Compras > Requisição de Compra Pendentes.
+
+          3. Módulo: Compras > Requisição de Compra Pendentes
+          Nova Coluna de Observação ("OBS")
+          Requisito: Adicione um campo/coluna de texto livre chamado "OBS".
+          Comportamento: Ao clicar na coluna, você deve abrir uma janela de visualização/edição, seguindo exatamente o mesmo padrão visual e funcional já utilizado na coluna "Nº SERIAL" do Orçamento de Venda.
+
+          3.1 Módulo: Compras > Requisição de Compra Pendentes
+          Nova Coluna "Nº ITEM"
+          Requisito: Incluir o campo numeral "Nº ITEM" na listagem.
+          Origem do Dado: Trazer a informação propagada desde a tela de Estoque > Requisição de Material (identificando a posição do item no Orçamento de Venda).
+
+          3.2 Módulo: Compras > Requisição de Compra Pendentes
+          Destaque Visual para Itens do Estoque
+          Regra: Aplique formatação em negrito em toda a linha correspondente cuja origem venha da tela de Estoque > Requisição de Material, garantindo rápida diferenciação visual.
+
+          3.3 Módulo: Compras > Requisição de Compra Pendentes
+          Filtro de Origem: Opção "Todos"
+          Regra: Atualizar o componente de filtro de "Origem" adicionando a opção "Todos", permitindo que o usuário visualize simultaneamente requisições de quaisquer origens cadastradas.
+
+          3.4 Módulo: Compras > Requisição de Compra Pendentes
+          Novo Botão: "Gerar Ordem de Serviço"
+          Posicionamento: Insira o botão "Gerar Ordem Serviço" posicionado à direita do botão existente "Ver Ordem Serviço".
+          Ação do botão: Ao selecionar um item e clicar no botão, o sistema deverá executar sequencialmente:
+          * Remover o item selecionado da listagem de Requisição de Compras Pendentes.
+          * Criar automaticamente uma nova Ordem de Serviço (OS) vinculada ao item dentro do módulo de Produção > Ordem de Serviço.
+
+          3.5 Módulo: Produção > Ordem de Serviço - Consulta
+          Layout e Colunas da Consulta de OS:
+          Na lista de consulta de Ordens de Serviço geradas, devem ser mantidas visíveis exclusivamente as seguintes colunas:
+          - N° ORÇAMENTO
+          - Nº OS
+          - Nº ITEM (trazido do orçamento original)
+          - Código Fiscal
+          - Descrição
+          - Complemento
+          - Horas (campo preenchido/digitado manualmente)
+          - Status (seguindo o padrão de status de produção do sistema)</div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>Documento gerado por GestãoPro · Edição Especial Frontend Design (v2)</span>
+      <a href="https://gestaopro.com.br/" target="_blank" rel="noopener">gestaopro.com.br</a>
+    </footer>
+  </div>
+</body>
+</html>

@@ -11,11 +11,6 @@ $stmt_map = $pdo->query("SELECT id_cliente, id_cliente_api, servidor FROM client
         $mapa_servidor_local[$row_map['id_cliente_api']] = $row_map['servidor'];
     }
 
-$stmt_retornos = $pdo->query("SELECT id_chamado FROM chamados_retornos");
-$chamados_retornos_local = [];
-while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
-    $chamados_retornos_local[] = (int)$row_retorno['id_chamado'];
-}
 ?>
 <div class="container-fluid px-0">
 
@@ -25,11 +20,19 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
         <h1 class="mb-1" style="font-size:1.6rem;">
             <i class="bi bi-headset me-2" style="color:var(--danger)"></i>Chamados de Suporte
         </h1>
-        <p class="mb-0" style="color:var(--text-muted);font-size:.85rem;">
-            Leitura em tempo real de <strong>interno.gestaopro.srv.br/api/chamados</strong>
+        <p class="mb-0" style="color:var(--text-muted);font-size:.85rem;" id="subtitulo-api">
+            Leitura em tempo real de <strong>interno.gestaopro.srv.br/api/mesa?usuario=53&secoes=chamados,clientes</strong>
         </p>
     </div>
-    <div class="d-flex gap-2 align-items-center">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div class="btn-group btn-group-sm p-1 rounded-3" style="background:var(--bg-body); border:1px solid var(--border-color);" role="group" id="btn-group-fonte">
+            <button type="button" class="btn btn-sm btn-primary fw-bold" id="btn-fonte-mesa" data-fonte="mesa" title="Carregar chamados da Mesa de Trabalho (Vinicius #53)">
+                <i class="bi bi-kanban me-1"></i> Mesa (#53)
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" id="btn-fonte-geral" data-fonte="chamados" title="Carregar todos os chamados da API Geral">
+                <i class="bi bi-globe me-1"></i> Todos (/api/chamados)
+            </button>
+        </div>
         <a href="chamados_acumulados.php" class="btn btn-success btn-sm fw-bold">
             <i class="bi bi-inbox"></i> Acumulados
         </a>
@@ -45,10 +48,10 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
 <div class="row g-3 mb-4">
     <?php
     $kpis = [
-        ['id'=>'kpi-aguard-dev',   'label'=>'Aguard. Desenvolvimento','icon'=>'bi-code-slash',       'color'=>'warning'],
-        ['id'=>'kpi-aguard-testes','label'=>'Aguardando Testes',     'icon'=>'bi-check2-circle',     'color'=>'success'],
-        ['id'=>'kpi-aguard-suporte','label'=>'Aguardando Suporte',   'icon'=>'bi-headset',           'color'=>'purple'],
-        ['id'=>'kpi-total',        'label'=>'Total',                'icon'=>'bi-ticket-detailed',   'color'=>'primary'],
+        ['id'=>'kpi-aguard-dev',          'label'=>'Aguard. Desenvolvimento','icon'=>'bi-code-slash',          'color'=>'warning'],
+        ['id'=>'kpi-aguard-testes',       'label'=>'Aguardando Testes',     'icon'=>'bi-check2-circle',      'color'=>'success'],
+        ['id'=>'kpi-aguard-autorizacao',  'label'=>'Aguardando Autorização','icon'=>'bi-hourglass-split',    'color'=>'danger'],
+        ['id'=>'kpi-aguard-fila',         'label'=>'Aguardando Fila',      'icon'=>'bi-list-check',         'color'=>'primary'],
     ];
     foreach ($kpis as $k): ?>
     <div class="col-6 col-md-3">
@@ -111,7 +114,7 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
     <div class="card-body p-0">
         <div id="estado-carregando" class="text-center py-5">
             <div class="spinner-border" style="color:var(--danger)" role="status"></div>
-            <p class="mt-3 mb-0" style="color:var(--text-muted)">Buscando chamados da API...</p>
+            <p id="msg-carregando" class="mt-3 mb-0" style="color:var(--text-muted)">Carregando chamados...</p>
         </div>
         <div id="estado-erro" class="d-none text-center py-5">
             <i class="bi bi-exclamation-triangle-fill" style="font-size:2.5rem;color:var(--danger)"></i>
@@ -128,12 +131,41 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
                             <th class="py-3 sortable" data-col="CHAMADO_STATUS">Status</th>
                             <th class="py-3 sortable" data-col="SERVIDOR">SRV</th>
                             <th class="py-3 sortable" data-col="DESCRICAO">Descrição</th>
+                            <th class="py-3 sortable" data-col="TIPOACOMP">Tipo</th>
                             <th class="py-3 sortable" data-col="DATAPREV_RETORNO">Prev. Retorno</th>
                             <th class="py-3 text-center">Ações</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-chamados"></tbody>
                 </table>
+            </div>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 px-3 py-3 border-top">
+                <div class="d-flex align-items-center gap-2">
+                    <label for="tamanho-pagina" class="small text-muted mb-0">Por página</label>
+                    <select id="tamanho-pagina" class="form-select form-select-sm" style="width:auto">
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <span id="lbl-paginacao" class="small text-muted"></span>
+                </div>
+                <nav aria-label="Paginação dos chamados">
+                    <ul id="controles-paginacao" class="pagination pagination-sm mb-0"></ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modal-descricao-chamado" tabindex="-1" aria-labelledby="modal-descricao-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-descricao-titulo">Descrição do chamado</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-descricao-texto" class="descricao-modal-texto"></div>
             </div>
         </div>
     </div>
@@ -143,6 +175,10 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
 
 <style>
 .sortable{cursor:pointer;user-select:none}.sortable:hover{color:var(--primary)!important}
+.descricao-chamado{font-size:.82rem;min-width:260px;max-width:360px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.descricao-resumo{display:inline-block;max-width:calc(100% - 34px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+.btn-ver-descricao{width:28px;height:28px;padding:0!important;flex:0 0 28px}
+.descricao-modal-texto{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.55;color:var(--text-dark)}
 .badge-ch{font-size:.68rem;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.03em;white-space:nowrap}
 .peso-chip{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;font-weight:700;font-size:.8rem}
 .btn-action {
@@ -165,6 +201,42 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
     font-size: 0.85rem;
     line-height: 1;
 }
+.table tbody tr.linha-atrasada > td {
+    background-color: rgba(239, 68, 68, 0.08) !important;
+    border-top-color: rgba(185, 28, 28, 0.22) !important;
+    border-bottom-color: rgba(185, 28, 28, 0.22) !important;
+}
+.table tbody tr.linha-hoje > td {
+    background-color: rgba(16, 185, 129, 0.08) !important;
+    border-top-color: rgba(4, 120, 87, 0.22) !important;
+    border-bottom-color: rgba(4, 120, 87, 0.22) !important;
+}
+.table tbody tr.linha-atrasada > td:first-child {
+    border-left: 4px solid #b91c1c !important;
+}
+.table tbody tr.linha-hoje > td:first-child {
+    border-left: 4px solid #047857 !important;
+}
+.table tbody tr.linha-atrasada > td.retorno-cell {
+    color: #b91c1c !important;
+    font-weight: 700;
+}
+.table tbody tr.linha-hoje > td.retorno-cell {
+    color: #047857 !important;
+    font-weight: 700;
+}
+.table tbody tr.linha-atrasada > td.retorno-cell span,
+.table tbody tr.linha-atrasada > td.retorno-cell div,
+.table tbody tr.linha-hoje > td.retorno-cell span,
+.table tbody tr.linha-hoje > td.retorno-cell div {
+    color: inherit !important;
+}
+[data-theme="dark"] .table tbody tr.linha-atrasada > td.retorno-cell {
+    color: #fca5a5 !important;
+}
+[data-theme="dark"] .table tbody tr.linha-hoje > td.retorno-cell {
+    color: #6ee7b7 !important;
+}
 </style>
 
 <script>
@@ -172,33 +244,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
     const MAPA_SERVIDOR_LOCAL = <?php echo json_encode($mapa_servidor_local); ?>;
 
 (function(){
-    let todos=[], sortCol='DATAPREV_RETORNO', sortAsc=true;
-    let chamadosBaixados = <?php echo json_encode($chamados_retornos_local); ?>;
-
-    window.alternarBaixa = function(id_chamado, acao) {
-        const fd = new FormData();
-        fd.append('id_chamado', id_chamado);
-        fd.append('acao', acao);
-        
-        fetch('salvar_chamado_retorno.php', {
-            method: 'POST',
-            body: fd
-        }).then(res => res.json()).then(resp => {
-            if (resp.sucesso) {
-                if (acao === 'dar_baixa') {
-                    if (!chamadosBaixados.includes(id_chamado)) chamadosBaixados.push(id_chamado);
-                } else {
-                    chamadosBaixados = chamadosBaixados.filter(id => id !== id_chamado);
-                }
-                aplicarFiltros();
-            } else {
-                alert('Erro ao atualizar: ' + (resp.erro || 'Erro desconhecido.'));
-            }
-        }).catch(err => {
-            console.error(err);
-            alert('Erro de rede ao atualizar baixa.');
-        });
-    };
+    let todos=[], sortCol='DATAPREV_RETORNO', sortAsc=true, paginaAtual=1, tamanhoPagina=50;
 
     function parseDateOnly(iso){
         if(!iso) return null;
@@ -233,16 +279,27 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         if(!retorno) return null;
         const hoje = new Date(); hoje.setHours(0,0,0,0);
         const amanha = new Date(hoje); amanha.setDate(hoje.getDate() + 1);
-        if(retorno.getTime() === hoje.getTime()) return {label:'Hoje', color:'var(--danger)', bg:'var(--danger-light)'};
+        if(retorno.getTime() === hoje.getTime()) return {label:'Hoje', color:'var(--success)', bg:'var(--success-light)'};
         if(retorno.getTime() === amanha.getTime()) return {label:'Amanhã', color:'var(--warning)', bg:'var(--warning-light)'};
         return null;
+    }
+
+    function isRetornoAtrasado(iso){
+        if(!iso) return false;
+        const retorno = parseDateOnly(iso);
+        if(!retorno) return false;
+        const hoje = new Date(); hoje.setHours(0,0,0,0);
+        return retorno.getTime() < hoje.getTime();
     }
 
     const STATUS_COR = {
         'Aguardando Desenvolvimento': ['var(--warning-light)','var(--warning)'],
         'Em Desenvolvimento':          ['var(--info-light)',   'var(--info)'],
         'Aguardando Cliente':          ['var(--purple-light)', 'var(--purple)'],
+        'Aguardando Suporte':          ['var(--purple-light)', 'var(--purple)'],
         'Aguardando Testes':           ['var(--success-light)','var(--success)'],
+        'Aguardando Autorização':      ['rgba(239, 68, 68, 0.12)','var(--danger)'],
+        'Aguardando Fila':             ['var(--primary-light)','var(--primary)'],
         'Enviado Atualização':         ['var(--primary-light)','var(--primary)'],
         'Resolvido':                   ['var(--success-light)','var(--success)'],
         'Cancelado':                   ['#f1f5f9',             'var(--text-muted)'],
@@ -257,7 +314,11 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             'aguardando desenvolvimento': 'Aguardando Desenvolvimento',
             'em desenvolvimento': 'Em Desenvolvimento',
             'aguardando cliente': 'Aguardando Cliente',
+            'aguardando suporte': 'Aguardando Suporte',
             'aguardando testes': 'Aguardando Testes',
+            'aguardando autorizacao': 'Aguardando Autorização',
+            'aguardando autorização': 'Aguardando Autorização',
+            'aguardando fila': 'Aguardando Fila',
             'enviado atualizacao': 'Enviado Atualização',
             'enviado atualização': 'Enviado Atualização',
             'enviado atualização': 'Enviado Atualização',
@@ -284,6 +345,20 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             .replace(/</g,'&lt;')
             .replace(/>/g,'&gt;')
             .replace(/\r?\n/g,'&#13;&#10;');
+    }
+
+    function escapeHtml(text){
+        return String(text||'')
+            .replace(/&/g,'&amp;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;')
+            .replace(/'/g,'&#039;');
+    }
+
+    function resumirDescricao(text, limite = 110){
+        const valor = String(text || '—').replace(/\s+/g, ' ').trim();
+        return valor.length > limite ? valor.slice(0, limite).trimEnd() + '...' : valor;
     }
 
     function criarMensagemWhatsapp(chamado){
@@ -387,17 +462,35 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
 
     function renderTabela(lista){
         const tbody=document.getElementById('tbody-chamados');
+        const totalPaginas = Math.max(1, Math.ceil(lista.length / tamanhoPagina));
+        paginaAtual = Math.min(paginaAtual, totalPaginas);
+        const inicio = (paginaAtual - 1) * tamanhoPagina;
+        const fim = Math.min(inicio + tamanhoPagina, lista.length);
         document.getElementById('lbl-contagem').textContent=lista.length+' registro'+(lista.length!==1?'s':'');
+        document.getElementById('lbl-paginacao').textContent=lista.length ? `${inicio + 1}–${fim} de ${lista.length}` : '0 registros';
+        const controles = document.getElementById('controles-paginacao');
+        const itemPagina = (label, pagina, disabled = false, active = false, aria = '') =>
+            `<li class="page-item${disabled?' disabled':''}${active?' active':''}"><button type="button" class="page-link" data-pagina="${pagina}" ${disabled?'disabled':''}${aria?` aria-label="${aria}"`:''}>${label}</button></li>`;
+        let htmlPaginacao = itemPagina('&laquo;', paginaAtual - 1, paginaAtual === 1, false, 'Página anterior');
+        const primeiraPagina = Math.max(1, paginaAtual - 2);
+        const ultimaPagina = Math.min(totalPaginas, primeiraPagina + 4);
+        for (let pagina = primeiraPagina; pagina <= ultimaPagina; pagina++) {
+            htmlPaginacao += itemPagina(pagina, pagina, false, pagina === paginaAtual);
+        }
+        htmlPaginacao += itemPagina('&raquo;', paginaAtual + 1, paginaAtual === totalPaginas, false, 'Próxima página');
+        controles.innerHTML = htmlPaginacao;
         if(!lista.length){
-            tbody.innerHTML='<tr><td colspan="10" class="text-center py-5" style="color:var(--text-muted)">Nenhum chamado encontrado.</td></tr>';
+            tbody.innerHTML='<tr><td colspan="8" class="text-center py-5" style="color:var(--text-muted)">Nenhum chamado encontrado.</td></tr>';
             return;
         }
             lista.sort((a,b)=>{
             const statusOrder = {
-                'Aguardando Suporte': 1,
-                'Enviado Atualização': 2,
-                'Aguardando Testes': 3,
-                'Aguardando Desenvolvimento': 4
+                'Enviado Atualização': 1,
+                'Aguardando Testes': 2,
+                'Aguardando Desenvolvimento': 3,
+                'Aguardando Autorização': 4,
+                'Aguardando Fila': 5,
+                'Aguardando Suporte': 6
             };
             const statusA = normalizarStatus(a.CHAMADO_STATUS);
             const statusB = normalizarStatus(b.CHAMADO_STATUS);
@@ -423,18 +516,19 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             if(typeof va==='number') return sortAsc?va-vb:vb-va;
             return sortAsc?String(va).localeCompare(String(vb),'pt-BR'):String(vb).localeCompare(String(va),'pt-BR');
         });
-        tbody.innerHTML=lista.map(r=>{
+        tbody.innerHTML=lista.slice(inicio, fim).map(r=>{
             const idChamado = parseInt(r.ID);
-            const isBaixado = chamadosBaixados.includes(idChamado);
-                
-            const btnBaixa = isBaixado ?
-                `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm btn-action" title="Desfazer baixa" onclick="alternarBaixa(${idChamado}, 'remover_baixa')"><i class="bi bi-check-all"></i> VALIDADO</button>` :
-                (r.CHAMADO_STATUS === 'Aguardando Testes' ?
-                    `<button type="button" class="btn btn-sm btn-outline-success fw-bold shadow-sm btn-action" title="Dar baixa" onclick="alternarBaixa(${idChamado}, 'dar_baixa')"><i class="bi bi-check2"></i> VALIDAR</button>` :
-                    '');
-
-            const rowClass = isBaixado ? 'linha-baixada' : '';
+            const rowClasses = [];
+            if (isRetornoAtrasado(r.DATAPREV_RETORNO)) rowClasses.push('linha-atrasada');
+            const retornoData = parseDateOnly(r.DATAPREV_RETORNO);
+            const hoje = new Date(); hoje.setHours(0,0,0,0);
+            if (retornoData && retornoData.getTime() === hoje.getTime()) rowClasses.push('linha-hoje');
+            const rowClass = rowClasses.join(' ');
             const servidor = (r.SERVIDOR || r.SERVIDORNUVEM || MAPA_SERVIDOR_LOCAL[r.ID_CLIENTE] || '—');
+            const tipoAcomp = escapeHtmlAttribute(r.TIPOACOMP || '—');
+            const descricao = String(r.DESCRICAO || '—');
+            const descricaoResumo = escapeHtml(resumirDescricao(descricao));
+            const descricaoAttr = escapeHtmlAttribute(descricao);
             const retornoStatus = getRetornoDataStatus(r.DATAPREV_RETORNO);
             const retornoStyle = retornoStatus ? `background:${retornoStatus.bg};color:${retornoStatus.color};border-radius:8px;padding:0.45rem 0.6rem;` : '';
             const retornoBadge = retornoStatus ? `<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${retornoStatus.color};margin-top:.22rem">${retornoStatus.label}</div>` : '';
@@ -454,12 +548,18 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             </td>
             <td>${badgeStatus(r.CHAMADO_STATUS)}</td>
             <td style="font-size:.75rem;background:var(--bg-body);padding:2px 7px;border-radius:6px;white-space:nowrap">${servidor}</td>
-            <td style="font-size:.82rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.DESCRICAO||''}">${r.DESCRICAO||'—'}</td>
-            <td style="font-size:.82rem;${retornoStyle}">${fmtData(r.DATAPREV_RETORNO)}${retornoBadge}</td>
+            <td class="descricao-chamado" title="Abrir descrição completa">
+                <span class="descricao-resumo">${descricaoResumo}</span>
+                <button type="button" class="btn btn-sm btn-outline-primary btn-action btn-action-icon btn-ver-descricao" data-descricao="${descricaoAttr}" data-id="${idChamado}" title="Ver descrição completa" aria-label="Ver descrição completa">
+                    <i class="bi bi-file-text"></i>
+                </button>
+            </td>
+            <td style="font-size:.8rem;white-space:nowrap">${tipoAcomp}</td>
+            <td class="retorno-cell" style="font-size:.82rem;${retornoStyle}">${fmtData(r.DATAPREV_RETORNO)}${retornoBadge}</td>
             <td class="text-center align-middle" style="white-space:nowrap">
                 <div class="d-flex gap-1 justify-content-center align-items-center flex-nowrap">
                     ${btnSalvar}
-                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold shadow-sm btn-action btn-copy-comprovante-link" data-id="${idChamado}" title="Gerar / copiar link do comprovante HTML">
+                    <button type="button" class="btn btn-sm btn-outline-secondary fw-bold btn-action btn-copy-comprovante-link" data-id="${idChamado}" title="Gerar / copiar link do comprovante HTML">
                         <i class="bi bi-file-earmark-richtext"></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-success shadow-sm copy-whatsapp-message btn-action btn-action-icon" data-bs-toggle="tooltip" data-bs-title="Copiar WhatsApp" data-message="${msgAttr}" title="Copiar WhatsApp">
@@ -468,14 +568,14 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
                     <a href="https://interno.gestaopro.srv.br/chamados/${r.ID}" target="_blank" class="btn btn-sm btn-primary fw-bold shadow-sm btn-action" title="Abrir chamado">
                         <i class="bi bi-box-arrow-up-right"></i> ABRIR
                     </a>
-                    ${btnBaixa}
                 </div>
             </td>
         </tr>`;
         }).join('');
     }
 
-    function aplicarFiltros(){
+    function aplicarFiltros(preservarPagina=false){
+        if(!preservarPagina) paginaAtual=1;
         const busca=document.getElementById('filtro-busca').value.toLowerCase();
         const statusList = Array.from(document.querySelectorAll('.filtro-status-cb:checked')).map(cb => cb.value);
         const tipoList   = Array.from(document.querySelectorAll('.filtro-tipo-cb:checked')).map(cb => cb.value);
@@ -497,18 +597,48 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
     function atualizarKPIs(lista){
         document.getElementById('kpi-aguard-dev').textContent=lista.filter(r=>normalizarStatus(r.CHAMADO_STATUS)==='Aguardando Desenvolvimento').length;
         document.getElementById('kpi-aguard-testes').textContent=lista.filter(r=>['Aguardando Testes','Enviado Atualização'].includes(normalizarStatus(r.CHAMADO_STATUS))).length;
-        document.getElementById('kpi-aguard-suporte').textContent=lista.filter(r=>normalizarStatus(r.CHAMADO_STATUS)==='Aguardando Suporte').length;
-        document.getElementById('kpi-total').textContent=lista.length;
+        document.getElementById('kpi-aguard-autorizacao').textContent=lista.filter(r=>normalizarStatus(r.CHAMADO_STATUS)==='Aguardando Autorização').length;
+        document.getElementById('kpi-aguard-fila').textContent=lista.filter(r=>normalizarStatus(r.CHAMADO_STATUS)==='Aguardando Fila').length;
     }
 
-    function carregarDados(){
+    function getFonteAtiva() {
+        return localStorage.getItem('gp_chamados_fonte') || 'mesa';
+    }
+
+    function atualizarBotoesFonte(fonte) {
+        const btnMesa = document.getElementById('btn-fonte-mesa');
+        const btnGeral = document.getElementById('btn-fonte-geral');
+        const subtitulo = document.getElementById('subtitulo-api');
+
+        if (fonte === 'mesa') {
+            btnMesa.className = 'btn btn-sm btn-primary fw-bold';
+            btnGeral.className = 'btn btn-sm btn-outline-secondary fw-bold';
+            if (subtitulo) {
+                subtitulo.innerHTML = 'Leitura em tempo real de <strong>interno.gestaopro.srv.br/api/mesa?usuario=53&secoes=chamados,clientes</strong>';
+            }
+        } else {
+            btnMesa.className = 'btn btn-sm btn-outline-secondary fw-bold';
+            btnGeral.className = 'btn btn-sm btn-primary fw-bold';
+            if (subtitulo) {
+                subtitulo.innerHTML = 'Leitura em tempo real de <strong>interno.gestaopro.srv.br/api/chamados</strong>';
+            }
+        }
+    }
+
+    function carregarDados(forcar){
+        forcar = !!forcar;
+        const fonte = getFonteAtiva();
+        atualizarBotoesFonte(fonte);
+
         document.getElementById('estado-carregando').classList.remove('d-none');
         document.getElementById('estado-erro').classList.add('d-none');
         document.getElementById('wrapper-tabela').classList.add('d-none');
         document.getElementById('btn-refresh').disabled=true;
+        document.getElementById('msg-carregando').textContent = forcar ? 'Buscando chamados da API...' : 'Carregando última leitura...';
 
-        const forcar=window._forcar||false; window._forcar=false;
-        const url='api_gestaopro_bridge.php?endpoint=chamados'+(forcar?'&forcar=1':'');
+        const url = fonte === 'mesa'
+            ? 'api_gestaopro_bridge.php?endpoint=mesa&usuario=53&secoes=chamados,clientes' + (forcar ? '&forcar=1' : '&somente_cache=1')
+            : 'api_gestaopro_bridge.php?endpoint=chamados' + (forcar ? '&forcar=1' : '&somente_cache=1');
 
         Promise.all([
             fetch(url).then(r=>r.json()),
@@ -521,7 +651,8 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             window.chamadosLocais = respLocais.sucesso ? (respLocais.dados || {}) : {};
 
             const statusValores = [...new Set(lista.map(r => normalizarStatus(r.CHAMADO_STATUS)).filter(Boolean))].sort();
-            populaDropdownCheckboxes('filtro-status-menu', 'filtro-status-label', 'filtro-status-cb', statusValores, ['Aguardando Desenvolvimento', 'Aguardando Suporte', 'Aguardando Testes', 'Enviado Atualização'], 'Todos os status');
+            const statusPadrao = ['Aguardando Desenvolvimento', 'Aguardando Testes', 'Aguardando Fila'];
+            populaDropdownCheckboxes('filtro-status-menu', 'filtro-status-label', 'filtro-status-cb', statusValores, statusPadrao, 'Todos os status');
             populaDropdownCheckboxes('filtro-tipo-menu', 'filtro-tipo-label', 'filtro-tipo-cb', lista.map(r=>r.TIPOACOMP), [], 'Todos os tipos');
             populaSelect('filtro-responsavel', lista.map(r=>r.RESPONSAVEL), 'VINICIUS');
             aplicarFiltros();
@@ -537,17 +668,48 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         }).catch(err=>{
             document.getElementById('estado-carregando').classList.add('d-none');
             document.getElementById('estado-erro').classList.remove('d-none');
-            document.getElementById('msg-erro').textContent=err.message;
+            let msg = err.message;
+            if (fonte === 'chamados') {
+                msg += ' <br><br><button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="alternarParaMesa()"><i class="bi bi-kanban me-1"></i> Carregar Chamados da Mesa (#53)</button>';
+            }
+            document.getElementById('msg-erro').innerHTML = msg;
         }).finally(()=>{
             document.getElementById('btn-refresh').disabled=false;
             document.getElementById('ico-refresh').className='bi bi-arrow-clockwise';
         });
     }
 
+    window.alternarParaMesa = function() {
+        localStorage.setItem('gp_chamados_fonte', 'mesa');
+        carregarDados(false);
+    };
+
+    document.getElementById('btn-fonte-mesa').addEventListener('click', function(){
+        localStorage.setItem('gp_chamados_fonte', 'mesa');
+        carregarDados(false);
+    });
+
+    document.getElementById('btn-fonte-geral').addEventListener('click', function(){
+        localStorage.setItem('gp_chamados_fonte', 'chamados');
+        carregarDados(false);
+    });
+
     document.getElementById('btn-refresh').addEventListener('click',function(){
-        window._forcar=true;
         document.getElementById('ico-refresh').className='bi bi-arrow-clockwise spin';
-        carregarDados();
+        carregarDados(true);
+    });
+
+    document.getElementById('controles-paginacao').addEventListener('click', function(e){
+        const botao = e.target.closest('[data-pagina]');
+        if (!botao || botao.disabled) return;
+        paginaAtual = parseInt(botao.dataset.pagina, 10) || 1;
+        aplicarFiltros(true);
+    });
+
+    document.getElementById('tamanho-pagina').addEventListener('change', function(){
+        tamanhoPagina=parseInt(this.value,10)||50;
+        paginaAtual=1;
+        aplicarFiltros();
     });
 
     ['filtro-busca','filtro-responsavel'].forEach(id=>{
@@ -568,6 +730,21 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         });
     });
 
+    async function obterDescricaoCompletaDoChamado(id) {
+        try {
+            const response = await fetch('api_gestaopro_bridge.php?endpoint=chamados&detalhe=' + encodeURIComponent(id));
+            const resposta = await response.json();
+            const chamado = resposta && resposta.sucesso && resposta.dados ? resposta.dados.chamado : null;
+            const descricao = chamado && (chamado.DESCRICAO ?? chamado.descricao);
+            if (typeof descricao === 'string' && descricao.trim() !== '') {
+                return descricao;
+            }
+        } catch (_) {
+            // Fallback para a descrição local em caso de falha na API.
+        }
+        return null;
+    }
+
     function copiarTextoAreaTransferencia(text, message = 'Copiado para a área de transferência!'){
         if (!text) return;
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -581,32 +758,60 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         prompt('Copie este link manualmente:', text);
     }
 
-    document.addEventListener('click', function(event){
+    document.addEventListener('click', async function(event){
+        const btnDescricao = event.target.closest('.btn-ver-descricao');
+        if (btnDescricao) {
+            const modalTitulo = document.getElementById('modal-descricao-titulo');
+            const modalTexto = document.getElementById('modal-descricao-texto');
+            const descricaoCompleta = btnDescricao.getAttribute('data-descricao') || '—';
+            const idChamado = btnDescricao.dataset.id;
+            modalTitulo.textContent = 'Descrição do chamado #' + idChamado;
+            modalTexto.textContent = descricaoCompleta;
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-descricao-chamado')).show();
+            if (descricaoCompleta.length >= 500) {
+                fetch('api_gestaopro_bridge.php?endpoint=chamados&detalhe=' + encodeURIComponent(idChamado))
+                    .then(response => response.json())
+                    .then(resposta => {
+                        const chamado = resposta.sucesso && resposta.dados ? resposta.dados.chamado : null;
+                        const descricao = chamado && (chamado.DESCRICAO || chamado.descricao);
+                        if (descricao && modalTitulo.textContent.endsWith('#' + idChamado)) {
+                            modalTexto.textContent = descricao;
+                        }
+                    })
+                    .catch(() => {});
+            }
+            return;
+        }
+
         const btnSalvar = event.target.closest('.btn-salvar-local');
         if (btnSalvar) {
             const id = parseInt(btnSalvar.dataset.id);
             const chamado = todos.find(c => c.ID == id);
             if (!chamado) return;
-            
-            const payload = {
-                id: chamado.ID,
-                id_cliente: chamado.ID_CLIENTE,
-                fantasia: chamado.FANTASIA || chamado.RAZAOSOCIAL,
-                status: chamado.CHAMADO_STATUS,
-                tipo: chamado.TIPOACOMP,
-                descricao: chamado.DESCRICAO,
-                dataprev: chamado.DATAPREV_RETORNO,
-                responsavel: chamado.RESPONSAVEL
-            };
 
             btnSalvar.disabled = true;
             btnSalvar.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
 
-            fetch('salvar_chamado_espelho.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            }).then(r=>r.json()).then(res=>{
+            try {
+                const descricaoCompleta = await obterDescricaoCompletaDoChamado(id);
+                const payload = {
+                    id: chamado.ID,
+                    id_cliente: chamado.ID_CLIENTE,
+                    fantasia: chamado.FANTASIA || chamado.RAZAOSOCIAL,
+                    status: chamado.CHAMADO_STATUS,
+                    tipo: chamado.TIPOACOMP,
+                    descricao: descricaoCompleta || chamado.DESCRICAO || '',
+                    descricao_completa: descricaoCompleta !== null,
+                    dataprev: chamado.DATAPREV_RETORNO,
+                    responsavel: chamado.RESPONSAVEL
+                };
+
+                const res = await fetch('salvar_chamado_espelho.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).then(r => r.json());
+
                 if (res.sucesso) {
                     window.chamadosLocais[id] = 0;
                     btnSalvar.outerHTML = `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm btn-action" title="Salvo Localmente"><i class="bi bi-cloud-check"></i> SALVO</button>`;
@@ -615,7 +820,12 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
                     btnSalvar.disabled = false;
                     btnSalvar.innerHTML = '<i class="bi bi-cloud-arrow-down"></i> SALVAR';
                 }
-            });
+            } catch (err) {
+                console.error(err);
+                alert('Erro ao salvar localmente.');
+                btnSalvar.disabled = false;
+                btnSalvar.innerHTML = '<i class="bi bi-cloud-arrow-down"></i> SALVAR';
+            }
             return;
         }
 
@@ -629,87 +839,59 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             btnComprovante.disabled = true;
             btnComprovante.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
 
-            fetch('gerar_pdf_chamado.php?id=' + encodeURIComponent(id))
-                .then(async response => {
-                    const rawText = await response.text();
-                    let res = null;
+            try {
+                const descricaoCompleta = await obterDescricaoCompletaDoChamado(id);
+                const payload = {
+                    id: chamado.ID,
+                    id_cliente: chamado.ID_CLIENTE,
+                    fantasia: chamado.FANTASIA || chamado.RAZAOSOCIAL,
+                    status: chamado.CHAMADO_STATUS,
+                    tipo: chamado.TIPOACOMP,
+                    descricao: descricaoCompleta || chamado.DESCRICAO || '',
+                    descricao_completa: descricaoCompleta !== null,
+                    dataprev: chamado.DATAPREV_RETORNO,
+                    responsavel: chamado.RESPONSAVEL
+                };
 
-                    try {
-                        res = rawText ? JSON.parse(rawText) : null;
-                    } catch (e) {
-                        throw new Error(rawText || 'Resposta do servidor inválida.');
-                    }
+                const saveRes = await fetch('salvar_chamado_espelho.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).then(r => r.json());
 
-                    if (!response.ok || !res || res.sucesso === false) {
-                        throw new Error(res && res.erro ? res.erro : 'Erro ao gerar comprovante.');
-                    }
+                if (!saveRes.sucesso) {
+                    throw new Error('Falha ao salvar chamado antes de gerar comprovante.');
+                }
 
-                    return res;
-                })
-                .then(res => {
-                    const usuario = chamado.CHAMADO_USUARIO || chamado.USUARIO || chamado.FANTASIA || chamado.RAZAOSOCIAL || '';
-                    const linkArquivo = res && res.link ? res.link : '';
+                if(!window.chamadosLocais) window.chamadosLocais = {};
+                window.chamadosLocais[id] = 0;
+                const btnSalvar = document.querySelector(`.btn-salvar-local[data-id="${id}"]`);
+                if (btnSalvar) {
+                    btnSalvar.outerHTML = `<button type="button" class="btn btn-sm btn-success fw-bold shadow-sm btn-action" title="Salvo Localmente"><i class="bi bi-cloud-check"></i> SALVO</button>`;
+                }
 
-                    console.log('=== PDF Response ===');
-                    console.log('Response object:', res);
-                    console.log('Link value:', linkArquivo);
-                    console.log('Link is empty?', !linkArquivo || linkArquivo.trim() === '');
-                    console.log('Success flag:', res?.sucesso);
+                const response = await fetch('gerar_pdf_chamado.php?id=' + encodeURIComponent(id));
+                const rawText = await response.text();
+                let res = null;
 
-                    if (linkArquivo && linkArquivo.trim() !== '') {
-                        try {
-                            console.log('Tentando abrir link:', linkArquivo);
-                            copiarTextoAreaTransferencia(linkArquivo, 'Link do comprovante copiado!');
-                            
-                            // Extrai fileId do link do Google Drive se necessário
-                            let comprovanteLink = linkArquivo;
-                            const googleDriveMatch = linkArquivo.match(/[?&]id=([^&]+)/);
-                            if (googleDriveMatch && googleDriveMatch[1]) {
-                                // Usa endpoint local para servir o HTML com o tipo de conteúdo correto.
-                                const fileId = googleDriveMatch[1];
-                                comprovanteLink = 'visualizar_comprovante_chamado.php?id=' + encodeURIComponent(fileId);
-                                console.log('Usando link local:', comprovanteLink);
-                            }
-                            
-                            // Tenta abrir direto
-                            const novaJanela = window.open(comprovanteLink, '_blank');
-                            console.log('Janela aberta:', novaJanela);
-                            
-                            if (novaJanela) {
-                                novaJanela.focus();
-                                console.log('✓ PDF aberto com sucesso');
-                            } else {
-                                // Se popup foi bloqueado, tenta usar location
-                                console.warn('Popup bloqueado, tentando com location...');
-                                setTimeout(() => {
-                                    window.location.href = comprovanteLink;
-                                }, 500);
-                            }
-                            return;
-                        } catch (err) {
-                            console.error('Erro ao abrir janela:', err);
-                            alert('Erro ao abrir PDF: ' + err.message);
-                        }
-                    } else {
-                        console.warn('❌ Link do arquivo está vazio ou ausente:', res);
-                        alert('❌ Link do comprovante não foi gerado corretamente. Verifique os logs.');
-                    }
+                try {
+                    res = rawText ? JSON.parse(rawText) : null;
+                } catch (e) {
+                    throw new Error(rawText || 'Resposta do servidor inválida.');
+                }
 
-                    const mensagemFallback = `Olá ${usuario}, segue o comprovante do chamado #${id}.\nStatus: ${chamado.CHAMADO_STATUS || ''}`;
-                    copiarTextoAreaTransferencia(mensagemFallback, 'Mensagem padrão copiada!');
+                if (!response.ok || !res || res.sucesso === false) {
+                    throw new Error(res && res.erro ? res.erro : 'Erro ao gerar comprovante.');
+                }
 
-                    if (res && res.folder_link) {
-                        window.open(res.folder_link, '_blank');
-                    }
-                })
-                .catch(err => {
-                    console.error(err);
-                    alert(err && err.message ? err.message : 'Erro de rede ao gerar link do comprovante.');
-                })
-                .finally(() => {
-                    btnComprovante.disabled = false;
-                    btnComprovante.innerHTML = originalHtml;
-                });
+                copiarTextoAreaTransferencia(`#${id}`, 'Número do chamado copiado!');
+            } catch (err) {
+                console.error(err);
+                alert(err && err.message ? err.message : 'Erro de rede ao gerar link do comprovante.');
+            } finally {
+                btnComprovante.disabled = false;
+                btnComprovante.innerHTML = originalHtml;
+            }
             return;
         }
 
@@ -721,23 +903,13 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         }
     });
 
-    carregarDados();
+    carregarDados(false);
 })();
 </script>
 
 <style>
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{animation:spin .7s linear infinite;display:inline-block}
-
-/* Linha com cor verde suave quando tem baixa/retorno dado */
-tr.linha-baixada > td {
-    background-color: var(--success-light) !important;
-}
-
-/* Modo escuro: verde mais visível */
-[data-theme="dark"] tr.linha-baixada > td {
-    background-color: rgba(16, 185, 129, 0.18) !important;
-}
 </style>
 
 <?php $js_extra=''; include 'footer.php'; ?>

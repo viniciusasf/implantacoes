@@ -2,6 +2,10 @@
 require_once 'config.php';
 header('Content-Type: application/json');
 
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+}
+
 try {
     $stmt = $pdo->query("SELECT id_chamado_api, notificado FROM chamados_espelho_local");
     $locais = [];
