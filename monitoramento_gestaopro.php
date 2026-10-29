@@ -326,6 +326,25 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
         return '<span style="color:var(--text-muted)">—</span>';
     }
 
+    function obterNumeroLicencas(cliente){
+        if ('NUMLIC' in cliente || 'NUMLIC_GPT' in cliente) {
+            const numLic = Number(cliente.NUMLIC ?? 0);
+            const numLicGpt = Number(cliente.NUMLIC_GPT ?? 0);
+            return (Number.isFinite(numLic) ? numLic : 0) + (Number.isFinite(numLicGpt) ? numLicGpt : 0);
+        }
+
+        const campos = ['NUMLIC_GPT', 'NUMLIC', 'NUM_LICENCAS', 'LICENCAS', 'NUM_LICENCIAS'];
+        let valorExplicito = null;
+        for (const campo of campos) {
+            const valor = cliente[campo];
+            if (valor === null || valor === undefined || String(valor).trim() === '') continue;
+            const numero = Number(valor);
+            if (!Number.isFinite(numero)) continue;
+            if (valorExplicito === null) valorExplicito = numero;
+            if (numero !== 0) return numero;
+        }
+        return valorExplicito ?? 0;
+    }
     function nomeConsultor(row){
         const v  = (row.VENDEDOR  || '').trim();
         const v2 = (row.VENDEDOR2 || '').trim();
@@ -367,8 +386,8 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
             const vendedorCliente = r.VENDEDOR || r.RESPONSAVEL || '';
             const servidorCliente = r.SERVIDOR || r.SERVIDORNUVEM || '';
             const dataInicioPadrao = r.DATA_INICIO || r.INICIO || r.DATAINICIO || '';
-            const licencasApi = r.NUMLIC ?? r.NUMLIC_GPT ?? r.NUM_LICENCAS ?? r.LICENCAS ?? r.NUM_LICENCIAS;
-            const licencasCliente = licencasApi ?? 0;
+            const licencasCliente = r.NUM_LICENCAS ?? obterNumeroLicencas(r);
+            const licencasApi = licencasCliente;
             const dadosAtualizacao = {
                 fantasia: nomeCliente,
                 vendedor: r.VENDEDOR || r.VENDEDOR2 || r.RESPONSAVEL || '',
@@ -581,11 +600,17 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
         document.getElementById('wrapper-tabela').classList.add('d-none');
         document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise';
 
-        let pClientes, pChamados;
+        let pClientes, pChamados, pLicencas;
 
         if (fonte === 'mesa') {
             const urlMesa = 'api_gestaopro_bridge.php?endpoint=mesa&usuario=53&secoes=clientes,chamados' + (forcar ? '&forcar=1' : (somenteCache ? '&somente_cache=1' : ''));
             pClientes = fetch(urlMesa).then(r => r.json());
+            const urlImplantacoes = forcar
+                ? 'api_gestaopro_bridge.php?endpoint=implantacoes&forcar=1'
+                : (somenteCache ? 'api_gestaopro_bridge.php?endpoint=implantacoes&somente_cache=1' : 'api_gestaopro_bridge.php?endpoint=implantacoes');
+            pLicencas = fetch(urlImplantacoes)
+                .then(r => r.json())
+                .catch(() => null);
             pChamados = Promise.resolve({ sucesso: true, dados: { chamados: [] } });
         } else {
             const url = forcar
@@ -596,19 +621,44 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                 : (somenteCache ? 'api_gestaopro_bridge.php?endpoint=chamados&somente_cache=1' : 'api_gestaopro_bridge.php?endpoint=chamados');
 
             pClientes = fetch(url).then(r => r.json());
+            pLicencas = Promise.resolve(null);
             pChamados = fetch(urlChamados)
                 .then(r => r.json())
                 .catch(err => ({ sucesso: false, erro: err.message || 'Falha de conexão' }));
         }
 
-        Promise.all([pClientes, pChamados])
-            .then(([resp, respChamados]) => {
+        Promise.all([pClientes, pChamados, pLicencas])
+            .then(([resp, respChamados, respLicencas]) => {
                 if (!resp.sucesso) throw new Error(resp.erro || 'Erro ao carregar clientes');
 
                 let clientes = resp.dados.clientes || resp.dados || [];
+                const dadosImplantacoes = respLicencas && respLicencas.sucesso ? respLicencas.dados : null;
+                const registrosImplantacoes = Array.isArray(dadosImplantacoes)
+                    ? dadosImplantacoes
+                    : (Array.isArray(dadosImplantacoes?.clientes)
+                        ? dadosImplantacoes.clientes
+                        : (Array.isArray(dadosImplantacoes?.implantacoes) ? dadosImplantacoes.implantacoes : []));
+                const licencasPorCliente = new Map();
+                const normalizarNomeCliente = nome => String(nome || '')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toUpperCase();
+                registrosImplantacoes.forEach(registro => {
+                    const idCliente = String(registro.ID_CLIENTE || registro.ID || '');
+                    const licencas = obterNumeroLicencas(registro);
+                    if (idCliente && licencas > 0) licencasPorCliente.set(idCliente, licencas);
+                    const nomeCliente = normalizarNomeCliente(registro.FANTASIA || registro.RAZAOSOCIAL);
+                    if (nomeCliente && licencas > 0) licencasPorCliente.set(`nome:${nomeCliente}`, licencas);
+                });
                 clientes = clientes.map(c => {
                     const idApi = c.ID_CLIENTE || c.ID;
                     const st = (c.STATUS_IMPLANTACAO || '').trim().toUpperCase();
+                    const nomeCliente = normalizarNomeCliente(c.FANTASIA || c.RAZAOSOCIAL);
+                    const licencasApi = licencasPorCliente.get(String(idApi))
+                        ?? licencasPorCliente.get(`nome:${nomeCliente}`)
+                        ?? obterNumeroLicencas(c);
                     return {
                         ...c,
                         ID_CLIENTE: idApi,
@@ -619,7 +669,7 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                         VENDEDOR2: c.VENDEDOR2 || '',
                         SERVIDOR: c.SERVIDOR || '',
                         NUVEM: c.NUVEM || ((c.SERVIDOR && c.SERVIDOR.toUpperCase() !== 'LOCAL') ? 'T' : 'F'),
-                        NUM_LICENCAS: c.NUM_LICENCAS ?? c.NUMLIC ?? 0,
+                        NUM_LICENCAS: licencasApi,
                         STATUS_IMPLANTACAO: st || 'OUTROS',
                     };
                 });

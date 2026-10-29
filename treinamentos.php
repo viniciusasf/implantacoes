@@ -103,7 +103,7 @@ function treinamentosTemColuna(PDO $pdo, $coluna, $forceRefresh = false)
     }
 
     try {
-        $stmt = $pdo->prepare("SHOW COLUMNS FROM treinamentos LIKE ?");
+        $stmt = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'treinamentos' AND COLUMN_NAME = ? LIMIT 1");
         $stmt->execute([$coluna]);
         $cache[$coluna] = (bool) $stmt->fetch(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
@@ -111,6 +111,49 @@ function treinamentosTemColuna(PDO $pdo, $coluna, $forceRefresh = false)
     }
 
     return $cache[$coluna];
+}
+
+function garantirColunasIntegracaoAgendaApi(PDO $pdo): bool
+{
+    $colunas = [
+        'gestaopro_agenda_id' => 'BIGINT NULL',
+        'gestaopro_agenda_usuario' => 'INT NULL'
+    ];
+
+    foreach ($colunas as $coluna => $definicao) {
+        if (treinamentosTemColuna($pdo, $coluna)) {
+            continue;
+        }
+        $erroAlteracao = null;
+        try {
+            $pdo->exec("ALTER TABLE treinamentos ADD COLUMN `{$coluna}` {$definicao}");
+        } catch (Throwable $e) {
+            // Revalida abaixo para cobrir execuÃ§Ãµes simultÃ¢neas da pÃ¡gina.
+            $erroAlteracao = $e->getMessage();
+        }
+        if (!treinamentosTemColuna($pdo, $coluna, true)) {
+            error_log("NÃ£o foi possÃ­vel criar a coluna {$coluna} em treinamentos: " . ($erroAlteracao ?: 'erro desconhecido'));
+            return false;
+        }
+    }
+
+    try {
+        $indices = $pdo->query("SHOW INDEX FROM treinamentos")->fetchAll(PDO::FETCH_ASSOC);
+        $temIndiceUnico = false;
+        foreach ($indices as $indice) {
+            if (($indice['Key_name'] ?? '') === 'uq_treinamentos_gestaopro_agenda') {
+                $temIndiceUnico = true;
+                break;
+            }
+        }
+        if (!$temIndiceUnico) {
+            $pdo->exec("ALTER TABLE treinamentos ADD UNIQUE KEY uq_treinamentos_gestaopro_agenda (gestaopro_agenda_usuario, gestaopro_agenda_id)");
+        }
+        return true;
+    } catch (Throwable $e) {
+        error_log('NÃ£o foi possÃ­vel criar o Ã­ndice Ãºnico da agenda GestãoPRO: ' . $e->getMessage());
+        return false;
+    }
 }
 
 function obterColunaEmailContato(PDO $pdo)
@@ -744,6 +787,46 @@ try {
 }
 $total_hoje = (int) $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE DATE(data_treinamento) = CURDATE() AND UPPER(status) = 'PENDENTE'")->fetchColumn();
 
+$integracaoAgendaApiDisponivel = garantirColunasIntegracaoAgendaApi($pdo);
+$agendamentosApiImportados = [];
+$clientesApiVinculados = [];
+$clientesApiIdsDuplicados = [];
+$contagemVinculosApiCliente = [];
+$clientesApiNomesLocais = [];
+if ($integracaoAgendaApiDisponivel) {
+    try {
+        $stmtApiImportados = $pdo->query("SELECT gestaopro_agenda_id, id_treinamento, google_event_id FROM treinamentos WHERE gestaopro_agenda_usuario = 53 AND gestaopro_agenda_id IS NOT NULL");
+        foreach ($stmtApiImportados->fetchAll(PDO::FETCH_ASSOC) as $registroApiImportado) {
+            $agendamentosApiImportados[(string) $registroApiImportado['gestaopro_agenda_id']] = [
+                'id_treinamento' => (int) $registroApiImportado['id_treinamento'],
+                'google_event_id' => trim((string) ($registroApiImportado['google_event_id'] ?? ''))
+            ];
+        }
+    } catch (Throwable $e) {
+        error_log('Falha ao consultar treinamentos importados da agenda GestãoPRO: ' . $e->getMessage());
+        $integracaoAgendaApiDisponivel = false;
+    }
+}
+try {
+    $stmtClientesApi = $pdo->query("SELECT ID_CLIENTE_API, fantasia FROM clientes WHERE fantasia IS NOT NULL AND TRIM(fantasia) <> ''");
+    foreach ($stmtClientesApi->fetchAll(PDO::FETCH_ASSOC) as $clienteApi) {
+        $idClienteApi = trim((string) ($clienteApi['ID_CLIENTE_API'] ?? ''));
+        if ($idClienteApi !== '') {
+            $contagemVinculosApiCliente[$idClienteApi] = ($contagemVinculosApiCliente[$idClienteApi] ?? 0) + 1;
+        }
+        $clientesApiNomesLocais[] = (string) $clienteApi['fantasia'];
+    }
+    foreach ($contagemVinculosApiCliente as $idClienteApi => $quantidadeVinculos) {
+        if ($quantidadeVinculos === 1) {
+            $clientesApiVinculados[$idClienteApi] = true;
+        } else {
+            $clientesApiIdsDuplicados[$idClienteApi] = true;
+        }
+    }
+} catch (Throwable $e) {
+    error_log('Falha ao consultar vÃ­nculos dos clientes com a API GestãoPRO: ' . $e->getMessage());
+}
+
 // --- PÁGINA DE TREINAMENTOS ---
 // Removida lógica de inatividade local (agora no Dashboard)
 
@@ -941,6 +1024,154 @@ if (isset($_GET['delete'])) {
 
 // Lógica para Adicionar/Editar
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (isset($_POST['importar_agendamento_api'])) {
+        $idEventoApi = filter_var($_POST['api_agenda_id'] ?? null, FILTER_VALIDATE_INT);
+        $retornoImportacao = 'treinamentos.php';
+
+        try {
+            if (!$integracaoAgendaApiDisponivel || !$idEventoApi || $idEventoApi < 1) {
+                throw new RuntimeException('A integração da agenda não está disponível ou o evento é inválido.');
+            }
+
+            $stmtExistenteApi = $pdo->prepare("SELECT id_treinamento FROM treinamentos WHERE gestaopro_agenda_usuario = 53 AND gestaopro_agenda_id = ? LIMIT 1");
+            $stmtExistenteApi->execute([$idEventoApi]);
+            $idLocalExistente = (int) ($stmtExistenteApi->fetchColumn() ?: 0);
+            if ($idLocalExistente > 0) {
+                throw new RuntimeException("Este agendamento já foi salvo no sistema como treinamento local #{$idLocalExistente}.");
+            }
+
+            $arquivoCacheAgenda = __DIR__ . '/logs/gp_cache_mesa_53_agenda.json';
+            if (!is_file($arquivoCacheAgenda)) {
+                throw new RuntimeException('Atualize a agenda da API antes de importar este agendamento.');
+            }
+            $cacheAgenda = json_decode((string) file_get_contents($arquivoCacheAgenda), true);
+            $eventoApi = null;
+            foreach (($cacheAgenda['agenda'] ?? []) as $itemAgenda) {
+                if ((string) ($itemAgenda['ID'] ?? '') === (string) $idEventoApi) {
+                    $eventoApi = $itemAgenda;
+                    break;
+                }
+            }
+            if (!$eventoApi || stripos((string) ($eventoApi['TIPOACOMP'] ?? ''), 'TREINAMENTO') === false) {
+                throw new RuntimeException('O treinamento não foi encontrado na última leitura da agenda. Atualize a lista e tente novamente.');
+            }
+            if (strtoupper(trim((string) ($eventoApi['PENDENTE'] ?? ''))) === 'F') {
+                throw new RuntimeException('Este treinamento foi encerrado na agenda da API e não pode ser importado.');
+            }
+
+            $idClienteApi = trim((string) ($eventoApi['ID_CLIENTE'] ?? ''));
+            if ($idClienteApi === '') {
+                throw new RuntimeException('O agendamento da API não informa o ID do cliente.');
+            }
+            $stmtClienteApi = $pdo->prepare('SELECT id_cliente FROM clientes WHERE ID_CLIENTE_API = ? LIMIT 2');
+            $stmtClienteApi->execute([$idClienteApi]);
+            $clientesPorIdApi = $stmtClienteApi->fetchAll(PDO::FETCH_COLUMN);
+            if (count($clientesPorIdApi) > 1) {
+                throw new RuntimeException('Há mais de um cadastro local com este ID de cliente da API. Corrija o vínculo antes de importar.');
+            }
+            $idClienteLocal = (int) ($clientesPorIdApi[0] ?? 0);
+            if ($idClienteLocal < 1) {
+                $nomeClienteApi = trim((string) ($eventoApi['CLIENTE'] ?? ''));
+                $stmtClienteNome = $pdo->prepare('SELECT id_cliente FROM clientes WHERE UPPER(TRIM(fantasia)) = UPPER(TRIM(?)) LIMIT 2');
+                $stmtClienteNome->execute([$nomeClienteApi]);
+                $clientesPorNome = $stmtClienteNome->fetchAll(PDO::FETCH_COLUMN);
+                if (count($clientesPorNome) === 1) {
+                    $idClienteLocal = (int) $clientesPorNome[0];
+                } elseif (count($clientesPorNome) > 1) {
+                    throw new RuntimeException('Há mais de um cadastro local com o nome deste cliente. Vincule o ID da API ao cadastro correto antes de importar.');
+                } else {
+                    throw new RuntimeException('Este cliente não está vinculado a um cadastro local. Vincule-o pelo ID da API ou use o mesmo nome do cliente antes de importar.');
+                }
+            }
+
+            $dataApi = trim((string) ($eventoApi['DATA'] ?? ''));
+            $horaApi = trim((string) ($eventoApi['HORA'] ?? ''));
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataApi) || !preg_match('/^\d{1,2}:\d{2}$/', $horaApi)) {
+                throw new RuntimeException('A data ou o horário informado pela API está inválido.');
+            }
+            $dataTreinamentoApi = normalizarDataTreinamento($dataApi . ' ' . $horaApi);
+            if (!$dataTreinamentoApi) {
+                throw new RuntimeException('Não foi possível interpretar a data e o horário do agendamento.');
+            }
+            if (existeConflitoHorarioTreinamento($pdo, $dataTreinamentoApi)) {
+                throw new RuntimeException('Já existe um agendamento local nesse horário. O evento da API não foi importado para evitar duplicidade.');
+            }
+
+            $temaApi = trim((string) ($eventoApi['DESCRICAO'] ?? ''));
+            if ($temaApi === '' || mb_strtolower($temaApi, 'UTF-8') === 'não informado') {
+                $temaApi = 'Treinamento GestãoPRO #' . $idEventoApi;
+            }
+
+            $pdo->beginTransaction();
+            $stmtInserirApi = $pdo->prepare(
+                "INSERT INTO treinamentos
+                    (id_cliente, id_contato, tema, status, data_treinamento, gestaopro_agenda_id, gestaopro_agenda_usuario)
+                 VALUES (?, NULL, ?, 'PENDENTE', ?, ?, 53)"
+            );
+            $stmtInserirApi->execute([$idClienteLocal, $temaApi, $dataTreinamentoApi, $idEventoApi]);
+            $idTreinamentoLocal = (int) $pdo->lastInsertId();
+            $pdo->commit();
+
+            $resultadoGoogle = sincronizarGoogleMeetAutomatico($pdo, $idTreinamentoLocal);
+            if (!empty($resultadoGoogle['needs_auth']) && !empty($resultadoGoogle['auth_start_url'])) {
+                header('Location: ' . $resultadoGoogle['auth_start_url']);
+                exit;
+            }
+
+            if (!empty($resultadoGoogle['success'])) {
+                $mensagemImportacao = "Agendamento API #{$idEventoApi} salvo como treinamento local #{$idTreinamentoLocal} e integrado ao Google Agenda.";
+                $tipoImportacao = 'success';
+            } else {
+                $detalheGoogle = trim((string) ($resultadoGoogle['message'] ?? ''));
+                $mensagemImportacao = "Agendamento salvo como treinamento local #{$idTreinamentoLocal}; integração Google pendente.";
+                if ($detalheGoogle !== '') {
+                    $mensagemImportacao .= ' ' . $detalheGoogle;
+                }
+                $tipoImportacao = 'warning';
+            }
+            header('Location: ' . $retornoImportacao . '?msg=' . urlencode($mensagemImportacao) . '&tipo=' . $tipoImportacao);
+            exit;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $mensagemImportacao = $e instanceof PDOException && (string) $e->getCode() === '23000'
+                ? 'Este agendamento da API já foi importado.'
+                : $e->getMessage();
+            header('Location: ' . $retornoImportacao . '?msg=' . urlencode($mensagemImportacao) . '&tipo=warning');
+            exit;
+        }
+    }
+
+    if (isset($_POST['integrar_google_agendamento_api'])) {
+        $idTreinamentoLocal = filter_var($_POST['id_treinamento_api'] ?? null, FILTER_VALIDATE_INT);
+        $retornoImportacao = 'treinamentos.php';
+        try {
+            if (!$integracaoAgendaApiDisponivel || !$idTreinamentoLocal || $idTreinamentoLocal < 1) {
+                throw new RuntimeException('Treinamento local inválido para integração Google.');
+            }
+            $stmtTreinamentoApi = $pdo->prepare("SELECT gestaopro_agenda_id FROM treinamentos WHERE id_treinamento = ? AND gestaopro_agenda_usuario = 53");
+            $stmtTreinamentoApi->execute([$idTreinamentoLocal]);
+            if (!$stmtTreinamentoApi->fetchColumn()) {
+                throw new RuntimeException('O treinamento informado não veio da agenda da API.');
+            }
+            $resultadoGoogle = sincronizarGoogleMeetAutomatico($pdo, $idTreinamentoLocal);
+            if (!empty($resultadoGoogle['needs_auth']) && !empty($resultadoGoogle['auth_start_url'])) {
+                header('Location: ' . $resultadoGoogle['auth_start_url']);
+                exit;
+            }
+            $sucessoGoogle = !empty($resultadoGoogle['success']);
+            $mensagemImportacao = $sucessoGoogle
+                ? "Treinamento local #{$idTreinamentoLocal} integrado ao Google Agenda."
+                : 'Não foi possível integrar ao Google Agenda: ' . ($resultadoGoogle['message'] ?? 'erro desconhecido');
+            header('Location: ' . $retornoImportacao . '?msg=' . urlencode($mensagemImportacao) . '&tipo=' . ($sucessoGoogle ? 'success' : 'warning'));
+            exit;
+        } catch (Throwable $e) {
+            header('Location: ' . $retornoImportacao . '?msg=' . urlencode($e->getMessage()) . '&tipo=warning');
+            exit;
+        }
+    }
+
     if (isset($_POST['confirmar_encerramento'])) {
         $id = (int) ($_POST['id_treinamento'] ?? 0);
         $obs = trim((string) ($_POST['observacoes'] ?? ''));
@@ -1683,6 +1914,15 @@ include 'header.php';
         transform: translateY(15px);
     }
 
+    #agenda-api-icone.spin {
+        animation: agenda-api-spin 0.7s linear infinite;
+        display: inline-block;
+    }
+
+    @keyframes agenda-api-spin {
+        to { transform: rotate(360deg); }
+    }
+
     .fw-800 {
         font-weight: 800;
     }
@@ -1748,6 +1988,40 @@ include 'header.php';
             </button>
         </div>
     </div>
+
+    <section class="card border-0 shadow-sm mb-4 gsap-reveal" id="agenda-api-card" style="background: var(--bg-card); border-radius: 16px;">
+        <div class="card-header bg-transparent border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2 p-3 p-md-4">
+            <div>
+                <h5 class="fw-bold mb-1"><i class="bi bi-cloud-arrow-down me-2 text-primary"></i>Treinamentos agendados no GestãoPRO</h5>
+                <div class="small text-muted">Agenda da API Master · usuário 53 · importe para o banco local e integre ao Google Agenda</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge rounded-pill bg-light text-secondary border" id="agenda-api-atualizacao">Carregando agenda...</span>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-atualizar-agenda-api">
+                    <i class="bi bi-arrow-clockwise me-1" id="agenda-api-icone"></i>Atualizar
+                </button>
+            </div>
+        </div>
+        <div class="px-3 px-md-4 pt-3 d-none" id="agenda-api-aviso"></div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3 ps-md-4">Data</th>
+                        <th>Horário</th>
+                        <th>Cliente</th>
+                        <th>Descrição</th>
+                        <th>Responsável</th>
+                        <th class="text-end pe-3 pe-md-4">ID API</th>
+                        <th class="text-end pe-3 pe-md-4">Integração</th>
+                    </tr>
+                </thead>
+                <tbody id="agenda-api-linhas">
+                    <tr><td colspan="7" class="text-center text-muted py-4">Consultando a agenda do usuário 53...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
     <!-- Alertas de Inatividade -->
     <!-- Listagem Principal -->
@@ -2995,14 +3269,39 @@ include 'header.php';
         return linhas.join('\n');
     }
 
-    function copiarTabelaDisponibilidadeCliente() {
-        if (!disponibilidadeFoiCarregada) {
-            alert('Atualize a disponibilidade antes de copiar a tabela.');
-            return;
+    async function copiarTabelaDisponibilidadeCliente() {
+        const botao = document.getElementById('btn_copiar_disponibilidade');
+        if (botao) {
+            botao.disabled = true;
+            botao.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Atualizando...';
         }
 
-        const mensagem = montarMensagemDisponibilidadeCliente(diasDisponibilidadeAtual);
-        copiarTextoAreaTransferencia(mensagem, 'Tabela de horarios copiada para enviar ao cliente.');
+        try {
+            // Atualizar no momento da cópia para não enviar horários que já passaram.
+            const resposta = await fetch('google_calendar_disponibilidade.php?dias=4&duracao_min=60', {
+                cache: 'no-store'
+            });
+            const data = await resposta.json();
+            if (!data || !data.success) {
+                throw new Error(data && data.message ? data.message : 'Falha ao atualizar disponibilidade.');
+            }
+
+            diasDisponibilidadeAtual = data.dias_disponiveis || [];
+            disponibilidadeFoiCarregada = true;
+            mensagemErroGlobal = null;
+            const container = document.getElementById('disponibilidade_resultado');
+            if (container) renderDisponibilidade(container, diasDisponibilidadeAtual);
+
+            const mensagem = montarMensagemDisponibilidadeCliente(diasDisponibilidadeAtual);
+            copiarTextoAreaTransferencia(mensagem, 'Tabela de horarios copiada para enviar ao cliente.');
+        } catch (erro) {
+            mensagemErroGlobal = erro.message || 'Erro ao atualizar disponibilidade.';
+            disponibilidadeFoiCarregada = false;
+            atualizarBotaoCopiarDisponibilidade();
+            alert('Não foi possível atualizar os horários: ' + mensagemErroGlobal);
+        } finally {
+            if (!mensagemErroGlobal) atualizarBotaoCopiarDisponibilidade();
+        }
     }
 
     function renderDisponibilidade(container, diasDisponiveis) {
@@ -3620,6 +3919,144 @@ include 'header.php';
         document.getElementById('nova_obs_id_cliente').value = currentClientIdForObs;
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalNovaObsCliente')).show();
     }
+</script>
+
+<script>
+    (function () {
+        const urlAgendaApi = 'api_gestaopro_bridge.php?endpoint=mesa&usuario=53&secoes=agenda%2Cchamados%2Cclientes';
+        const corpoAgendaApi = document.getElementById('agenda-api-linhas');
+        const atualizacaoAgendaApi = document.getElementById('agenda-api-atualizacao');
+        const avisoAgendaApi = document.getElementById('agenda-api-aviso');
+        const botaoAgendaApi = document.getElementById('btn-atualizar-agenda-api');
+        const iconeAgendaApi = document.getElementById('agenda-api-icone');
+        const agendamentosApiImportados = <?= json_encode($agendamentosApiImportados, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        const clientesApiVinculados = <?= json_encode($clientesApiVinculados, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        const clientesApiIdsDuplicados = <?= json_encode($clientesApiIdsDuplicados, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        const nomesClientesLocaisNormalizados = <?= json_encode($clientesApiNomesLocais, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>.map(normalizarNomeClienteApi);
+        const contagemNomesClientesLocais = nomesClientesLocaisNormalizados.reduce((contagem, nome) => {
+            contagem[nome] = (contagem[nome] || 0) + 1;
+            return contagem;
+        }, {});
+        const nomesClientesLocais = new Set(nomesClientesLocaisNormalizados.filter(nome => nome && contagemNomesClientesLocais[nome] === 1));
+        const integracaoAgendaApiDisponivel = <?= $integracaoAgendaApiDisponivel ? 'true' : 'false' ?>;
+
+        function normalizarNomeClienteApi(valor) {
+            return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR');
+        }
+
+        function escaparHtmlAgenda(valor) {
+            return String(valor == null ? '' : valor)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function hojeSaoPaulo() {
+            const partes = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit'
+            }).formatToParts(new Date());
+            const valores = Object.fromEntries(partes.map(parte => [parte.type, parte.value]));
+            return `${valores.year}-${valores.month}-${valores.day}`;
+        }
+
+        function renderizarAgendaApi(resposta) {
+            const dados = resposta && resposta.dados ? resposta.dados : {};
+            const hoje = hojeSaoPaulo();
+            const eventos = (Array.isArray(dados.agenda) ? dados.agenda : [])
+                .filter(evento => /treinamento/i.test(String(evento.TIPOACOMP || '')))
+                .filter(evento => String(evento.PENDENTE == null ? '' : evento.PENDENTE).trim().toUpperCase() !== 'F')
+                .filter(evento => /^\d{4}-\d{2}-\d{2}$/.test(String(evento.DATA || '')) && evento.DATA >= hoje)
+                .filter(evento => !agendamentosApiImportados[String(evento.ID || '')])
+                .sort((a, b) => String(a.DATA).localeCompare(String(b.DATA)) || String(a.HORA || '').localeCompare(String(b.HORA || '')));
+
+            if (resposta.contingencia) {
+                avisoAgendaApi.className = 'px-3 px-md-4 pt-3';
+                avisoAgendaApi.innerHTML = '<div class="alert alert-warning small mb-0">A API não respondeu agora. Exibindo a última agenda disponível em cache.</div>';
+            } else {
+                avisoAgendaApi.className = 'd-none';
+                avisoAgendaApi.textContent = '';
+            }
+
+            if (!integracaoAgendaApiDisponivel) {
+                avisoAgendaApi.className = 'px-3 px-md-4 pt-3';
+                avisoAgendaApi.innerHTML = '<div class="alert alert-danger small mb-0">Não foi possível preparar as colunas locais para registrar as importações. A agenda pode ser consultada, mas não importada.</div>';
+            }
+
+            if (eventos.length === 0) {
+                corpoAgendaApi.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Nenhum treinamento futuro encontrado na agenda da API para o usuário 53.</td></tr>';
+            } else {
+                corpoAgendaApi.innerHTML = eventos.map(evento => {
+                    const [ano, mes, dia] = String(evento.DATA).split('-');
+                    const dataFormatada = `${dia}/${mes}/${ano}`;
+                    const idEvento = String(evento.ID || '');
+                    const importado = agendamentosApiImportados[idEvento];
+                    const idClienteApi = String(evento.ID_CLIENTE || '');
+                    const vinculoApiDuplicado = Boolean(clientesApiIdsDuplicados[idClienteApi]);
+                    const clienteVinculado = !vinculoApiDuplicado && (Boolean(clientesApiVinculados[idClienteApi]) || nomesClientesLocais.has(normalizarNomeClienteApi(evento.CLIENTE)));
+                    let acaoIntegracao = '';
+                    if (!integracaoAgendaApiDisponivel) {
+                        acaoIntegracao = '<span class="badge bg-secondary">Indisponível</span>';
+                    } else if (importado) {
+                        const idLocal = escaparHtmlAgenda(importado.id_treinamento);
+                        const googleIntegrado = Boolean(importado.google_event_id);
+                        acaoIntegracao = `<div class="d-flex flex-column align-items-end gap-1">
+                            <span class="badge bg-success">Local #${idLocal}</span>
+                            ${googleIntegrado
+                                ? '<span class="small text-success">Google sincronizado</span>'
+                                : `<form method="post" class="m-0"><input type="hidden" name="id_treinamento_api" value="${idLocal}"><button type="submit" name="integrar_google_agendamento_api" value="1" class="btn btn-sm btn-outline-primary" title="Tentar novamente a integração com o Google Agenda"><i class="bi bi-arrow-repeat me-1"></i>Integrar Google</button></form>`}
+                        </div>`;
+                    } else if (!clienteVinculado) {
+                        acaoIntegracao = '<span class="badge bg-warning text-dark" title="Vincule o cadastro local ao ID do cliente na API antes de importar">Cliente sem vínculo</span>';
+                    } else {
+                        acaoIntegracao = `<form method="post" class="m-0"><input type="hidden" name="api_agenda_id" value="${escaparHtmlAgenda(idEvento)}"><button type="submit" name="importar_agendamento_api" value="1" class="btn btn-sm btn-outline-success" onclick="return confirm('Salvar este treinamento no banco local e tentar criar o evento no Google Agenda? Os contatos com e-mail cadastrados para o cliente poderão receber o convite.')"><i class="bi bi-cloud-arrow-down me-1"></i>Salvar + Google</button></form>`;
+                    }
+                    return `<tr>
+                        <td class="ps-3 ps-md-4 fw-semibold">${dataFormatada}</td>
+                        <td class="text-nowrap">${escaparHtmlAgenda(evento.HORA || '—')}</td>
+                        <td class="fw-semibold">${escaparHtmlAgenda(evento.CLIENTE || 'Cliente não informado')}</td>
+                        <td>${escaparHtmlAgenda(evento.DESCRICAO || 'Sem descrição')}</td>
+                        <td>${escaparHtmlAgenda(evento.RESPONSAVEL || 'Usuário 53')}</td>
+                        <td class="text-end pe-3 pe-md-4 text-muted">#${escaparHtmlAgenda(evento.ID || '—')}</td>
+                        <td class="text-end pe-3 pe-md-4">${acaoIntegracao}</td>
+                    </tr>`;
+                }).join('');
+            }
+
+            const origem = resposta.contingencia ? 'Cache de contingência' : (resposta.origem === 'cache' ? 'Cache' : 'API');
+            atualizacaoAgendaApi.textContent = `${origem}${resposta.gerado_em ? ' · ' + resposta.gerado_em : ''} · ${eventos.length} futuro(s)`;
+        }
+
+        async function carregarAgendaApi(forcar) {
+            if (!corpoAgendaApi || !botaoAgendaApi) return;
+            botaoAgendaApi.disabled = true;
+            iconeAgendaApi.classList.add('spin');
+            atualizacaoAgendaApi.textContent = forcar ? 'Atualizando pela API...' : 'Consultando agenda...';
+            try {
+                const url = urlAgendaApi + (forcar ? '&forcar=1' : '');
+                const response = await fetch(url, { cache: 'no-store' });
+                const resposta = await response.json();
+                if (!response.ok || !resposta.sucesso) {
+                    throw new Error(resposta.erro || 'Não foi possível consultar a agenda da API.');
+                }
+                renderizarAgendaApi(resposta);
+            } catch (erro) {
+                avisoAgendaApi.className = 'px-3 px-md-4 pt-3';
+                avisoAgendaApi.innerHTML = `<div class="alert alert-danger small mb-0">${escaparHtmlAgenda(erro.message || 'Erro ao consultar a agenda.')}</div>`;
+                corpoAgendaApi.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Não foi possível carregar os treinamentos da API.</td></tr>';
+                atualizacaoAgendaApi.textContent = 'Falha ao atualizar';
+            } finally {
+                botaoAgendaApi.disabled = false;
+                iconeAgendaApi.classList.remove('spin');
+            }
+        }
+
+        if (botaoAgendaApi) {
+            botaoAgendaApi.addEventListener('click', function () { carregarAgendaApi(true); });
+            carregarAgendaApi(false);
+        }
+    })();
 </script>
 
 <?php include 'footer.php'; ?>

@@ -362,26 +362,12 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
     }
 
     function criarMensagemWhatsapp(chamado){
-        const servidor = chamado.SERVIDOR || chamado.SERVIDORNUVEM || MAPA_SERVIDOR_LOCAL[chamado.ID_CLIENTE] || '—';
         const usuario = chamado.CHAMADO_USUARIO || chamado.USUARIO || 'cliente';
-        const descricao = String(chamado.DESCRICAO || 'Sem descrição')
-            .replace(/\r\n/g,'\n')
-            .replace(/\r/g,'\n')
-            .split('\n')
-            .map(line => line.trim())
-            .join('\r\n');
-        const resumo = descricao.length > 500 ? descricao.slice(0, 500) + '...' : descricao;
         return `Olá, ${usuario} 👋\r\n\r\n` +
-            `Seu chamado *#${chamado.ID}* foi aberto com sucesso ✅\r\n\r\n` +
-            `*Tipo:* ${chamado.TIPOACOMP || 'Não informado'} 📄\r\n` +
-            `*Status:* ${chamado.CHAMADO_STATUS || 'Não informado'} ⏳\r\n` +
-            `*Servidor:* ${servidor} 🖥️\r\n` +
-            `*Responsável:* ${chamado.RESPONSAVEL || 'Não informado'} 👤\r\n\r\n` +
-            `*Resumo:* ${resumo} 🔍\r\n\r\n` +
-            `*Previsão de retorno:* ${fmtDataTexto(chamado.DATAPREV_RETORNO)} 📅\r\n\r\n` +
-            `Sigo acompanhando por aqui e, assim que houver novidade, te aviso. 🚀`;
+            `Seu chamado de suporte *#${chamado.ID}* foi resolvido com sucesso ✅\r\n\r\n` +
+            `Para receber a atualização, saia do sistema e entre novamente. Depois, faça o teste.\r\n\r\n` +
+            `Sigo acompanhando por aqui e, se surgir qualquer novidade, pode me chamar. 🚀`;
     }
-
     function copiarTextoAreaTransferencia(texto, mensagemSucesso){
         if(navigator.clipboard && window.isSecureContext){
             navigator.clipboard.writeText(texto).then(()=>alert(mensagemSucesso)).catch(()=>fallbackCopy(texto, mensagemSucesso));
@@ -636,25 +622,46 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
         document.getElementById('btn-refresh').disabled=true;
         document.getElementById('msg-carregando').textContent = forcar ? 'Buscando chamados da API...' : 'Carregando última leitura...';
 
-        const url = fonte === 'mesa'
-            ? 'api_gestaopro_bridge.php?endpoint=mesa&usuario=53&secoes=chamados,clientes' + (forcar ? '&forcar=1' : '&somente_cache=1')
-            : 'api_gestaopro_bridge.php?endpoint=chamados' + (forcar ? '&forcar=1' : '&somente_cache=1');
+        const urlForcar = fonte === 'mesa'
+            ? 'api_gestaopro_bridge.php?endpoint=mesa&usuario=53&secoes=chamados,clientes&forcar=1'
+            : 'api_gestaopro_bridge.php?endpoint=chamados&forcar=1';
+
+        const url = forcar ? urlForcar : (fonte === 'mesa'
+            ? 'api_gestaopro_bridge.php?endpoint=mesa&usuario=53&secoes=chamados,clientes&somente_cache=1'
+            : 'api_gestaopro_bridge.php?endpoint=chamados&somente_cache=1');
 
         Promise.all([
             fetch(url).then(r=>r.json()),
             fetch('get_chamados_espelho.php').then(r=>r.json())
         ]).then(([resp, respLocais])=>{
+            // Se não há cache e não estamos forçando, tenta automaticamente buscar da API
+            if (!resp.sucesso && !forcar) {
+                document.getElementById('msg-carregando').textContent = 'Nenhum cache encontrado. Buscando chamados da API...';
+                return Promise.all([
+                    fetch(urlForcar).then(r=>r.json()),
+                    Promise.resolve(respLocais)
+                ]);
+            }
+            return [[resp, respLocais]];
+        }).then(resultado=>{
+            // Normaliza o resultado (pode vir de cache ou da chamada forçada)
+            const [resp, respLocais] = Array.isArray(resultado[0]) ? resultado[0] : resultado;
             if(!resp.sucesso) throw new Error(resp.erro||'Erro desconhecido');
-            const lista=resp.dados.chamados||[];
+            const listaChamados = resp.dados.chamados || [];
+            const listaAguardandoCliente = fonte === 'mesa' && Array.isArray(resp.dados.aguardandoCliente)
+                ? resp.dados.aguardandoCliente
+                : [];
+            const lista = [...new Map([...listaChamados, ...listaAguardandoCliente].map(chamado => [String(chamado.ID ?? JSON.stringify(chamado)), chamado])).values()];
+
             todos=lista;
             
             window.chamadosLocais = respLocais.sucesso ? (respLocais.dados || {}) : {};
 
             const statusValores = [...new Set(lista.map(r => normalizarStatus(r.CHAMADO_STATUS)).filter(Boolean))].sort();
-            const statusPadrao = ['Aguardando Desenvolvimento', 'Aguardando Testes', 'Aguardando Fila'];
+            const statusPadrao = [];
             populaDropdownCheckboxes('filtro-status-menu', 'filtro-status-label', 'filtro-status-cb', statusValores, statusPadrao, 'Todos os status');
             populaDropdownCheckboxes('filtro-tipo-menu', 'filtro-tipo-label', 'filtro-tipo-cb', lista.map(r=>r.TIPOACOMP), [], 'Todos os tipos');
-            populaSelect('filtro-responsavel', lista.map(r=>r.RESPONSAVEL), 'VINICIUS');
+            populaSelect('filtro-responsavel', lista.map(r=>r.RESPONSAVEL), '');
             aplicarFiltros();
 
             const ob=document.getElementById('badge-origem');
@@ -666,13 +673,22 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
             document.getElementById('estado-carregando').classList.add('d-none');
             document.getElementById('wrapper-tabela').classList.remove('d-none');
         }).catch(err=>{
+            // Se o endpoint geral falhou e ainda não tentamos a Mesa, alterna automaticamente
+            if (fonte === 'chamados' && !forcar) {
+                console.warn('[chamados] Endpoint geral falhou, alternando para Mesa:', err.message);
+                localStorage.setItem('gp_chamados_fonte', 'mesa');
+                carregarDados(false);
+                return;
+            }
+            if (fonte === 'chamados' && forcar) {
+                console.warn('[chamados] Endpoint geral falhou, alternando para Mesa:', err.message);
+                localStorage.setItem('gp_chamados_fonte', 'mesa');
+                carregarDados(true);
+                return;
+            }
             document.getElementById('estado-carregando').classList.add('d-none');
             document.getElementById('estado-erro').classList.remove('d-none');
-            let msg = err.message;
-            if (fonte === 'chamados') {
-                msg += ' <br><br><button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="alternarParaMesa()"><i class="bi bi-kanban me-1"></i> Carregar Chamados da Mesa (#53)</button>';
-            }
-            document.getElementById('msg-erro').innerHTML = msg;
+            document.getElementById('msg-erro').innerHTML = err.message;
         }).finally(()=>{
             document.getElementById('btn-refresh').disabled=false;
             document.getElementById('ico-refresh').className='bi bi-arrow-clockwise';
@@ -681,7 +697,7 @@ const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
 
     window.alternarParaMesa = function() {
         localStorage.setItem('gp_chamados_fonte', 'mesa');
-        carregarDados(false);
+        carregarDados(true);
     };
 
     document.getElementById('btn-fonte-mesa').addEventListener('click', function(){

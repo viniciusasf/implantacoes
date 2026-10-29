@@ -571,7 +571,10 @@ try {
     if ($base_endpoint === 'mesa') {
         $usuario = filter_var($_GET['usuario'] ?? 53, FILTER_VALIDATE_INT) ?: 53;
         $secoes = !empty($_GET['secoes']) ? trim((string)$_GET['secoes']) : 'chamados,clientes';
-        $mesaCacheFile = __DIR__ . "/logs/gp_cache_mesa_{$usuario}.json";
+        $secoesArray = array_values(array_unique(array_filter(array_merge(explode(',', $secoes), ['clientes', 'chamados']))));
+        $usaCacheComAgenda = in_array('agenda', $secoesArray, true);
+        $sufixoCache = $usaCacheComAgenda ? '_agenda' : '';
+        $mesaCacheFile = __DIR__ . "/logs/gp_cache_mesa_{$usuario}{$sufixoCache}.json";
         $forcar = !empty($_GET['forcar']);
         $somenteCache = !empty($_GET['somente_cache']);
 
@@ -604,7 +607,6 @@ try {
             exit;
         }
 
-        $secoesArray = array_unique(array_filter(array_merge(explode(',', $secoes), ['clientes', 'chamados'])));
         $queryMesa = http_build_query([
             'usuario' => $usuario,
             'secoes'  => implode(',', $secoesArray),
@@ -634,6 +636,9 @@ try {
 
         if (!isset($dadosMesa['chamados']) || !is_array($dadosMesa['chamados'])) {
             $dadosMesa['chamados'] = [];
+        }
+        if ($usaCacheComAgenda && (!isset($dadosMesa['agenda']) || !is_array($dadosMesa['agenda']))) {
+            $dadosMesa['agenda'] = [];
         }
 
         salvarCache($mesaCacheFile, $dadosMesa);
@@ -765,12 +770,17 @@ try {
 
     // Alguns status não vêm na consulta padrão da API; busque-os separadamente.
     if ($base_endpoint === 'chamados') {
-        foreach (['Resolvido', 'Enviado Atualização'] as $status) {
-            $query = http_build_query(['status' => $status]);
-            $dadosStatus = buscarTodasPaginas('/api/chamados?' . $query, $cookieStr, 'chamados');
+        foreach (['Resolvido', 'Enviado Atualização', 'Aguardando Cliente'] as $status) {
+            try {
+                $query = http_build_query(['status' => $status]);
+                $dadosStatus = buscarTodasPaginas('/api/chamados?' . $query, $cookieStr, 'chamados');
 
-            if ($dadosStatus && isset($dadosStatus['chamados']) && is_array($dadosStatus['chamados'])) {
-                $dados['chamados'] = mesclarChamados(array_merge($dados['chamados'] ?? [], $dadosStatus['chamados']));
+                if ($dadosStatus && isset($dadosStatus['chamados']) && is_array($dadosStatus['chamados'])) {
+                    $dados['chamados'] = mesclarChamados(array_merge($dados['chamados'] ?? [], $dadosStatus['chamados']));
+                }
+            } catch (Throwable $e) {
+                // Uma busca complementar com falha não deve descartar a lista geral válida.
+                error_log("Falha ao complementar chamados com status '{$status}': " . $e->getMessage());
             }
         }
 

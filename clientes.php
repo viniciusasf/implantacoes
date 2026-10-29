@@ -1097,6 +1097,8 @@ body, html {
                             <button type="button" class="btn btn-sm btn-action chamados btn-suporte-cliente"
                                     data-id-api="<?= htmlspecialchars($idApiChamados, ENT_QUOTES, 'UTF-8') ?>"
                                     data-fantasia="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                    data-status-implantacao="<?= htmlspecialchars($cfg['label'], ENT_QUOTES, 'UTF-8') ?>"
+                                    data-recursos="<?= htmlspecialchars($c['recursos'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                                     aria-label="Chamados de suporte de <?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
                                     title="<?= $idApiChamados === '' ? 'Cadastre o ID Cliente API para consultar os chamados' : 'Chamados de suporte' ?>"
                                     onclick="abrirChamadosSuporte(this)" <?= $idApiChamados === '' ? 'disabled' : '' ?>>
@@ -1263,6 +1265,8 @@ body, html {
                                             <button type="button" class="btn btn-sm btn-action chamados btn-suporte-cliente"
                                                     data-id-api="<?= htmlspecialchars($idApiChamadosTabela, ENT_QUOTES, 'UTF-8') ?>"
                                                     data-fantasia="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-status-implantacao="<?= htmlspecialchars($cfg['label'], ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-recursos="<?= htmlspecialchars($c['recursos'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                                                     aria-label="Chamados de suporte de <?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
                                                     title="<?= $idApiChamadosTabela === '' ? 'Cadastre o ID Cliente API para consultar os chamados' : 'Chamados de suporte' ?>"
                                                     onclick="abrirChamadosSuporte(this)" <?= $idApiChamadosTabela === '' ? 'disabled' : '' ?>>
@@ -1580,6 +1584,9 @@ body, html {
                     </div>
                 </div>
                 <div class="d-flex align-items-center gap-2 ms-auto">
+                    <button type="button" class="btn btn-sm btn-outline-light fw-semibold" id="supportTicketsExport" onclick="exportarChamadosSuporteTxt()" disabled>
+                        <i class="bi bi-file-earmark-text me-1"></i>Exportar .txt
+                    </button>
                     <button type="button" class="btn btn-sm btn-light fw-semibold" id="supportTicketsRefresh" onclick="carregarChamadosSuporteAtual(true)">
                         <i class="bi bi-arrow-clockwise me-1" id="supportTicketsRefreshIcon"></i>Atualizar
                     </button>
@@ -1596,7 +1603,7 @@ body, html {
                     </div>
                     <div class="col-12 col-sm-4">
                         <div class="dash-kpi-card py-3">
-                            <div class="text-muted small">Em aberto</div>
+                            <div class="text-muted small">Não resolvidos</div>
                             <div class="fs-3 fw-bold text-warning" id="supportTicketsOpen">0</div>
                         </div>
                     </div>
@@ -1607,6 +1614,11 @@ body, html {
                         </div>
                     </div>
                 </div>
+                <section class="mb-4" id="supportTicketsStatusBreakdown" hidden aria-live="polite">
+                    <h6 class="fw-bold text-main mb-2">Distribuição por status do GestãoPro</h6>
+                    <div class="d-flex flex-wrap gap-2" id="supportTicketsStatusCounts"></div>
+                    <p class="small text-muted mt-2 mb-0">“Não resolvidos” inclui todos os chamados cujo status não indica resolução. Confira os status acima para identificar cada um.</p>
+                </section>
 
                 <div class="row g-2 align-items-center mb-3" id="supportTicketsFilters" hidden>
                     <div class="col-12 col-md">
@@ -1963,6 +1975,32 @@ body, html {
         }
         if (!dados || typeof dados !== 'object') return null;
 
+        const coletarGruposDeChamados = valor => {
+            if (Array.isArray(valor)) {
+                return valor.filter(item => item && typeof item === 'object' && !Array.isArray(item));
+            }
+            if (!valor || typeof valor !== 'object') return [];
+            return Object.values(valor).flatMap(coletarGruposDeChamados);
+        };
+
+        // A API agrupa os chamados por situação (por exemplo, abertos/finalizados).
+        // Reúne todos os grupos para não exibir somente o primeiro status encontrado.
+        for (const [chave, valor] of Object.entries(dados)) {
+            if (chave.toLowerCase() === 'chamados') {
+                const todos = coletarGruposDeChamados(valor);
+                if (todos.length) {
+                    const porId = new Map();
+                    const semId = [];
+                    todos.forEach(item => {
+                        const id = item.ID ?? item.id ?? item.ID_CHAMADO ?? item.id_chamado ?? item.ticket_id;
+                        if (id === undefined || id === null || String(id).trim() === '') semId.push(item);
+                        else if (!porId.has(String(id))) porId.set(String(id), item);
+                    });
+                    return [...porId.values(), ...semId];
+                }
+            }
+        }
+
         let encontrouColecaoVazia = false;
         for (const chave of ['chamados', 'implantacao', 'implantacoes', 'tickets', 'data', 'dados', 'items', 'registros', 'results']) {
             if (dados[chave] !== undefined) {
@@ -2025,7 +2063,8 @@ body, html {
             .replace(/\b\w/g, letra => letra.toUpperCase());
     }
 
-    let chamadosSuporteAtivos = { idApi: '', fantasia: '', chamados: [], origem: 'api' };
+    let chamadosSuporteAtivos = { idApi: '', fantasia: '', statusImplantacao: '', recursos: '', chamados: [], origem: 'api' };
+    const descricoesCompletasChamadosCliente = new Map();
     let requisicaoChamadosSuporte = 0;
 
     function classificarStatusChamadoCliente(status) {
@@ -2052,12 +2091,155 @@ body, html {
     }
 
     function atualizarResumoChamadosCliente(chamados) {
-        const abertos = chamados.filter(chamado => classificarStatusChamadoCliente(campoChamadoCliente(chamado, ['CHAMADO_STATUS', 'STATUS_CHAMADO', 'STATUS', 'status'])) === 'aberto').length;
         const resolvidos = chamados.filter(chamado => classificarStatusChamadoCliente(campoChamadoCliente(chamado, ['CHAMADO_STATUS', 'STATUS_CHAMADO', 'STATUS', 'status'])) === 'resolvido').length;
         document.getElementById('supportTicketsTotal').textContent = chamados.length.toLocaleString('pt-BR');
-        document.getElementById('supportTicketsOpen').textContent = abertos.toLocaleString('pt-BR');
+        document.getElementById('supportTicketsOpen').textContent = (chamados.length - resolvidos).toLocaleString('pt-BR');
         document.getElementById('supportTicketsResolved').textContent = resolvidos.toLocaleString('pt-BR');
         document.getElementById('supportTicketsSummary').hidden = false;
+
+        const contagemPorStatus = new Map();
+        chamados.forEach(chamado => {
+            const status = campoChamadoCliente(chamado, ['CHAMADO_STATUS', 'STATUS_CHAMADO', 'STATUS', 'status']);
+            const rotulo = status || 'Status não informado';
+            contagemPorStatus.set(rotulo, (contagemPorStatus.get(rotulo) || 0) + 1);
+        });
+        const itensStatus = Array.from(contagemPorStatus.entries())
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'))
+            .map(([status, total]) => `<span class="badge rounded-pill bg-secondary-subtle text-secondary px-3 py-2">${escaparHtmlChamadosCliente(status)} <span class="ms-1">${total}</span></span>`)
+            .join('');
+        document.getElementById('supportTicketsStatusCounts').innerHTML = itensStatus;
+        document.getElementById('supportTicketsStatusBreakdown').hidden = chamados.length === 0;
+    }
+
+    function valorCampoChamadoParaTxt(chamado, aliases, fallback = 'Não informado') {
+        const valor = campoChamadoCliente(chamado, aliases);
+        return valor === '' ? fallback : valorLegivelChamadoCliente(valor);
+    }
+
+    function classificarTipoDemandaTxt(chamado) {
+        const tipoOriginal = valorCampoChamadoParaTxt(chamado, ['TIPO', 'TIPO_DEMANDA', 'CATEGORIA', 'TIPOACOMP', 'TIPO_ACOMPANHAMENTO'], 'Não informado');
+        if (tipoOriginal !== 'Não informado') return tipoOriginal;
+        const texto = `${valorCampoChamadoParaTxt(chamado, ['ASSUNTO', 'TITULO', 'TEMA'], '')} ${valorCampoChamadoParaTxt(chamado, ['DESCRICAO', 'DESCRICAO_PROBLEMA', 'MENSAGEM'], '')}`.toLowerCase();
+        if (/customiza|desenvolv|personaliza/.test(texto)) return 'Customização';
+        if (/relat[oó]rio|relatorio/.test(texto)) return 'Relatório';
+        if (/erro|falha|bug|corrig|problema/.test(texto)) return 'Erro de Sistema';
+        return 'Solicitação / Dúvida';
+    }
+
+    function statusChamadoParaTxt(chamado) {
+        const status = valorCampoChamadoParaTxt(chamado, ['CHAMADO_STATUS', 'STATUS_CHAMADO', 'STATUS', 'status'], 'Não informado');
+        if (status === 'Não informado') return status;
+        return classificarStatusChamadoCliente(status) === 'resolvido' ? 'Resolvido / Encerrado' : status;
+    }
+
+    function formatarChamadoParaTxt(chamado) {
+        const id = campoChamadoCliente(chamado, ['ID', 'ID_CHAMADO', 'id_chamado', 'numero', 'ticket_id']);
+        const data = valorCampoChamadoParaTxt(chamado, ['DATA_ABERTURA', 'DATA_CRIACAO', 'DATA', 'CRIADO_EM', 'created_at']);
+        const tipo = classificarTipoDemandaTxt(chamado);
+        const descricao = valorCampoChamadoParaTxt(chamado, ['DESCRICAO', 'DESCRICAO_PROBLEMA', 'MENSAGEM', 'NECESSIDADE', 'SOLICITACAO'], 'Não informado');
+        const responsaveis = valorCampoChamadoParaTxt(chamado, ['RESPONSAVEIS', 'RESPONSAVEL', 'RESPONSAVEL_TECNICO', 'ATENDENTE', 'TECNICO', 'USUARIO'], 'Não informado');
+        return [
+            `CHAMADO #${id || 'Sem número'}`,
+            `- Data: ${data === 'Não informado' ? data : formatarDataChamadoCliente(data)}`,
+            `- Tipo: ${tipo}`,
+            `- Status: ${statusChamadoParaTxt(chamado)}`,
+            `- Descrição da Demanda/Necessidade: ${descricao}`,
+            `- Responsáveis: ${responsaveis}`
+        ].join('\r\n');
+    }
+
+    function agruparChamadosParaTxt(chamados) {
+        const grupos = new Map();
+        chamados.forEach(chamado => {
+            const tipo = classificarTipoDemandaTxt(chamado);
+            const chave = tipo;
+            if (!grupos.has(chave)) grupos.set(chave, { tipo, chamados: [] });
+            grupos.get(chave).chamados.push(chamado);
+        });
+        return Array.from(grupos.values())
+            .sort((a, b) => a.tipo.localeCompare(b.tipo, 'pt-BR'))
+            .map(grupo => `=== TIPO: ${grupo.tipo} ===\r\n\r\n${grupo.chamados.map(formatarChamadoParaTxt).join('\r\n\r\n')}`)
+            .join('\r\n\r\n' + '='.repeat(72) + '\r\n\r\n');
+    }
+
+    async function obterDescricaoCompletaChamadoCliente(chamado) {
+        const id = campoChamadoCliente(chamado, ['ID', 'ID_CHAMADO', 'id_chamado', 'numero', 'ticket_id']);
+        if (id === '') return campoChamadoCliente(chamado, ['DESCRICAO', 'DESCRICAO_PROBLEMA', 'MENSAGEM', 'descricao']);
+        if (descricoesCompletasChamadosCliente.has(String(id))) return descricoesCompletasChamadosCliente.get(String(id));
+        try {
+            const resposta = await fetch('api_gestaopro_bridge.php?endpoint=chamados&detalhe=' + encodeURIComponent(id), { headers: { 'Accept': 'application/json' } }).then(r => r.json());
+            const detalhe = resposta && resposta.sucesso && resposta.dados ? resposta.dados.chamado : null;
+            const descricao = detalhe && (detalhe.DESCRICAO ?? detalhe.descricao ?? detalhe.DESCRICAO_PROBLEMA);
+            if (typeof descricao === 'string' && descricao.trim() !== '') {
+                descricoesCompletasChamadosCliente.set(String(id), descricao);
+                return descricao;
+            }
+        } catch (_) {}
+        return campoChamadoCliente(chamado, ['DESCRICAO', 'DESCRICAO_PROBLEMA', 'MENSAGEM', 'descricao']);
+    }
+
+    async function exportarChamadosSuporteTxt() {
+        const { idApi, fantasia, statusImplantacao, recursos } = chamadosSuporteAtivos;
+        let chamados = chamadosSuporteAtivos.chamados;
+        if (!chamados.length) return;
+
+        const botaoExportar = document.getElementById('supportTicketsExport');
+        botaoExportar.disabled = true;
+        const textoOriginal = botaoExportar.innerHTML;
+        botaoExportar.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Carregando descrições...';
+        try {
+            // Busca a lista novamente sem usar o cache para não exportar uma leitura desatualizada.
+            const query = new URLSearchParams({ endpoint: 'chamados_cliente', id_cliente_api: idApi, forcar: '1' });
+            const respostaLista = await fetch(`api_gestaopro_bridge.php?${query.toString()}`, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } }).then(r => r.json());
+            if (!respostaLista.sucesso) throw new Error(respostaLista.erro || 'Não foi possível atualizar a lista de chamados.');
+            const listaAtualizada = localizarChamadosCliente(respostaLista.dados);
+            if (listaAtualizada === null) throw new Error('A resposta atualizada não contém uma lista válida de chamados.');
+            chamados = listaAtualizada;
+            chamadosSuporteAtivos.chamados = listaAtualizada;
+            document.getElementById('supportTicketsList').innerHTML = chamados.map(renderizarChamadoSuporte).join('');
+            atualizarResumoChamadosCliente(chamados);
+            filtrarChamadosSuporte();
+            await Promise.all(chamados.map(async chamado => {
+                const descricao = await obterDescricaoCompletaChamadoCliente(chamado);
+                if (descricao) {
+                    const chave = Object.keys(chamado).find(k => ['descricao', 'descricao_problema', 'mensagem'].includes(k.toLowerCase())) || 'DESCRICAO';
+                    chamado[chave] = descricao;
+                }
+            }));
+        } catch (erro) {
+            alert(`Não foi possível preparar o arquivo com todos os chamados: ${erro.message || 'erro desconhecido'}`);
+            return;
+        } finally {
+            botaoExportar.disabled = false;
+            botaoExportar.innerHTML = textoOriginal;
+        }
+
+        const dataExportacao = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        const conteudo = [
+            '=== RESUMO EXECUTIVO DA IMPLANTAÇÃO ===',
+            `Cliente: ${fantasia} (ID ${idApi})`,
+            `Status: ${statusImplantacao === 'Encerrado' ? 'Implantação Encerrada' : `Implantação ${statusImplantacao}`}`,
+            `Módulos utilizados: ${recursos || 'Não informado'}`,
+            `Total de Chamados Tratados: ${chamados.length}`,
+            `Data da exportação: ${dataExportacao}`,
+            '',
+            agruparChamadosParaTxt(chamados)
+        ].join('\r\n');
+        const arquivo = new Blob(['\uFEFF', conteudo], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(arquivo);
+        const link = document.createElement('a');
+        const nomeCliente = fantasia
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-zA-Z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .toLowerCase() || 'cliente';
+        link.href = url;
+        link.download = `chamados_${nomeCliente}_${idApi}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     function renderizarChamadoSuporte(chamado) {
@@ -2080,9 +2262,7 @@ body, html {
             .map(([chave, valor]) => `<div class="support-ticket-detail"><div class="text-muted small mb-1">${escaparHtmlChamadosCliente(rotuloCampoChamadoCliente(chave))}</div><div class="fw-medium">${escaparHtmlChamadosCliente(valorLegivelChamadoCliente(valor))}</div></div>`)
             .join('');
         const textoPrincipal = assunto || descricao || 'Sem descrição disponível.';
-        const descricaoSecundaria = assunto && descricao && assunto !== descricao
-            ? `<div class="support-ticket-description text-muted small mt-2">${escaparHtmlChamadosCliente(descricao)}</div>`
-            : '';
+        const descricaoSecundaria = `<details class="mt-2" data-support-description data-ticket-id="${escaparHtmlChamadosCliente(id)}"><summary class="small fw-semibold text-primary" style="cursor:pointer">Ver descrição completa</summary><div class="support-ticket-description text-muted small mt-2">${escaparHtmlChamadosCliente(descricao || '')}</div></details>`;
 
         return `<article class="support-ticket-card" data-support-ticket data-status="${categoria}" data-search="${escaparHtmlChamadosCliente(JSON.stringify(chamado).toLowerCase())}">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
@@ -2143,12 +2323,14 @@ body, html {
         const idApi = (elemento.dataset.idApi || '').trim();
         if (!idApi) return;
 
-        chamadosSuporteAtivos = { idApi, fantasia: elemento.dataset.fantasia || 'Cliente', chamados: [], origem: 'api' };
+        chamadosSuporteAtivos = { idApi, fantasia: elemento.dataset.fantasia || 'Cliente', statusImplantacao: elemento.dataset.statusImplantacao || 'Não informado', recursos: elemento.dataset.recursos || '', chamados: [], origem: 'api' };
         document.getElementById('supportTicketsClient').textContent = chamadosSuporteAtivos.fantasia;
         document.getElementById('supportTicketsClientId').textContent = idApi;
         document.getElementById('supportTicketsUpdated').textContent = 'Consultando GestãoPro...';
         document.getElementById('supportTicketsSummary').hidden = true;
+        document.getElementById('supportTicketsStatusBreakdown').hidden = true;
         document.getElementById('supportTicketsFilters').hidden = true;
+        document.getElementById('supportTicketsExport').disabled = true;
         document.getElementById('supportTicketsList').innerHTML = '';
         document.getElementById('supportTicketsResultCount').textContent = '';
         document.getElementById('supportTicketsError').classList.add('d-none');
@@ -2182,6 +2364,7 @@ body, html {
             }
             if (requisicao !== requisicaoChamadosSuporte || chamadosSuporteAtivos.idApi !== idApi) return;
             exibirChamadosSuporte(json.dados, json.origem || 'api', json.gerado_em || '');
+            document.getElementById('supportTicketsExport').disabled = chamadosSuporteAtivos.chamados.length === 0;
         } catch (erro) {
             if (requisicao !== requisicaoChamadosSuporte || chamadosSuporteAtivos.idApi !== idApi) return;
             loading.classList.add('d-none');
@@ -2204,6 +2387,19 @@ body, html {
 
     document.getElementById('supportTicketsSearch').addEventListener('input', filtrarChamadosSuporte);
     document.getElementById('supportTicketsStatusFilter').addEventListener('change', filtrarChamadosSuporte);
+    document.getElementById('supportTicketsList').addEventListener('toggle', async event => {
+        const detalhes = event.target;
+        if (!detalhes.matches('details[data-support-description]') || !detalhes.open || detalhes.dataset.loaded === '1') return;
+        const id = detalhes.dataset.ticketId;
+        const chamado = chamadosSuporteAtivos.chamados.find(item => String(campoChamadoCliente(item, ['ID', 'ID_CHAMADO', 'id_chamado', 'numero', 'ticket_id'])) === id);
+        if (!chamado) return;
+        detalhes.dataset.loaded = '1';
+        const area = detalhes.querySelector('.support-ticket-description');
+        const resumoAtual = area.textContent;
+        area.textContent = 'Carregando descrição completa...';
+        const descricao = await obterDescricaoCompletaChamadoCliente(chamado);
+        area.textContent = descricao || resumoAtual || 'Descrição indisponível.';
+    }, true);
 
     // --- GERENCIADOR DO DASHBOARD POR CLIENTE ---
     let dashClienteAtivo = null;
