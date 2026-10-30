@@ -639,6 +639,7 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                         ? dadosImplantacoes.clientes
                         : (Array.isArray(dadosImplantacoes?.implantacoes) ? dadosImplantacoes.implantacoes : []));
                 const licencasPorCliente = new Map();
+                const implantacaoPorCliente = new Map();
                 const normalizarNomeCliente = nome => String(nome || '')
                     .normalize('NFD')
                     .replace(/[\u0300-\u036f]/g, '')
@@ -646,7 +647,8 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                     .trim()
                     .toUpperCase();
                 registrosImplantacoes.forEach(registro => {
-                    const idCliente = String(registro.ID_CLIENTE || registro.ID || '');
+                    const idCliente = String(registro.ID_CLIENTE || registro.ID || registro.ID_CLIENTE_API || '');
+                    if (idCliente) implantacaoPorCliente.set(idCliente, registro);
                     const licencas = obterNumeroLicencas(registro);
                     if (idCliente && licencas > 0) licencasPorCliente.set(idCliente, licencas);
                     const nomeCliente = normalizarNomeCliente(registro.FANTASIA || registro.RAZAOSOCIAL);
@@ -655,6 +657,7 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                 clientes = clientes.map(c => {
                     const idApi = c.ID_CLIENTE || c.ID;
                     const st = (c.STATUS_IMPLANTACAO || '').trim().toUpperCase();
+                    const registroImplantacao = implantacaoPorCliente.get(String(idApi)) || {};
                     const nomeCliente = normalizarNomeCliente(c.FANTASIA || c.RAZAOSOCIAL);
                     const licencasApi = licencasPorCliente.get(String(idApi))
                         ?? licencasPorCliente.get(`nome:${nomeCliente}`)
@@ -665,8 +668,8 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                         ID: c.ID || idApi,
                         FANTASIA: c.FANTASIA || c.RAZAOSOCIAL || '',
                         RAZAOSOCIAL: c.RAZAOSOCIAL || c.FANTASIA || '',
-                        VENDEDOR: c.VENDEDOR || c.IMPLANTADOR || 'VINICIUS',
-                        VENDEDOR2: c.VENDEDOR2 || '',
+                        VENDEDOR: c.VENDEDOR || registroImplantacao.VENDEDOR || '',
+                        VENDEDOR2: c.VENDEDOR2 || registroImplantacao.VENDEDOR2 || '',
                         SERVIDOR: c.SERVIDOR || '',
                         NUVEM: c.NUVEM || ((c.SERVIDOR && c.SERVIDOR.toUpperCase() !== 'LOCAL') ? 'T' : 'F'),
                         NUM_LICENCAS: licencasApi,

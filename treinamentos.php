@@ -1129,7 +1129,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
                 $tipoImportacao = 'warning';
             }
-            header('Location: ' . $retornoImportacao . '?msg=' . urlencode($mensagemImportacao) . '&tipo=' . $tipoImportacao);
+            $redirectParams = [
+                'msg' => $mensagemImportacao,
+                'tipo' => $tipoImportacao,
+            ];
+            if (!empty($resultadoGoogle['success']) && !empty($resultadoGoogle['google_agenda_link'])) {
+                $redirectParams['open_google_agenda'] = trim((string) $resultadoGoogle['google_agenda_link']);
+                $redirectParams['open_google_agenda_treinamento_id'] = $idTreinamentoLocal;
+                $redirectParams['open_google_modal_novo'] = 1;
+            } else {
+                $redirectParams['open_google_modal_id'] = $idTreinamentoLocal;
+            }
+            header('Location: ' . $retornoImportacao . '?' . http_build_query($redirectParams));
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -1989,7 +2000,7 @@ include 'header.php';
         </div>
     </div>
 
-    <section class="card border-0 shadow-sm mb-4 gsap-reveal" id="agenda-api-card" style="background: var(--bg-card); border-radius: 16px;">
+    <section class="card border-0 shadow-sm mb-4 gsap-reveal d-none" id="agenda-api-card" style="background: var(--bg-card); border-radius: 16px;">
         <div class="card-header bg-transparent border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2 p-3 p-md-4">
             <div>
                 <h5 class="fw-bold mb-1"><i class="bi bi-cloud-arrow-down me-2 text-primary"></i>Treinamentos agendados no GestãoPRO</h5>
@@ -3924,6 +3935,7 @@ include 'header.php';
 <script>
     (function () {
         const urlAgendaApi = 'api_gestaopro_bridge.php?endpoint=mesa&usuario=53&secoes=agenda%2Cchamados%2Cclientes';
+        const cardAgendaApi = document.getElementById('agenda-api-card');
         const corpoAgendaApi = document.getElementById('agenda-api-linhas');
         const atualizacaoAgendaApi = document.getElementById('agenda-api-atualizacao');
         const avisoAgendaApi = document.getElementById('agenda-api-aviso');
@@ -3971,6 +3983,10 @@ include 'header.php';
                 .filter(evento => !agendamentosApiImportados[String(evento.ID || '')])
                 .sort((a, b) => String(a.DATA).localeCompare(String(b.DATA)) || String(a.HORA || '').localeCompare(String(b.HORA || '')));
 
+            if (cardAgendaApi) {
+                cardAgendaApi.classList.toggle('d-none', eventos.length === 0);
+            }
+
             if (resposta.contingencia) {
                 avisoAgendaApi.className = 'px-3 px-md-4 pt-3';
                 avisoAgendaApi.innerHTML = '<div class="alert alert-warning small mb-0">A API não respondeu agora. Exibindo a última agenda disponível em cache.</div>';
@@ -3985,7 +4001,7 @@ include 'header.php';
             }
 
             if (eventos.length === 0) {
-                corpoAgendaApi.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Nenhum treinamento futuro encontrado na agenda da API para o usuário 53.</td></tr>';
+                corpoAgendaApi.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Nenhum treinamento futuro encontrado na agenda.</td></tr>';
             } else {
                 corpoAgendaApi.innerHTML = eventos.map(evento => {
                     const [ano, mes, dia] = String(evento.DATA).split('-');
