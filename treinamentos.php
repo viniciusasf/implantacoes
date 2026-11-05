@@ -793,6 +793,22 @@ $clientesApiVinculados = [];
 $clientesApiIdsDuplicados = [];
 $contagemVinculosApiCliente = [];
 $clientesApiNomesLocais = [];
+$contatosClientesApi = [];
+$temasTreinamentoApi = [
+    'INSTALAÇÃO SISTEMA',
+    'CONFIGURAR GESTAOGPT',
+    'CONFIGURAR ASSISTÊNCIAPRO',
+    'CADASTROS/ESTOQUE',
+    'CUSTOMIZAÇÕES',
+    'VENDAS',
+    'COMPRAS',
+    'FATURAMENTO/NF',
+    'FINANCEIRO/BOLETOS/CAIXA',
+    'PRODUÇÃO/OS',
+    'RELATÓRIOS',
+    'ATENDIMENTOS',
+    'DUVIDAS',
+];
 if ($integracaoAgendaApiDisponivel) {
     try {
         $stmtApiImportados = $pdo->query("SELECT gestaopro_agenda_id, id_treinamento, google_event_id FROM treinamentos WHERE gestaopro_agenda_usuario = 53 AND gestaopro_agenda_id IS NOT NULL");
@@ -832,6 +848,22 @@ try {
 
 // Filtros de busca por cliente removidos da UI - mantendo apenas ordenação e paginação
 $filtro_cliente = ''; // Desativado para simplificação via treinamentos.php
+try {
+    $stmtContatosAgenda = $pdo->query("SELECT cl.ID_CLIENTE_API, cl.fantasia, ct.id_contato, ct.nome
+        FROM clientes cl JOIN contatos ct ON ct.id_cliente = cl.id_cliente
+        WHERE ct.nome IS NOT NULL AND TRIM(ct.nome) <> '' ORDER BY ct.nome ASC");
+    foreach ($stmtContatosAgenda->fetchAll(PDO::FETCH_ASSOC) as $contatoAgenda) {
+        $contatosClientesApi[] = [
+            'id_api' => trim((string)($contatoAgenda['ID_CLIENTE_API'] ?? '')),
+            'cliente' => (string)($contatoAgenda['fantasia'] ?? ''),
+            'id_contato' => (int)$contatoAgenda['id_contato'],
+            'nome' => (string)$contatoAgenda['nome'],
+        ];
+    }
+} catch (Throwable $e) {
+    error_log('Falha ao carregar contatos para importação de treinamentos da API: ' . $e->getMessage());
+}
+
 $mostrar_todos = isset($_GET['mostrar_todos']) ? true : false;
 $where_conditions = []; // Alterado: agora mostramos treinamentos independentemente do cliente estar ativo ou encerrado
 $params = [];
@@ -1084,6 +1116,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
             }
 
+            $idContatoApi = filter_var($_POST['id_contato_api'] ?? null, FILTER_VALIDATE_INT);
+            if (!$idContatoApi || $idContatoApi < 1) {
+                throw new RuntimeException('Selecione o contato que ficará vinculado ao treinamento.');
+            }
+            $stmtContatoApi = $pdo->prepare('SELECT nome FROM contatos WHERE id_contato = ? AND id_cliente = ? LIMIT 1');
+            $stmtContatoApi->execute([$idContatoApi, $idClienteLocal]);
+            $nomeContatoApi = trim((string)($stmtContatoApi->fetchColumn() ?: ''));
+            if ($nomeContatoApi === '') {
+                throw new RuntimeException('O contato selecionado não pertence ao cliente vinculado ao treinamento.');
+            }
+
             $dataApi = trim((string) ($eventoApi['DATA'] ?? ''));
             $horaApi = trim((string) ($eventoApi['HORA'] ?? ''));
             if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataApi) || !preg_match('/^\d{1,2}:\d{2}$/', $horaApi)) {
@@ -1097,18 +1140,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 throw new RuntimeException('Já existe um agendamento local nesse horário. O evento da API não foi importado para evitar duplicidade.');
             }
 
-            $temaApi = trim((string) ($eventoApi['DESCRICAO'] ?? ''));
-            if ($temaApi === '' || mb_strtolower($temaApi, 'UTF-8') === 'não informado') {
-                $temaApi = 'Treinamento GestãoPRO #' . $idEventoApi;
+            $temaApi = trim((string)($_POST['tema_api'] ?? ''));
+            if (!in_array($temaApi, $temasTreinamentoApi, true)) {
+                throw new RuntimeException('Selecione um tema válido para o treinamento.');
             }
 
             $pdo->beginTransaction();
             $stmtInserirApi = $pdo->prepare(
                 "INSERT INTO treinamentos
-                    (id_cliente, id_contato, tema, status, data_treinamento, gestaopro_agenda_id, gestaopro_agenda_usuario)
-                 VALUES (?, NULL, ?, 'PENDENTE', ?, ?, 53)"
+                    (id_cliente, id_contato, nome_contato, tema, status, data_treinamento, gestaopro_agenda_id, gestaopro_agenda_usuario)
+                 VALUES (?, ?, ?, ?, 'PENDENTE', ?, ?, 53)"
             );
-            $stmtInserirApi->execute([$idClienteLocal, $temaApi, $dataTreinamentoApi, $idEventoApi]);
+            $stmtInserirApi->execute([$idClienteLocal, $idContatoApi, $nomeContatoApi, $temaApi, $dataTreinamentoApi, $idEventoApi]);
             $idTreinamentoLocal = (int) $pdo->lastInsertId();
             $pdo->commit();
 
@@ -1310,8 +1353,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     $abrirGoogleAgendaLink = '';
     $abrirGoogleAgendaTreinamentoId = 0;
-    $id_cliente = $_POST['id_cliente'];
-    $id_contato = $_POST['id_contato'];
+    $id_cliente = (int) ($_POST['id_cliente'] ?? 0);
+    $id_contato = (int) ($_POST['id_contato'] ?? 0);
+    $nome_contato = '';
+    if ($id_contato > 0) {
+        $stmtContato = $pdo->prepare('SELECT nome FROM contatos WHERE id_contato = ? AND id_cliente = ? LIMIT 1');
+        $stmtContato->execute([$id_contato, $id_cliente]);
+        $nome_contato = trim((string) ($stmtContato->fetchColumn() ?: ''));
+        if ($nome_contato === '') {
+            $id_contato = null;
+        }
+    } else {
+        $id_contato = null;
+    }
     $tema = $_POST['tema'];
     $status = 'PENDENTE';
     if (isset($_POST['status']) && trim((string) $_POST['status']) !== '') {
@@ -1349,11 +1403,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $campos_update = [
             "id_cliente=?",
             "id_contato=?",
+            "nome_contato=?",
             "tema=?",
             "status=?",
             "data_treinamento=?"
         ];
-        $params_update = [$id_cliente, $id_contato, $tema, $status, $data_treinamento];
+        $params_update = [$id_cliente, $id_contato, $nome_contato, $tema, $status, $data_treinamento];
 
         if ($has_google_event_link) {
             $campos_update[] = "google_event_link=?";
@@ -1392,8 +1447,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     } else {
         // --- 3. INSERÇÃO DE NOVO TREINAMENTO ---
-        $colunas_insert = ["id_cliente", "id_contato", "tema", "status", "data_treinamento", "google_event_link"];
-        $params_insert = [$id_cliente, $id_contato, $tema, $status, $data_treinamento, $google_event_link];
+        $colunas_insert = ["id_cliente", "id_contato", "nome_contato", "tema", "status", "data_treinamento", "google_event_link"];
+        $params_insert = [$id_cliente, $id_contato, $nome_contato, $tema, $status, $data_treinamento, $google_event_link];
 
         if ($has_google_agenda_link && $tem_coluna_google_agenda) {
             $colunas_insert[] = "google_agenda_link";
@@ -2034,6 +2089,39 @@ include 'header.php';
         </div>
     </section>
 
+    <div class="modal fade" id="modalVincularContatoAgenda" tabindex="-1" aria-labelledby="tituloModalVincularContatoAgenda" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form method="post" class="modal-content border-0 shadow-lg" id="formVincularContatoAgenda" style="border-radius: 16px;">
+                <div class="modal-header border-0 px-4 pt-4">
+                    <h5 class="modal-title fw-bold" id="tituloModalVincularContatoAgenda"><i class="bi bi-person-check me-2 text-primary"></i>Vincular contato ao treinamento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body px-4">
+                    <input type="hidden" name="api_agenda_id" id="agenda_contato_evento_id">
+                    <div class="rounded-3 bg-light border p-3 mb-3">
+                        <div class="fw-semibold" id="agenda_contato_cliente"></div>
+                        <div class="small text-muted" id="agenda_contato_resumo"></div>
+                    </div>
+                    <label for="id_contato_api" class="form-label small fw-bold text-muted">Contato que ficará vinculado</label>
+                    <select name="id_contato_api" id="id_contato_api" class="form-select" required><option value="">Selecione o contato...</option></select>
+                    <div id="agenda_contato_sem_opcoes" class="form-text text-danger d-none mt-2">Este cliente ainda não possui contatos cadastrados. Cadastre um contato antes de importar o treinamento.</div>
+                    <label for="tema_api" class="form-label small fw-bold text-muted mt-3">Tema do treinamento</label>
+                    <select name="tema_api" id="tema_api" class="form-select" required>
+                        <option value="">Selecione o tema...</option>
+                        <?php foreach ($temasTreinamentoApi as $temaPermitido): ?>
+                            <option value="<?= htmlspecialchars($temaPermitido, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($temaPermitido, ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="form-text mt-2">O convite do Google continuará sendo enviado a todos os contatos do cliente.</div>
+                </div>
+                <div class="modal-footer border-0 p-4 pt-2">
+                    <button type="button" class="btn btn-light px-4 fw-semibold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" name="importar_agendamento_api" value="1" id="btnConfirmarImportacaoAgenda" class="btn btn-success px-4 fw-bold"><i class="bi bi-cloud-arrow-down me-2"></i>Salvar + Google</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Alertas de Inatividade -->
     <!-- Listagem Principal -->
 
@@ -2260,7 +2348,15 @@ include 'header.php';
                                             </button>
 
                                             <?php
-                                            $nome_contato_wp = trim((string) ($t['contato_nome'] ?? ($t['nome_contato'] ?? $t['cliente_nome'])));
+                                            $nome_contato_wp = trim((string) ($t['contato_nome'] ?? ''));
+                                            if ($nome_contato_wp === '') {
+                                                $nomeLivre = trim((string) ($t['nome_contato'] ?? ''));
+                                                $nomeCliente = trim((string) ($t['cliente_nome'] ?? ''));
+                                                if ($nomeLivre !== '' && mb_strtolower($nomeLivre, 'UTF-8') !== mb_strtolower($nomeCliente, 'UTF-8')) {
+                                                    $nome_contato_wp = $nomeLivre;
+                                                }
+                                            }
+                                            $saudacao_wp = $nome_contato_wp !== '' ? "Olá, {$nome_contato_wp}!" : 'Olá!';
                                             $dt_treino = new DateTime($t['data_treinamento'], new DateTimeZone('America/Sao_Paulo'));
                                             $dias_semana_wp = ['1' => 'Segunda-Feira', '2' => 'Terça-Feira', '3' => 'Quarta-Feira', '4' => 'Quinta-Feira', '5' => 'Sexta-Feira', '6' => 'Sábado', '7' => 'Domingo'];
                                             $data_f = $dt_treino->format('d/m') . ' ' . ($dias_semana_wp[$dt_treino->format('N')] ?? '');
@@ -2272,7 +2368,7 @@ include 'header.php';
                                             $link_google_meet = trim((string) ($t['google_event_link'] ?? ''));
                                             $link_google_agenda = trim((string) ($t['google_agenda_link'] ?? ''));
 
-                                            $msg_wp = "Olá, {$nome_contato_wp}! 👋\n\n✅ Seu treinamento GestãoPRO está confirmado!\n\n";
+                                            $msg_wp = "{$saudacao_wp} 👋\n\n✅ Seu treinamento GestãoPRO está confirmado!\n\n";
                                             $msg_wp .= "🔢 ID do treinamento: #{$t['id_treinamento']}\n";
                                             $msg_wp .= "📅 *Data:* {$data_f}\n";
                                             $msg_wp .= "🕒 *Horário do treinamento:* das {$hora_inicio}h às {$hora_fim}h, horário de Brasília.\n";
@@ -3942,6 +4038,7 @@ include 'header.php';
         const botaoAgendaApi = document.getElementById('btn-atualizar-agenda-api');
         const iconeAgendaApi = document.getElementById('agenda-api-icone');
         const agendamentosApiImportados = <?= json_encode($agendamentosApiImportados, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        const contatosClientesApi = <?= json_encode($contatosClientesApi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
         const clientesApiVinculados = <?= json_encode($clientesApiVinculados, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
         const clientesApiIdsDuplicados = <?= json_encode($clientesApiIdsDuplicados, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
         const nomesClientesLocaisNormalizados = <?= json_encode($clientesApiNomesLocais, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>.map(normalizarNomeClienteApi);
@@ -4026,7 +4123,7 @@ include 'header.php';
                     } else if (!clienteVinculado) {
                         acaoIntegracao = '<span class="badge bg-warning text-dark" title="Vincule o cadastro local ao ID do cliente na API antes de importar">Cliente sem vínculo</span>';
                     } else {
-                        acaoIntegracao = `<form method="post" class="m-0"><input type="hidden" name="api_agenda_id" value="${escaparHtmlAgenda(idEvento)}"><button type="submit" name="importar_agendamento_api" value="1" class="btn btn-sm btn-outline-success" onclick="return confirm('Salvar este treinamento no banco local e tentar criar o evento no Google Agenda? Os contatos com e-mail cadastrados para o cliente poderão receber o convite.')"><i class="bi bi-cloud-arrow-down me-1"></i>Salvar + Google</button></form>`;
+                        acaoIntegracao = `<button type="button" class="btn btn-sm btn-outline-success btn-abrir-vinculo-contato" data-evento="${escaparHtmlAgenda(idEvento)}" data-id-api="${escaparHtmlAgenda(idClienteApi)}" data-cliente="${escaparHtmlAgenda(evento.CLIENTE || 'Cliente')}" data-data="${escaparHtmlAgenda(dataFormatada)}" data-hora="${escaparHtmlAgenda(evento.HORA || '')}" data-tema="${escaparHtmlAgenda(evento.DESCRICAO || '')}"><i class="bi bi-cloud-arrow-down me-1"></i>Salvar + Google</button>`;
                     }
                     return `<tr>
                         <td class="ps-3 ps-md-4 fw-semibold">${dataFormatada}</td>
@@ -4038,6 +4135,30 @@ include 'header.php';
                         <td class="text-end pe-3 pe-md-4">${acaoIntegracao}</td>
                     </tr>`;
                 }).join('');
+                corpoAgendaApi.querySelectorAll('.btn-abrir-vinculo-contato').forEach(botao => {
+                    botao.addEventListener('click', () => {
+                        const idApi = botao.dataset.idApi || '';
+                        const nomeCliente = botao.dataset.cliente || '';
+                        const contatosPorId = contatosClientesApi.filter(contato => contato.id_api === idApi);
+                        const contatos = contatosPorId.length ? contatosPorId : contatosClientesApi.filter(contato => normalizarNomeClienteApi(contato.cliente) === normalizarNomeClienteApi(nomeCliente));
+                        const selectContato = document.getElementById('id_contato_api');
+                        const avisoSemContato = document.getElementById('agenda_contato_sem_opcoes');
+                        const confirmar = document.getElementById('btnConfirmarImportacaoAgenda');
+                        document.getElementById('agenda_contato_evento_id').value = botao.dataset.evento || '';
+                        document.getElementById('agenda_contato_cliente').textContent = nomeCliente;
+                        document.getElementById('agenda_contato_resumo').textContent = `${botao.dataset.data || ''} ${botao.dataset.hora || ''} · ${botao.dataset.tema || ''}`;
+                        selectContato.innerHTML = '<option value="">Selecione o contato...</option>';
+                        contatos.forEach(contato => {
+                            const opcao = document.createElement('option');
+                            opcao.value = String(contato.id_contato);
+                            opcao.textContent = contato.nome;
+                            selectContato.appendChild(opcao);
+                        });
+                        avisoSemContato.classList.toggle('d-none', contatos.length > 0);
+                        confirmar.disabled = contatos.length === 0;
+                        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalVincularContatoAgenda')).show();
+                    });
+                });
             }
 
             const origem = resposta.contingencia ? 'Cache de contingência' : (resposta.origem === 'cache' ? 'Cache' : 'API');

@@ -25,7 +25,7 @@ define('GP_LOGIN',     appRequiredConfig('gestaopro', 'login'));
 define('GP_SENHA',     appRequiredConfig('gestaopro', 'password'));
 define('GP_CACHE_TTL', 300); // 5 minutos
 
-$ENDPOINTS_VALIDOS = ['implantacoes', 'chamados', 'chamados_cliente', 'uso', 'mesa'];
+$ENDPOINTS_VALIDOS = ['implantacoes', 'chamados', 'chamados_cliente', 'uso', 'mesa', 'cliente_detalhes'];
 $endpoint = $_GET['endpoint'] ?? 'implantacoes';
 $base_endpoint = explode('/', explode('?', $endpoint)[0])[0];
 
@@ -59,6 +59,140 @@ function lerCache(string $file, bool $aceitarExpirado = false): ?array {
 function salvarCache(string $file, array $dados): void {
     garantirDiretorioCache($file);
     @file_put_contents($file, json_encode($dados, JSON_UNESCAPED_UNICODE));
+}
+
+/** Adapta a resposta de /api/mesa/utilizacao ao formato consumido pelo dashboard. */
+function normalizarUtilizacaoMesa(array $dados, string $idClienteApi): array {
+    if (isset($dados['resumo']) || !isset($dados['clientes']) || !is_array($dados['clientes'])) {
+        return $dados;
+    }
+
+    $registro = null;
+    foreach ($dados['clientes'] as $cliente) {
+        if (!is_array($cliente)) continue;
+        $id = (string)($cliente['idCliente'] ?? $cliente['ID_CLIENTE'] ?? $cliente['ID_CLIENTE_API'] ?? $cliente['id_cliente_api'] ?? $cliente['id_cliente'] ?? $cliente['id'] ?? '');
+        if ($id === $idClienteApi) {
+            $registro = $cliente;
+            break;
+        }
+    }
+    if ($registro === null && count($dados['clientes']) === 1 && is_array($dados['clientes'][0])) {
+        $registro = $dados['clientes'][0];
+    }
+    if ($registro === null) return $dados;
+
+    $ultimoLogin = $registro['ultimoLogin'] ?? $registro['ULTIMO_LOGIN'] ?? $registro['ultimo_login'] ?? null;
+    return [
+        'seriais' => $registro['seriais'] ?? [],
+        'resumo' => [
+            'ULTIMO' => $ultimoLogin,
+            'LOGINS' => $ultimoLogin ? 1 : null,
+            'PAGEVIEWS' => null,
+            'USUARIOS' => null,
+            'CLIENTES' => null,
+            'ATRITOS' => null,
+            'ERROS' => null,
+            'DERRUBADAS' => null,
+        ],
+        'diario' => [],
+        'modulos' => [],
+        'usuarios' => [],
+        'rotas' => [],
+        'atritos' => [],
+        'erros' => [],
+        'utilizacao_mesa' => $registro,
+    ];
+}
+
+function extrairUltimoLoginUtilizacaoMesa(?array $dados, string $idClienteApi): ?string {
+    if (!$dados || !isset($dados['clientes']) || !is_array($dados['clientes'])) return null;
+    foreach ($dados['clientes'] as $cliente) {
+        if (!is_array($cliente)) continue;
+        $id = (string)($cliente['idCliente'] ?? $cliente['ID_CLIENTE'] ?? $cliente['ID_CLIENTE_API'] ?? $cliente['id_cliente_api'] ?? $cliente['id_cliente'] ?? $cliente['id'] ?? '');
+        if ($id === $idClienteApi) {
+            $ultimo = $cliente['ultimoLogin'] ?? $cliente['ULTIMO_LOGIN'] ?? $cliente['ultimo_login'] ?? null;
+            return is_string($ultimo) && trim($ultimo) !== '' ? trim($ultimo) : null;
+        }
+    }
+    return null;
+}
+
+function obterUltimoAcessoMaisRecente(array $dadosUso, ?string $ultimoLoginMesa): ?string {
+    $candidatos = [$ultimoLoginMesa, $dadosUso['resumo']['ULTIMO'] ?? null];
+    foreach (($dadosUso['usuarios'] ?? []) as $usuario) {
+        if (is_array($usuario)) {
+            $candidatos[] = $usuario['ULTIMO'] ?? $usuario['ultimo'] ?? $usuario['ultimoAcesso'] ?? null;
+        }
+    }
+
+    $maisRecente = null;
+    $maiorTimestamp = null;
+    foreach ($candidatos as $valor) {
+        if (!is_string($valor) || trim($valor) === '') continue;
+        $timestamp = strtotime($valor);
+        if ($timestamp !== false && ($maiorTimestamp === null || $timestamp > $maiorTimestamp)) {
+            $maisRecente = trim($valor);
+            $maiorTimestamp = $timestamp;
+        }
+    }
+    return $maisRecente;
+}
+
+function obterMapaStatusImplantacao(?string $cookieStr = null, bool $atualizar = false): array {
+    $cacheImplantacoes = __DIR__ . '/logs/gp_cache_implantacoes.json';
+    $dados = $atualizar ? null : lerCache($cacheImplantacoes);
+
+    if ($dados === null && $cookieStr !== null) {
+        try {
+            $dados = buscarTodasPaginas('/api/implantacoes', $cookieStr, 'clientes');
+            if (is_array($dados)) {
+                salvarCache($cacheImplantacoes, $dados);
+            }
+        } catch (Throwable $e) {
+            $dados = null;
+        }
+    }
+
+    // Se a API estiver temporariamente indisponível, aproveita a última leitura conhecida.
+    if ($dados === null) {
+        $dados = lerCache($cacheImplantacoes, true);
+    }
+    if (!is_array($dados)) {
+        return [];
+    }
+
+    $registros = $dados['clientes'] ?? $dados['implantacoes'] ?? [];
+    if (!is_array($registros)) {
+        return [];
+    }
+
+    $mapa = [];
+    foreach ($registros as $registro) {
+        if (!is_array($registro)) {
+            continue;
+        }
+        $idApi = trim((string) ($registro['ID_CLIENTE'] ?? $registro['ID_CLIENTE_API'] ?? ''));
+        $status = strtoupper(trim((string) ($registro['STATUS_IMPLANTACAO'] ?? '')));
+        if ($idApi !== '' && $status !== '') {
+            $mapa[$idApi] = $status;
+        }
+    }
+
+    return $mapa;
+}
+
+function filtrarImplantacoesEncerradas(array $dadosUso, array $statusPorIdApi): array {
+    if (!isset($dadosUso['clientes']) || !is_array($dadosUso['clientes']) || !$statusPorIdApi) {
+        return $dadosUso;
+    }
+
+    $dadosUso['clientes'] = array_values(array_filter($dadosUso['clientes'], static function ($cliente) use ($statusPorIdApi) {
+        $idApi = trim((string) ($cliente['id_cliente_api'] ?? ''));
+        $status = $statusPorIdApi[$idApi] ?? '';
+        return $status === '' || strpos($status, 'ENCERRAD') !== 0;
+    }));
+
+    return $dadosUso;
 }
 
 function mesclarChamados(array $chamados): array {
@@ -314,6 +448,40 @@ function buscarEndpoint(string $path, string $cookieStr): ?array {
 }
 
 /** Busca várias páginas em paralelo para manter a atualização dentro do tempo do PHP. */
+if ($base_endpoint === 'cliente_detalhes') {
+    $idClienteApi = trim((string) ($_GET['id_cliente_api'] ?? ''));
+    if ($idClienteApi === '' || !ctype_digit($idClienteApi)) {
+        http_response_code(400);
+        echo json_encode(['sucesso' => false, 'erro' => 'ID do cliente da API invalido.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $cacheDetalhes = __DIR__ . '/logs/gp_cache_detalhes_cliente_' . $idClienteApi . '.json';
+    $forcarDetalhes = !empty($_GET['forcar']);
+    $detalhes = !$forcarDetalhes ? lerCache($cacheDetalhes) : null;
+    if ($detalhes !== null) {
+        echo json_encode(['sucesso' => true, 'origem' => 'cache', 'dados' => $detalhes], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $cookieDetalhes = fazerLogin();
+    if (!$cookieDetalhes) {
+        http_response_code(401);
+        echo json_encode(['sucesso' => false, 'erro' => 'Falha na autenticacao com a API GestaoPro.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $detalhes = buscarEndpoint('/api/clientes/' . rawurlencode($idClienteApi) . '/detalhes', $cookieDetalhes);
+    if ($detalhes === null) {
+        http_response_code(502);
+        echo json_encode(['sucesso' => false, 'erro' => 'Nao foi possivel consultar os detalhes do cliente na API.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    salvarCache($cacheDetalhes, $detalhes);
+    echo json_encode(['sucesso' => true, 'origem' => 'api', 'dados' => $detalhes], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 function buscarEndpointsEmLote(array $paths, string $cookieStr): array {
     $multi = curl_multi_init();
     $handles = [];
@@ -430,7 +598,9 @@ try {
         }
         $usoCacheFile = __DIR__ . '/logs/gp_cache_uso_' . $dias . '.json';
         $forcar = !empty($_GET['forcar']);
+        $consultarApi = !empty($_GET['consultar_api']);
         $somenteCache = !empty($_GET['somente_cache']);
+        $apenasMesa = !empty($_GET['apenas_mesa']);
         $idClienteApi = !empty($_GET['id_cliente_api']) ? trim((string)$_GET['id_cliente_api']) : null;
 
         // --- Consulta individual de um cliente por ID API ---
@@ -442,7 +612,9 @@ try {
             $dadosGerais = lerCache($usoCacheFile, true);
 
             // 1. Se não estamos forçando e temos cache individual
-            if (!$forcar && $cliCached !== null) {
+            if (!$apenasMesa && !$forcar && !$consultarApi && $cliCached !== null && !isset($cliCached['utilizacao_mesa'])) {
+                $cliCached = normalizarUtilizacaoMesa($cliCached, $idClienteApi);
+                salvarCache($cliCacheFile, $cliCached);
                 echo json_encode([
                     'sucesso'   => true,
                     'origem'    => 'cache',
@@ -454,23 +626,24 @@ try {
             }
 
             // 2. Se não estamos forçando, podemos verificar se os dados existem no cache geral
-            if (!$forcar && $dadosGerais !== null && isset($dadosGerais['clientes']) && is_array($dadosGerais['clientes'])) {
+            if (!$apenasMesa && !$forcar && !$consultarApi && $dadosGerais !== null && isset($dadosGerais['clientes']) && is_array($dadosGerais['clientes'])) {
                 foreach ($dadosGerais['clientes'] as $clItem) {
-                    if ((string)($clItem['id_cliente_api'] ?? '') === $idClienteApi && !empty($clItem['dados'])) {
-                        salvarCache($cliCacheFile, $clItem['dados']);
+                    if ((string)($clItem['id_cliente_api'] ?? '') === $idClienteApi && !empty($clItem['dados']) && !isset($clItem['dados']['utilizacao_mesa'])) {
+                        $dadosCacheCliente = normalizarUtilizacaoMesa($clItem['dados'], $idClienteApi);
+                        salvarCache($cliCacheFile, $dadosCacheCliente);
                         echo json_encode([
                             'sucesso'   => true,
                             'origem'    => 'cache',
                             'gerado_em' => date('d/m/Y H:i:s', filemtime($usoCacheFile)),
                             'id_cliente_api' => $idClienteApi,
-                            'dados'     => $clItem['dados'],
+                            'dados'     => $dadosCacheCliente,
                         ], JSON_UNESCAPED_UNICODE);
                         exit;
                     }
                 }
             }
 
-            if ($somenteCache) {
+            if ($somenteCache && !$apenasMesa) {
                 http_response_code(404);
                 echo json_encode(['sucesso' => false, 'erro' => 'Nenhum dado em cache para este cliente.'], JSON_UNESCAPED_UNICODE);
                 exit;
@@ -484,11 +657,70 @@ try {
                 exit;
             }
 
-            $dadosApiCli = buscarEndpoint('/api/clientes/' . rawurlencode($idClienteApi) . '/uso?' . http_build_query(['dias' => $dias]), $cookieUso);
-            if ($dadosApiCli === null) {
-                http_response_code(502);
-                echo json_encode(['sucesso' => false, 'erro' => 'Não foi possível obter dados de uso do cliente.'], JSON_UNESCAPED_UNICODE);
-                exit;
+            // A utilização consolidada (incluindo último login) vem do endpoint da mesa.
+            // O parâmetro forcar é encaminhado à API quando o usuário solicita atualização.
+            if ($apenasMesa) {
+                // Botao Uso: consulta exclusivamente a utilizacao consolidada da mesa, sempre forcada.
+                $dadosUtilizacaoMesa = buscarEndpoint('/api/mesa/utilizacao?' . http_build_query([
+                    'ids' => $idClienteApi,
+                    'forcar' => 1,
+                ]), $cookieUso);
+                if ($dadosUtilizacaoMesa === null) {
+                    http_response_code(502);
+                    echo json_encode(['sucesso' => false, 'erro' => 'Nao foi possivel obter os dados de utilizacao da mesa.'], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
+
+                $dadosApiCli = normalizarUtilizacaoMesa($dadosUtilizacaoMesa, $idClienteApi);
+                $ultimoLoginMesa = extrairUltimoLoginUtilizacaoMesa($dadosUtilizacaoMesa, $idClienteApi)
+                    ?? ($dadosUtilizacaoMesa['ultimoLogin'] ?? $dadosUtilizacaoMesa['ULTIMO_LOGIN'] ?? $dadosUtilizacaoMesa['ultimo_login'] ?? null);
+                if (!isset($dadosApiCli['resumo']) || !is_array($dadosApiCli['resumo'])) $dadosApiCli['resumo'] = [];
+                if (is_string($ultimoLoginMesa) && trim($ultimoLoginMesa) !== '') {
+                    $dadosApiCli['resumo']['ULTIMO'] = trim($ultimoLoginMesa);
+                }
+                if (!isset($dadosApiCli['utilizacao_mesa'])) {
+                    $dadosApiCli['utilizacao_mesa'] = $dadosUtilizacaoMesa;
+                }
+
+                // Preserva os indicadores detalhados que ja estao em cache e atualiza o login pela mesa.
+                if ($dadosGerais !== null && isset($dadosGerais['clientes']) && is_array($dadosGerais['clientes'])) {
+                    foreach ($dadosGerais['clientes'] as $clItem) {
+                        if ((string)($clItem['id_cliente_api'] ?? '') !== $idClienteApi || !is_array($clItem['dados'] ?? null)) continue;
+                        $dadosAnteriores = $clItem['dados'];
+                        $resumoAnterior = is_array($dadosAnteriores['resumo'] ?? null) ? $dadosAnteriores['resumo'] : [];
+                        $resumoMesa = is_array($dadosApiCli['resumo'] ?? null) ? $dadosApiCli['resumo'] : [];
+                        $dadosApiCli = array_merge($dadosAnteriores, $dadosApiCli);
+                        $dadosApiCli['resumo'] = array_merge($resumoAnterior, $resumoMesa);
+                        $dadosApiCli['resumo']['ULTIMO'] = obterUltimoAcessoMaisRecente($dadosAnteriores, is_string($ultimoLoginMesa) ? $ultimoLoginMesa : null);
+                        break;
+                    }
+                }
+            } else {
+                $dadosApiCli = buscarEndpoint('/api/clientes/' . rawurlencode($idClienteApi) . '/uso?' . http_build_query(['dias' => $dias]), $cookieUso);
+                if ($dadosApiCli === null) {
+                    http_response_code(502);
+                    echo json_encode(['sucesso' => false, 'erro' => 'Nao foi possivel obter dados de uso do cliente.'], JSON_UNESCAPED_UNICODE);
+                    exit;
+                }
+
+                // Os indicadores detalhados permanecem no endpoint de uso; o login geral vem da mesa.
+                $dadosUtilizacaoMesa = buscarEndpoint('/api/mesa/utilizacao?' . http_build_query([
+                    'ids' => $idClienteApi,
+                    'forcar' => $forcar ? 1 : 0,
+                ]), $cookieUso);
+                $ultimoLoginMesa = extrairUltimoLoginUtilizacaoMesa($dadosUtilizacaoMesa, $idClienteApi);
+                if (!isset($dadosApiCli['resumo']) || !is_array($dadosApiCli['resumo'])) $dadosApiCli['resumo'] = [];
+                $dadosApiCli['resumo']['ULTIMO'] = obterUltimoAcessoMaisRecente($dadosApiCli, $ultimoLoginMesa);
+                if (isset($dadosUtilizacaoMesa['clientes']) && is_array($dadosUtilizacaoMesa['clientes'])) {
+                    foreach ($dadosUtilizacaoMesa['clientes'] as $registroMesa) {
+                        if (!is_array($registroMesa)) continue;
+                        $idMesa = (string)($registroMesa['idCliente'] ?? $registroMesa['ID_CLIENTE'] ?? $registroMesa['ID_CLIENTE_API'] ?? $registroMesa['id_cliente_api'] ?? $registroMesa['id_cliente'] ?? $registroMesa['id'] ?? '');
+                        if ($idMesa === $idClienteApi) {
+                            $dadosApiCli['utilizacao_mesa'] = $registroMesa;
+                            break;
+                        }
+                    }
+                }
             }
 
             salvarCache($cliCacheFile, $dadosApiCli);
@@ -529,7 +761,21 @@ try {
         // --- Consulta geral de todos os clientes ---
         if ($forcar && file_exists($usoCacheFile)) @unlink($usoCacheFile);
         $usoCached = lerCache($usoCacheFile, $somenteCache);
+        // Recalcula caches antigos para completar o ?ltimo login pelo endpoint da mesa.
+        if ($usoCached !== null && empty($usoCached['__mesa_utilizacao_enriquecido'])) {
+            $usoCached = null;
+        }
         if ($usoCached !== null) {
+            $cacheImplantacoes = __DIR__ . '/logs/gp_cache_implantacoes.json';
+            $statusCacheAtual = is_file($cacheImplantacoes) && (time() - filemtime($cacheImplantacoes)) <= GP_CACHE_TTL;
+            $statusPorIdApi = obterMapaStatusImplantacao(null, false);
+            if (!$statusCacheAtual && !$somenteCache) {
+                $cookieStatus = fazerLogin();
+                if ($cookieStatus) {
+                    $statusPorIdApi = obterMapaStatusImplantacao($cookieStatus, true) ?: $statusPorIdApi;
+                }
+            }
+            $usoCached = filtrarImplantacoesEncerradas($usoCached, $statusPorIdApi);
             echo json_encode(['sucesso' => true, 'origem' => 'cache', 'gerado_em' => date('d/m/Y H:i:s', filemtime($usoCacheFile)), 'dados' => $usoCached], JSON_UNESCAPED_UNICODE);
             exit;
         }
@@ -551,20 +797,67 @@ try {
             if (ctype_digit($idApi)) $pathsUso[$idApi] = '/api/clientes/' . rawurlencode($idApi) . '/uso?' . http_build_query(['dias' => $dias]);
         }
         $respostasUso = buscarEndpointsEmLote($pathsUso, $cookieUso);
+
+        // A API da mesa fornece o ?ltimo login consolidado do cliente, sem separar por usu?rio.
+        // Consulta lotes pequenos para manter a URL abaixo do limite dos servidores/proxies.
+        $idsUso = array_keys($pathsUso);
+        $ultimosLoginsMesa = [];
+        $registrosUtilizacaoMesa = [];
+        foreach (array_chunk($idsUso, 40) as $indiceLote => $idsLote) {
+            $queryUtilizacao = http_build_query([
+                'ids' => implode(',', $idsLote),
+                'forcar' => 1,
+            ]);
+            $respostaLote = buscarEndpointsEmLote([
+                'lote_' . $indiceLote => '/api/mesa/utilizacao?' . $queryUtilizacao,
+            ], $cookieUso)['lote_' . $indiceLote] ?? null;
+            if (!$respostaLote || !isset($respostaLote['clientes']) || !is_array($respostaLote['clientes'])) {
+                continue;
+            }
+            foreach ($respostaLote['clientes'] as $registroMesa) {
+                if (!is_array($registroMesa)) continue;
+                $idMesa = trim((string)($registroMesa['idCliente'] ?? $registroMesa['ID_CLIENTE'] ?? $registroMesa['ID_CLIENTE_API'] ?? $registroMesa['id_cliente_api'] ?? $registroMesa['id_cliente'] ?? $registroMesa['id'] ?? ''));
+                if ($idMesa === '') continue;
+                $registrosUtilizacaoMesa[$idMesa] = $registroMesa;
+                $ultimoLogin = $registroMesa['ultimoLogin'] ?? $registroMesa['ULTIMO_LOGIN'] ?? $registroMesa['ultimo_login'] ?? null;
+                if (is_string($ultimoLogin) && trim($ultimoLogin) !== '') {
+                    $ultimosLoginsMesa[$idMesa] = trim($ultimoLogin);
+                }
+            }
+        }
+
         $registrosUso = [];
         foreach ($clientesUso as $clienteUso) {
             $idApi = (string)$clienteUso['id_cliente_api'];
+            $dadosCliente = $respostasUso[$idApi] ?? null;
+            $ultimoLoginMesa = $ultimosLoginsMesa[$idApi] ?? null;
+            if (is_array($dadosCliente)) {
+                if (!isset($dadosCliente['resumo']) || !is_array($dadosCliente['resumo'])) $dadosCliente['resumo'] = [];
+                $dadosCliente['resumo']['ULTIMO'] = obterUltimoAcessoMaisRecente($dadosCliente, $ultimoLoginMesa);
+                if (isset($registrosUtilizacaoMesa[$idApi])) $dadosCliente['utilizacao_mesa'] = $registrosUtilizacaoMesa[$idApi];
+            } elseif ($ultimoLoginMesa !== null) {
+                // Preserva pelo menos o acesso geral mesmo se /uso estiver sem detalhes.
+                $dadosCliente = [
+                    'resumo' => ['ULTIMO' => $ultimoLoginMesa],
+                    'diario' => [],
+                    'modulos' => [],
+                    'usuarios' => [],
+                    'utilizacao_mesa' => $registrosUtilizacaoMesa[$idApi] ?? [],
+                ];
+            }
             $registrosUso[] = [
                 'id_cliente' => (int)$clienteUso['id_cliente'],
                 'fantasia' => $clienteUso['fantasia'],
                 'id_cliente_api' => $idApi,
                 'serial_cadastro' => $clienteUso['serial'],
-                'dados' => $respostasUso[$idApi] ?? null,
+                'dados' => $dadosCliente,
             ];
         }
-        $payloadUso = ['dias' => $dias, 'clientes' => $registrosUso];
+        $payloadUso = ['dias' => $dias, 'clientes' => $registrosUso, '__mesa_utilizacao_enriquecido' => true];
+        $statusPorIdApi = obterMapaStatusImplantacao($cookieUso, $forcar);
+        $payloadUsoFiltrado = filtrarImplantacoesEncerradas($payloadUso, $statusPorIdApi);
         salvarCache($usoCacheFile, $payloadUso);
-        echo json_encode(['sucesso' => true, 'origem' => 'api', 'gerado_em' => date('d/m/Y H:i:s'), 'dados' => $payloadUso], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['sucesso' => true, 'origem' => 'api', 'gerado_em' => date('d/m/Y H:i:s'), 'dados' => $payloadUsoFiltrado], JSON_UNESCAPED_UNICODE);
         exit;
     }
 

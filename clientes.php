@@ -103,6 +103,8 @@ if (isset($_GET['delete'])) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $abrirFichaContato = ($_POST['abrir_ficha_contato'] ?? '') === '1';
     $clienteNovoId = null;
+    $contatosApiImportados = 0;
+    $contatosApiCadastro = json_decode((string) ($_POST['contatos_api_json'] ?? '[]'), true);
     $fantasia = $_POST['fantasia'];
     $servidor = $_POST['servidor'];
     $vendedor = $_POST['vendedor'];
@@ -198,6 +200,37 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $link_drive ?: null,
             ]);
             $clienteNovoId = (int) $pdo->lastInsertId();
+
+            if ($clienteNovoId > 0 && is_array($contatosApiCadastro)) {
+                try {
+                    $stmtContatoApi = $pdo->prepare('INSERT INTO contatos (id_cliente, nome, email, cargo, telefone_ddd, observacao) VALUES (?, ?, ?, ?, ?, ?)');
+                    foreach ($contatosApiCadastro as $contatoApi) {
+                        if (!is_array($contatoApi)) continue;
+                        $nomeContatoApi = trim((string) ($contatoApi['CONTATO'] ?? ''));
+                        if ($nomeContatoApi === '') continue;
+                        $emailContatoApi = trim((string) ($contatoApi['EMAIL'] ?? ''));
+                        $telefoneContatoApi = trim(implode(' ', array_filter([
+                            trim((string) ($contatoApi['DDD'] ?? '')),
+                            trim((string) ($contatoApi['TELEFONE'] ?? '')),
+                        ], static function ($parte) { return $parte !== ''; })));
+                        $stmtContatoApi->execute([
+                            $clienteNovoId,
+                            $nomeContatoApi,
+                            $emailContatoApi !== '' ? $emailContatoApi : null,
+                            trim((string) ($contatoApi['SETOR'] ?? '')) ?: null,
+                            $telefoneContatoApi !== '' ? $telefoneContatoApi : null,
+                            trim((string) ($contatoApi['OBS'] ?? '')) ?: null,
+                        ]);
+                        $contatosApiImportados++;
+                    }
+                    if ($contatosApiImportados > 0) {
+                        $abrirFichaContato = false;
+                    }
+                } catch (Throwable $erroContatoApi) {
+                    error_log('Falha ao importar contatos da API para o cliente local #' . $clienteNovoId . ': ' . $erroContatoApi->getMessage());
+                    $abrirFichaContato = true;
+                }
+            }
         }
     } catch (PDOException $e) {
         if ($e->getCode() === '23000' && $id_cliente_api !== null) {
@@ -231,7 +264,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
 
-    header("Location: {$redirect_to}?msg=Dados+atualizados&view=" . $view_mode);
+    $mensagemSalvar = $contatosApiImportados > 0
+        ? 'Cliente+cadastrado+com+' . $contatosApiImportados . '+contato(s)+da+API'
+        : 'Dados+atualizados';
+    header("Location: {$redirect_to}?msg={$mensagemSalvar}&view=" . $view_mode);
     exit;
 }
 
@@ -371,6 +407,15 @@ function obterInfoUsoCliente(array $cliente, array $usoMap): array {
 
     $resumo = $dadosUso['resumo'];
     $ultimoIso = $resumo['ULTIMO'] ?? null;
+    $ultimoTimestamp = $ultimoIso ? strtotime((string)$ultimoIso) : false;
+    foreach (($dadosUso['usuarios'] ?? []) as $usuarioUso) {
+        if (!is_array($usuarioUso) || empty($usuarioUso['ULTIMO'])) continue;
+        $timestampUsuario = strtotime((string)$usuarioUso['ULTIMO']);
+        if ($timestampUsuario !== false && ($ultimoTimestamp === false || $timestampUsuario > $ultimoTimestamp)) {
+            $ultimoIso = $usuarioUso['ULTIMO'];
+            $ultimoTimestamp = $timestampUsuario;
+        }
+    }
     $pageviews = (int)($resumo['PAGEVIEWS'] ?? 0);
     $logins = (int)($resumo['LOGINS'] ?? 0);
     $atritos = (int)($resumo['ATRITOS'] ?? 0);
@@ -1083,6 +1128,7 @@ body, html {
                                     data-fim="<?= $c['data_fim'] ?>" 
                                     data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
                                     data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
+                                    data-serial="<?= htmlspecialchars($c['serial'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                     data-cfg="<?= $c['configurado'] ?>" 
                                     data-licencas="<?= $c['num_licencas'] ?>" 
@@ -1250,6 +1296,7 @@ body, html {
                                                     data-fim="<?= $c['data_fim'] ?>" 
                                                     data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
                                                     data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
+                                                    data-serial="<?= htmlspecialchars($c['serial'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
                                                     data-obs="<?= htmlspecialchars($c['observacao']) ?>" 
                                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                                     data-cfg="<?= $c['configurado'] ?>" 
@@ -1373,6 +1420,13 @@ body, html {
                             <div class="input-group">
                                 <span class="input-group-text bg-white border-end-0"><i class="bi bi-server text-primary"></i></span>
                                 <input type="text" name="servidor" id="servidor" class="form-control border-start-0 ps-0" placeholder="Ex: LOCAL / NUVEM">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">SERIAL</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-upc-scan text-primary"></i></span>
+                                <input type="text" name="serial" id="serial" class="form-control border-start-0 ps-0" placeholder="Ex: ELETROCONSERTOS">
                             </div>
                         </div>
                     </div>
@@ -2575,6 +2629,31 @@ body, html {
         }
     }
 
+    // Pré-carrega o uso ao abrir a tela, consultando a API sem forçar sua atualização.
+    // O botão Atualizar do dashboard continua usando forcar=1.
+    async function preCarregarUsoClientes() {
+        const ids = [...new Set([...document.querySelectorAll('.client-usage-box[data-id-api]')]
+            .map(el => (el.dataset.idApi || '').trim())
+            .filter(id => /^\\d+$/.test(id)))];
+        let proximo = 0;
+        const trabalhador = async () => {
+            while (proximo < ids.length) {
+                const id = ids[proximo++];
+                try {
+                    await fetch(`api_gestaopro_bridge.php?endpoint=uso&id_cliente_api=${encodeURIComponent(id)}&dias=30&consultar_api=1`, {
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                } catch (erro) {
+                    console.warn(`Falha ao pré-carregar uso do cliente ${id}.`, erro);
+                }
+            }
+        };
+        await Promise.all(Array.from({ length: Math.min(3, ids.length) }, trabalhador));
+    }
+
+    if ('requestIdleCallback' in window) requestIdleCallback(() => preCarregarUsoClientes());
+    else window.addEventListener('load', () => setTimeout(preCarregarUsoClientes, 250));
+
     function renderizarDashboardUso(dados, dias, origem, geradoEm) {
         const resumo = dados.resumo || {};
         const diario = Array.isArray(dados.diario) ? dados.diario : [];
@@ -2589,7 +2668,16 @@ body, html {
         document.getElementById('dashOrigemAtualizacao').innerHTML = `<i class="bi bi-clock me-1"></i>Atualizado: <strong>${geradoEm}</strong> (${origemTexto})`;
 
         // Status e KPIs
-        const ultimoIso = resumo.ULTIMO;
+        let ultimoIso = resumo.ULTIMO || null;
+        let ultimoTimestamp = ultimoIso ? new Date(ultimoIso).getTime() : Number.NEGATIVE_INFINITY;
+        usuarios.forEach(usuario => {
+            if (!usuario?.ULTIMO) return;
+            const timestampUsuario = new Date(usuario.ULTIMO).getTime();
+            if (!Number.isNaN(timestampUsuario) && timestampUsuario > ultimoTimestamp) {
+                ultimoIso = usuario.ULTIMO;
+                ultimoTimestamp = timestampUsuario;
+            }
+        });
         const statusUso = formatarTempoRelativo(ultimoIso);
 
         const badgeStatusEl = document.getElementById('dashBadgeStatus');
@@ -2985,6 +3073,7 @@ body, html {
 
         document.getElementById('id_cliente').value = d.id;
         document.getElementById('fantasia').value = d.fantasia || '';
+        document.getElementById('serial').value = d.serial || '';
         document.getElementById('servidor').value = d.servidor || '';
         document.getElementById('vendedor').value = d.vendedor || '';
         document.getElementById('data_inicio').value = d.inicio || '';
