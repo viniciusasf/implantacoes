@@ -34,6 +34,67 @@ garantirTabelaObservacoes($pdo);
 
 
 
+function calcularScoreGeralCliente(PDO $pdo, $idCliente) {
+    static $cache = [];
+    if (isset($cache[$idCliente])) return $cache[$idCliente];
+
+    $processos = [
+        'produtos' => 20,
+        'clientes' => 10,
+        'orcamento' => 3,
+        'pdv' => 5,
+        'boleto' => 2,
+        'nota_fiscal' => 2,
+        'customizacoes' => 5
+    ];
+
+    $stmt = $pdo->prepare("SELECT processo, utiliza_modulo, nivel, meta_minima, uso_real, operacoes_suporte, erros_retrabalho 
+                           FROM treinamento_efetivo_cliente 
+                           WHERE id_cliente = ?");
+    $stmt->execute([$idCliente]);
+    $avaliacoes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $dbData = [];
+    foreach ($avaliacoes as $row) {
+        $dbData[$row['processo']] = $row;
+    }
+
+    $totalScore = 0;
+    $countAplicavel = 0;
+
+    foreach ($processos as $slug => $defaultMeta) {
+        $utiliza = isset($dbData[$slug]) ? (int)($dbData[$slug]['utiliza_modulo']) : 1;
+        if ($utiliza === 0) continue;
+
+        $nivel = isset($dbData[$slug]) ? (int)$dbData[$slug]['nivel'] : 0;
+        $meta = isset($dbData[$slug]) ? (int)$dbData[$slug]['meta_minima'] : $defaultMeta;
+        $uso = isset($dbData[$slug]) ? (int)$dbData[$slug]['uso_real'] : 0;
+        $suporte = isset($dbData[$slug]) ? (int)$dbData[$slug]['operacoes_suporte'] : 0;
+        $erros = isset($dbData[$slug]) ? (int)$dbData[$slug]['erros_retrabalho'] : 0;
+        
+        $suporte = max(0, min($uso, $suporte));
+        $erros = max(0, min($uso, $erros));
+
+        $nivelScore = ($nivel / 4) * 100;
+        $usoScore = $meta > 0 ? max(0, min(100, ($uso / $meta) * 100)) : 100;
+        $autonomia = $uso > 0 ? max(0, min(100, (($uso - $suporte) / $uso) * 100)) : 0;
+        $qualidade = $uso > 0 ? max(0, min(100, (($uso - $erros) / $uso) * 100)) : 0;
+
+        $score = ($nivelScore * 0.4) + ($usoScore * 0.2) + ($autonomia * 0.2) + ($qualidade * 0.2);
+        
+        $totalScore += $score;
+        $countAplicavel++;
+    }
+
+    $resultado = 'N/A';
+    if ($countAplicavel > 0) {
+        $resultado = round($totalScore / $countAplicavel) . '%';
+    }
+    
+    $cache[$idCliente] = $resultado;
+    return $resultado;
+}
+
 function treinamentosTemColuna(PDO $pdo, $coluna, $forceRefresh = false)
 {
     static $cache = [];
@@ -42,7 +103,7 @@ function treinamentosTemColuna(PDO $pdo, $coluna, $forceRefresh = false)
     }
 
     try {
-        $stmt = $pdo->prepare("SHOW COLUMNS FROM treinamentos LIKE ?");
+        $stmt = $pdo->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'treinamentos' AND COLUMN_NAME = ? LIMIT 1");
         $stmt->execute([$coluna]);
         $cache[$coluna] = (bool) $stmt->fetch(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
@@ -50,6 +111,49 @@ function treinamentosTemColuna(PDO $pdo, $coluna, $forceRefresh = false)
     }
 
     return $cache[$coluna];
+}
+
+function garantirColunasIntegracaoAgendaApi(PDO $pdo): bool
+{
+    $colunas = [
+        'gestaopro_agenda_id' => 'BIGINT NULL',
+        'gestaopro_agenda_usuario' => 'INT NULL'
+    ];
+
+    foreach ($colunas as $coluna => $definicao) {
+        if (treinamentosTemColuna($pdo, $coluna)) {
+            continue;
+        }
+        $erroAlteracao = null;
+        try {
+            $pdo->exec("ALTER TABLE treinamentos ADD COLUMN `{$coluna}` {$definicao}");
+        } catch (Throwable $e) {
+            // Revalida abaixo para cobrir execuÃ§Ãµes simultÃ¢neas da pÃ¡gina.
+            $erroAlteracao = $e->getMessage();
+        }
+        if (!treinamentosTemColuna($pdo, $coluna, true)) {
+            error_log("NÃ£o foi possÃ­vel criar a coluna {$coluna} em treinamentos: " . ($erroAlteracao ?: 'erro desconhecido'));
+            return false;
+        }
+    }
+
+    try {
+        $indices = $pdo->query("SHOW INDEX FROM treinamentos")->fetchAll(PDO::FETCH_ASSOC);
+        $temIndiceUnico = false;
+        foreach ($indices as $indice) {
+            if (($indice['Key_name'] ?? '') === 'uq_treinamentos_gestaopro_agenda') {
+                $temIndiceUnico = true;
+                break;
+            }
+        }
+        if (!$temIndiceUnico) {
+            $pdo->exec("ALTER TABLE treinamentos ADD UNIQUE KEY uq_treinamentos_gestaopro_agenda (gestaopro_agenda_usuario, gestaopro_agenda_id)");
+        }
+        return true;
+    } catch (Throwable $e) {
+        error_log('NÃ£o foi possÃ­vel criar o Ã­ndice Ãºnico da agenda GestãoPRO: ' . $e->getMessage());
+        return false;
+    }
 }
 
 function obterColunaEmailContato(PDO $pdo)
@@ -331,11 +435,34 @@ function garantirTabelaPendenciasTreinamentos(PDO $pdo)
     }
 }
 
+function garantirTabelaMateriaisTreinamentos(PDO $pdo)
+{
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS materiais_treinamentos (
+            id_material INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            id_treinamento INT NOT NULL,
+            id_cliente INT NULL,
+            cliente_nome VARCHAR(255) NOT NULL,
+            tema_solicitado TEXT NOT NULL,
+            data_solicitacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            status_material VARCHAR(20) NOT NULL DEFAULT 'ABERTO',
+            data_envio DATETIME NULL,
+            UNIQUE KEY uq_material_treinamento (id_treinamento),
+            KEY idx_status_material (status_material),
+            KEY idx_cliente_material (id_cliente)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        return true;
+    } catch (Throwable $e) {
+        error_log('Erro ao preparar materiais_treinamentos: ' . $e->getMessage());
+        return false;
+    }
+}
+
 function criarServicoGoogleCalendarStatus()
 {
     $autoloadPath = __DIR__ . '/vendor/autoload.php';
-    $credentialsPath = __DIR__ . '/credentials.json';
-    $tokenPath = __DIR__ . '/token.json';
+    $credentialsPath = appGoogleCredentialsPath();
+    $tokenPath = appGoogleTokenPath();
 
     if (!file_exists($autoloadPath) || !file_exists($credentialsPath) || !file_exists($tokenPath)) {
         return [null, 'integracao_google_nao_configurada'];
@@ -475,7 +602,7 @@ function sincronizarGoogleMeetAutomatico($pdo, $idTreinamento)
 {
     try {
         $autoloadPath = __DIR__ . '/vendor/autoload.php';
-        $credentialsPath = __DIR__ . '/credentials.json';
+        $credentialsPath = appGoogleCredentialsPath();
         $tokenPath = googleTokenPath();
         $authStartUrl = 'google_calendar_sync.php?id_treinamento=' . (int) $idTreinamento . '&start_auth=1';
 
@@ -660,11 +787,83 @@ try {
 }
 $total_hoje = (int) $pdo->query("SELECT COUNT(*) FROM treinamentos WHERE DATE(data_treinamento) = CURDATE() AND UPPER(status) = 'PENDENTE'")->fetchColumn();
 
+$integracaoAgendaApiDisponivel = garantirColunasIntegracaoAgendaApi($pdo);
+$agendamentosApiImportados = [];
+$clientesApiVinculados = [];
+$clientesApiIdsDuplicados = [];
+$contagemVinculosApiCliente = [];
+$clientesApiNomesLocais = [];
+$contatosClientesApi = [];
+$temasTreinamentoApi = [
+    'INSTALAÇÃO SISTEMA',
+    'CONFIGURAR GESTAOGPT',
+    'CONFIGURAR ASSISTÊNCIAPRO',
+    'CADASTROS/ESTOQUE',
+    'CUSTOMIZAÇÕES',
+    'VENDAS',
+    'COMPRAS',
+    'FATURAMENTO/NF',
+    'FINANCEIRO/BOLETOS/CAIXA',
+    'PRODUÇÃO/OS',
+    'RELATÓRIOS',
+    'ATENDIMENTOS',
+    'DUVIDAS',
+];
+if ($integracaoAgendaApiDisponivel) {
+    try {
+        $stmtApiImportados = $pdo->query("SELECT gestaopro_agenda_id, id_treinamento, google_event_id FROM treinamentos WHERE gestaopro_agenda_usuario = 53 AND gestaopro_agenda_id IS NOT NULL");
+        foreach ($stmtApiImportados->fetchAll(PDO::FETCH_ASSOC) as $registroApiImportado) {
+            $agendamentosApiImportados[(string) $registroApiImportado['gestaopro_agenda_id']] = [
+                'id_treinamento' => (int) $registroApiImportado['id_treinamento'],
+                'google_event_id' => trim((string) ($registroApiImportado['google_event_id'] ?? ''))
+            ];
+        }
+    } catch (Throwable $e) {
+        error_log('Falha ao consultar treinamentos importados da agenda GestãoPRO: ' . $e->getMessage());
+        $integracaoAgendaApiDisponivel = false;
+    }
+}
+try {
+    $stmtClientesApi = $pdo->query("SELECT ID_CLIENTE_API, fantasia FROM clientes WHERE fantasia IS NOT NULL AND TRIM(fantasia) <> ''");
+    foreach ($stmtClientesApi->fetchAll(PDO::FETCH_ASSOC) as $clienteApi) {
+        $idClienteApi = trim((string) ($clienteApi['ID_CLIENTE_API'] ?? ''));
+        if ($idClienteApi !== '') {
+            $contagemVinculosApiCliente[$idClienteApi] = ($contagemVinculosApiCliente[$idClienteApi] ?? 0) + 1;
+        }
+        $clientesApiNomesLocais[] = (string) $clienteApi['fantasia'];
+    }
+    foreach ($contagemVinculosApiCliente as $idClienteApi => $quantidadeVinculos) {
+        if ($quantidadeVinculos === 1) {
+            $clientesApiVinculados[$idClienteApi] = true;
+        } else {
+            $clientesApiIdsDuplicados[$idClienteApi] = true;
+        }
+    }
+} catch (Throwable $e) {
+    error_log('Falha ao consultar vÃ­nculos dos clientes com a API GestãoPRO: ' . $e->getMessage());
+}
+
 // --- PÁGINA DE TREINAMENTOS ---
 // Removida lógica de inatividade local (agora no Dashboard)
 
 // Filtros de busca por cliente removidos da UI - mantendo apenas ordenação e paginação
 $filtro_cliente = ''; // Desativado para simplificação via treinamentos.php
+try {
+    $stmtContatosAgenda = $pdo->query("SELECT cl.ID_CLIENTE_API, cl.fantasia, ct.id_contato, ct.nome
+        FROM clientes cl JOIN contatos ct ON ct.id_cliente = cl.id_cliente
+        WHERE ct.nome IS NOT NULL AND TRIM(ct.nome) <> '' ORDER BY ct.nome ASC");
+    foreach ($stmtContatosAgenda->fetchAll(PDO::FETCH_ASSOC) as $contatoAgenda) {
+        $contatosClientesApi[] = [
+            'id_api' => trim((string)($contatoAgenda['ID_CLIENTE_API'] ?? '')),
+            'cliente' => (string)($contatoAgenda['fantasia'] ?? ''),
+            'id_contato' => (int)$contatoAgenda['id_contato'],
+            'nome' => (string)$contatoAgenda['nome'],
+        ];
+    }
+} catch (Throwable $e) {
+    error_log('Falha ao carregar contatos para importação de treinamentos da API: ' . $e->getMessage());
+}
+
 $mostrar_todos = isset($_GET['mostrar_todos']) ? true : false;
 $where_conditions = []; // Alterado: agora mostramos treinamentos independentemente do cliente estar ativo ou encerrado
 $params = [];
@@ -808,6 +1007,22 @@ if (isset($_GET['enviar_pendencia'])) {
     }
 }
 
+// Lógica para Reativar Treinamento
+if (isset($_GET['reativar_treinamento'])) {
+    $id = (int) $_GET['reativar_treinamento'];
+    if ($id > 0) {
+        try {
+            $stmt = $pdo->prepare("UPDATE treinamentos SET status = 'PENDENTE' WHERE id_treinamento = ? AND UPPER(TRIM(status)) NOT IN ('PENDENTE')");
+            $stmt->execute([$id]);
+            header("Location: treinamentos.php?mostrar_todos=1&msg=" . urlencode("Treinamento reativado com sucesso!") . "&tipo=success");
+            exit;
+        } catch (Throwable $e) {
+            header("Location: treinamentos.php?mostrar_todos=1&msg=" . urlencode("Erro ao reativar treinamento: " . $e->getMessage()) . "&tipo=danger");
+            exit;
+        }
+    }
+}
+
 // Lógica para Deletar
 if (isset($_GET['delete'])) {
     $id = (int) $_GET['delete'];
@@ -841,9 +1056,181 @@ if (isset($_GET['delete'])) {
 
 // Lógica para Adicionar/Editar
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (isset($_POST['importar_agendamento_api'])) {
+        $idEventoApi = filter_var($_POST['api_agenda_id'] ?? null, FILTER_VALIDATE_INT);
+        $retornoImportacao = 'treinamentos.php';
+
+        try {
+            if (!$integracaoAgendaApiDisponivel || !$idEventoApi || $idEventoApi < 1) {
+                throw new RuntimeException('A integração da agenda não está disponível ou o evento é inválido.');
+            }
+
+            $stmtExistenteApi = $pdo->prepare("SELECT id_treinamento FROM treinamentos WHERE gestaopro_agenda_usuario = 53 AND gestaopro_agenda_id = ? LIMIT 1");
+            $stmtExistenteApi->execute([$idEventoApi]);
+            $idLocalExistente = (int) ($stmtExistenteApi->fetchColumn() ?: 0);
+            if ($idLocalExistente > 0) {
+                throw new RuntimeException("Este agendamento já foi salvo no sistema como treinamento local #{$idLocalExistente}.");
+            }
+
+            $arquivoCacheAgenda = __DIR__ . '/logs/gp_cache_mesa_53_agenda.json';
+            if (!is_file($arquivoCacheAgenda)) {
+                throw new RuntimeException('Atualize a agenda da API antes de importar este agendamento.');
+            }
+            $cacheAgenda = json_decode((string) file_get_contents($arquivoCacheAgenda), true);
+            $eventoApi = null;
+            foreach (($cacheAgenda['agenda'] ?? []) as $itemAgenda) {
+                if ((string) ($itemAgenda['ID'] ?? '') === (string) $idEventoApi) {
+                    $eventoApi = $itemAgenda;
+                    break;
+                }
+            }
+            if (!$eventoApi || stripos((string) ($eventoApi['TIPOACOMP'] ?? ''), 'TREINAMENTO') === false) {
+                throw new RuntimeException('O treinamento não foi encontrado na última leitura da agenda. Atualize a lista e tente novamente.');
+            }
+            if (strtoupper(trim((string) ($eventoApi['PENDENTE'] ?? ''))) === 'F') {
+                throw new RuntimeException('Este treinamento foi encerrado na agenda da API e não pode ser importado.');
+            }
+
+            $idClienteApi = trim((string) ($eventoApi['ID_CLIENTE'] ?? ''));
+            if ($idClienteApi === '') {
+                throw new RuntimeException('O agendamento da API não informa o ID do cliente.');
+            }
+            $stmtClienteApi = $pdo->prepare('SELECT id_cliente FROM clientes WHERE ID_CLIENTE_API = ? LIMIT 2');
+            $stmtClienteApi->execute([$idClienteApi]);
+            $clientesPorIdApi = $stmtClienteApi->fetchAll(PDO::FETCH_COLUMN);
+            if (count($clientesPorIdApi) > 1) {
+                throw new RuntimeException('Há mais de um cadastro local com este ID de cliente da API. Corrija o vínculo antes de importar.');
+            }
+            $idClienteLocal = (int) ($clientesPorIdApi[0] ?? 0);
+            if ($idClienteLocal < 1) {
+                $nomeClienteApi = trim((string) ($eventoApi['CLIENTE'] ?? ''));
+                $stmtClienteNome = $pdo->prepare('SELECT id_cliente FROM clientes WHERE UPPER(TRIM(fantasia)) = UPPER(TRIM(?)) LIMIT 2');
+                $stmtClienteNome->execute([$nomeClienteApi]);
+                $clientesPorNome = $stmtClienteNome->fetchAll(PDO::FETCH_COLUMN);
+                if (count($clientesPorNome) === 1) {
+                    $idClienteLocal = (int) $clientesPorNome[0];
+                } elseif (count($clientesPorNome) > 1) {
+                    throw new RuntimeException('Há mais de um cadastro local com o nome deste cliente. Vincule o ID da API ao cadastro correto antes de importar.');
+                } else {
+                    throw new RuntimeException('Este cliente não está vinculado a um cadastro local. Vincule-o pelo ID da API ou use o mesmo nome do cliente antes de importar.');
+                }
+            }
+
+            $idContatoApi = filter_var($_POST['id_contato_api'] ?? null, FILTER_VALIDATE_INT);
+            if (!$idContatoApi || $idContatoApi < 1) {
+                throw new RuntimeException('Selecione o contato que ficará vinculado ao treinamento.');
+            }
+            $stmtContatoApi = $pdo->prepare('SELECT nome FROM contatos WHERE id_contato = ? AND id_cliente = ? LIMIT 1');
+            $stmtContatoApi->execute([$idContatoApi, $idClienteLocal]);
+            $nomeContatoApi = trim((string)($stmtContatoApi->fetchColumn() ?: ''));
+            if ($nomeContatoApi === '') {
+                throw new RuntimeException('O contato selecionado não pertence ao cliente vinculado ao treinamento.');
+            }
+
+            $dataApi = trim((string) ($eventoApi['DATA'] ?? ''));
+            $horaApi = trim((string) ($eventoApi['HORA'] ?? ''));
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dataApi) || !preg_match('/^\d{1,2}:\d{2}$/', $horaApi)) {
+                throw new RuntimeException('A data ou o horário informado pela API está inválido.');
+            }
+            $dataTreinamentoApi = normalizarDataTreinamento($dataApi . ' ' . $horaApi);
+            if (!$dataTreinamentoApi) {
+                throw new RuntimeException('Não foi possível interpretar a data e o horário do agendamento.');
+            }
+            if (existeConflitoHorarioTreinamento($pdo, $dataTreinamentoApi)) {
+                throw new RuntimeException('Já existe um agendamento local nesse horário. O evento da API não foi importado para evitar duplicidade.');
+            }
+
+            $temaApi = trim((string)($_POST['tema_api'] ?? ''));
+            if (!in_array($temaApi, $temasTreinamentoApi, true)) {
+                throw new RuntimeException('Selecione um tema válido para o treinamento.');
+            }
+
+            $pdo->beginTransaction();
+            $stmtInserirApi = $pdo->prepare(
+                "INSERT INTO treinamentos
+                    (id_cliente, id_contato, nome_contato, tema, status, data_treinamento, gestaopro_agenda_id, gestaopro_agenda_usuario)
+                 VALUES (?, ?, ?, ?, 'PENDENTE', ?, ?, 53)"
+            );
+            $stmtInserirApi->execute([$idClienteLocal, $idContatoApi, $nomeContatoApi, $temaApi, $dataTreinamentoApi, $idEventoApi]);
+            $idTreinamentoLocal = (int) $pdo->lastInsertId();
+            $pdo->commit();
+
+            $resultadoGoogle = sincronizarGoogleMeetAutomatico($pdo, $idTreinamentoLocal);
+            if (!empty($resultadoGoogle['needs_auth']) && !empty($resultadoGoogle['auth_start_url'])) {
+                header('Location: ' . $resultadoGoogle['auth_start_url']);
+                exit;
+            }
+
+            if (!empty($resultadoGoogle['success'])) {
+                $mensagemImportacao = "Agendamento API #{$idEventoApi} salvo como treinamento local #{$idTreinamentoLocal} e integrado ao Google Agenda.";
+                $tipoImportacao = 'success';
+            } else {
+                $detalheGoogle = trim((string) ($resultadoGoogle['message'] ?? ''));
+                $mensagemImportacao = "Agendamento salvo como treinamento local #{$idTreinamentoLocal}; integração Google pendente.";
+                if ($detalheGoogle !== '') {
+                    $mensagemImportacao .= ' ' . $detalheGoogle;
+                }
+                $tipoImportacao = 'warning';
+            }
+            $redirectParams = [
+                'msg' => $mensagemImportacao,
+                'tipo' => $tipoImportacao,
+            ];
+            if (!empty($resultadoGoogle['success']) && !empty($resultadoGoogle['google_agenda_link'])) {
+                $redirectParams['open_google_agenda'] = trim((string) $resultadoGoogle['google_agenda_link']);
+                $redirectParams['open_google_agenda_treinamento_id'] = $idTreinamentoLocal;
+                $redirectParams['open_google_modal_novo'] = 1;
+            } else {
+                $redirectParams['open_google_modal_id'] = $idTreinamentoLocal;
+            }
+            header('Location: ' . $retornoImportacao . '?' . http_build_query($redirectParams));
+            exit;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            $mensagemImportacao = $e instanceof PDOException && (string) $e->getCode() === '23000'
+                ? 'Este agendamento da API já foi importado.'
+                : $e->getMessage();
+            header('Location: ' . $retornoImportacao . '?msg=' . urlencode($mensagemImportacao) . '&tipo=warning');
+            exit;
+        }
+    }
+
+    if (isset($_POST['integrar_google_agendamento_api'])) {
+        $idTreinamentoLocal = filter_var($_POST['id_treinamento_api'] ?? null, FILTER_VALIDATE_INT);
+        $retornoImportacao = 'treinamentos.php';
+        try {
+            if (!$integracaoAgendaApiDisponivel || !$idTreinamentoLocal || $idTreinamentoLocal < 1) {
+                throw new RuntimeException('Treinamento local inválido para integração Google.');
+            }
+            $stmtTreinamentoApi = $pdo->prepare("SELECT gestaopro_agenda_id FROM treinamentos WHERE id_treinamento = ? AND gestaopro_agenda_usuario = 53");
+            $stmtTreinamentoApi->execute([$idTreinamentoLocal]);
+            if (!$stmtTreinamentoApi->fetchColumn()) {
+                throw new RuntimeException('O treinamento informado não veio da agenda da API.');
+            }
+            $resultadoGoogle = sincronizarGoogleMeetAutomatico($pdo, $idTreinamentoLocal);
+            if (!empty($resultadoGoogle['needs_auth']) && !empty($resultadoGoogle['auth_start_url'])) {
+                header('Location: ' . $resultadoGoogle['auth_start_url']);
+                exit;
+            }
+            $sucessoGoogle = !empty($resultadoGoogle['success']);
+            $mensagemImportacao = $sucessoGoogle
+                ? "Treinamento local #{$idTreinamentoLocal} integrado ao Google Agenda."
+                : 'Não foi possível integrar ao Google Agenda: ' . ($resultadoGoogle['message'] ?? 'erro desconhecido');
+            header('Location: ' . $retornoImportacao . '?msg=' . urlencode($mensagemImportacao) . '&tipo=' . ($sucessoGoogle ? 'success' : 'warning'));
+            exit;
+        } catch (Throwable $e) {
+            header('Location: ' . $retornoImportacao . '?msg=' . urlencode($e->getMessage()) . '&tipo=warning');
+            exit;
+        }
+    }
+
     if (isset($_POST['confirmar_encerramento'])) {
         $id = (int) ($_POST['id_treinamento'] ?? 0);
         $obs = trim((string) ($_POST['observacoes'] ?? ''));
+        $solicitouMaterial = trim((string) ($_POST['solicitou_material'] ?? ''));
+        $temaMaterial = trim((string) ($_POST['tema_material'] ?? ''));
         $temPendencia = trim((string) ($_POST['tem_pendencia'] ?? ''));
         $tipoPendencia = null;
         if ($temPendencia === 'sim') {
@@ -853,7 +1240,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
         $data_hoje = date('Y-m-d H:i:s');
 
-        if ($id <= 0 || $obs === '' || $tipoPendencia === null) {
+        if ($id <= 0 || $obs === '' || $tipoPendencia === null || !in_array($solicitouMaterial, ['sim', 'nao'], true) || ($solicitouMaterial === 'sim' && $temaMaterial === '')) {
             header("Location: treinamentos.php?msg=" . urlencode("Preencha os campos obrigatorios para encerrar o treinamento.") . "&tipo=warning");
             exit;
         }
@@ -861,6 +1248,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $colunaMarcacaoDisponivel = garantirColunaMarcacaoPendencia($pdo);
         $colunaRealizadoDisponivel = garantirColunaTreinamentoRealizado($pdo);
         $tabelaPendenciasDisponivel = garantirTabelaPendenciasTreinamentos($pdo);
+        $tabelaMateriaisDisponivel = garantirTabelaMateriaisTreinamentos($pdo);
         $mensagemRetorno = "Treinamento encerrado com sucesso.";
 
         $treinamentoRealizado = isset($_POST['treinamento_realizado']) && $_POST['treinamento_realizado'] === 'nao' ? 0 : 1;
@@ -881,7 +1269,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             $stmtCliente = $pdo->prepare("SELECT id_cliente FROM treinamentos WHERE id_treinamento = ?");
             $stmtCliente->execute([$id]);
-            $idCliente = (int) ($stmtCliente->fetchColumn() ?: 0);
+            $treinoCliente = $stmtCliente->fetchColumn();
+            $idCliente = (int) ($treinoCliente ?: 0);
+
+            if ($solicitouMaterial === 'sim') {
+                if (!$tabelaMateriaisDisponivel) {
+                    throw new RuntimeException('Não foi possível preparar a lista de materiais solicitados.');
+                }
+                $stmtNome = $pdo->prepare("SELECT fantasia FROM clientes WHERE id_cliente = ?");
+                $stmtNome->execute([$idCliente]);
+                $nomeClienteMaterial = trim((string) ($stmtNome->fetchColumn() ?: 'Cliente'));
+                $stmtMaterial = $pdo->prepare(
+                    "INSERT INTO materiais_treinamentos
+                        (id_treinamento, id_cliente, cliente_nome, tema_solicitado, data_solicitacao, status_material, data_envio)
+                     VALUES (?, ?, ?, ?, ?, 'ABERTO', NULL)
+                     ON DUPLICATE KEY UPDATE
+                        id_cliente = VALUES(id_cliente), cliente_nome = VALUES(cliente_nome),
+                        tema_solicitado = VALUES(tema_solicitado), data_solicitacao = VALUES(data_solicitacao),
+                        status_material = 'ABERTO', data_envio = NULL"
+                );
+                $stmtMaterial->execute([$id, $idCliente > 0 ? $idCliente : null, $nomeClienteMaterial, $temaMaterial, $data_hoje]);
+            }
 
             if ($tipoPendencia === 'COM_PENDENCIA' && $tabelaPendenciasDisponivel) {
                 $stmtPendencia = $pdo->prepare(
@@ -945,10 +1353,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     $abrirGoogleAgendaLink = '';
     $abrirGoogleAgendaTreinamentoId = 0;
-    $id_cliente = $_POST['id_cliente'];
-    $id_contato = $_POST['id_contato'];
+    $id_cliente = (int) ($_POST['id_cliente'] ?? 0);
+    $id_contato = (int) ($_POST['id_contato'] ?? 0);
+    $nome_contato = '';
+    if ($id_contato > 0) {
+        $stmtContato = $pdo->prepare('SELECT nome FROM contatos WHERE id_contato = ? AND id_cliente = ? LIMIT 1');
+        $stmtContato->execute([$id_contato, $id_cliente]);
+        $nome_contato = trim((string) ($stmtContato->fetchColumn() ?: ''));
+        if ($nome_contato === '') {
+            $id_contato = null;
+        }
+    } else {
+        $id_contato = null;
+    }
     $tema = $_POST['tema'];
-    $status = $_POST['status'];
+    $status = 'PENDENTE';
+    if (isset($_POST['status']) && trim((string) $_POST['status']) !== '') {
+        $status = strtoupper(trim((string) $_POST['status']));
+    }
+    if ($status !== 'PENDENTE') {
+        $status = 'PENDENTE';
+    }
     $data_treinamento = !empty($_POST['data_treinamento']) ? normalizarDataTreinamento($_POST['data_treinamento']) : null;
     $id_treinamento_atual = isset($_POST['id_treinamento']) ? (int) $_POST['id_treinamento'] : 0;
     $has_google_event_link = array_key_exists('google_event_link', $_POST);
@@ -967,14 +1392,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['id_treinamento']) && !empty($_POST['id_treinamento'])) {
 
         // --- 1. ATUALIZAÇÃO DE TREINAMENTO EXISTENTE ---
+        $status = 'PENDENTE';
+        if (isset($_POST['status']) && trim((string) $_POST['status']) !== '') {
+            $status = strtoupper(trim((string) $_POST['status']));
+        }
+        if ($status !== 'PENDENTE') {
+            $status = 'PENDENTE';
+        }
+
         $campos_update = [
             "id_cliente=?",
             "id_contato=?",
+            "nome_contato=?",
             "tema=?",
             "status=?",
             "data_treinamento=?"
         ];
-        $params_update = [$id_cliente, $id_contato, $tema, $status, $data_treinamento];
+        $params_update = [$id_cliente, $id_contato, $nome_contato, $tema, $status, $data_treinamento];
 
         if ($has_google_event_link) {
             $campos_update[] = "google_event_link=?";
@@ -1013,8 +1447,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     } else {
         // --- 3. INSERÇÃO DE NOVO TREINAMENTO ---
-        $colunas_insert = ["id_cliente", "id_contato", "tema", "status", "data_treinamento", "google_event_link"];
-        $params_insert = [$id_cliente, $id_contato, $tema, $status, $data_treinamento, $google_event_link];
+        $colunas_insert = ["id_cliente", "id_contato", "nome_contato", "tema", "status", "data_treinamento", "google_event_link"];
+        $params_insert = [$id_cliente, $id_contato, $nome_contato, $tema, $status, $data_treinamento, $google_event_link];
 
         if ($has_google_agenda_link && $tem_coluna_google_agenda) {
             $colunas_insert[] = "google_agenda_link";
@@ -1084,7 +1518,7 @@ if (isset($_GET['get_observations']) && isset($_GET['id_cliente'])) {
     $obs_cliente = $stmtAjax->fetchAll(PDO::FETCH_ASSOC);
 
     // Observações (relatório) de fechamento de treinamentos
-    $stmtTreinamentos = $pdo->prepare("SELECT id_treinamento, tema, observacoes, data_treinamento_encerrado, data_treinamento FROM treinamentos WHERE id_cliente = ? AND UPPER(status) = 'RESOLVIDO' AND observacoes IS NOT NULL AND TRIM(observacoes) != ''");
+    $stmtTreinamentos = $pdo->prepare("SELECT id_treinamento, tema, observacoes, data_treinamento_encerrado, data_treinamento, tipo_pendencia_encerramento FROM treinamentos WHERE id_cliente = ? AND UPPER(status) = 'RESOLVIDO' AND observacoes IS NOT NULL AND TRIM(observacoes) != ''");
     $stmtTreinamentos->execute([$id_c]);
     $treinamentos_encerrados = $stmtTreinamentos->fetchAll(PDO::FETCH_ASSOC);
 
@@ -1106,13 +1540,17 @@ if (isset($_GET['get_observations']) && isset($_GET['id_cliente'])) {
         if (!$data_obs)
             $data_obs = date('Y-m-d H:i:s'); // fallback de segurança
 
+        $tipoPendencia = trim((string) ($t['tipo_pendencia_encerramento'] ?? ''));
+        $tipoEncerramento = strtoupper($tipoPendencia) === 'COM_PENDENCIA' ? 'Com Pendência' : 'Sem Pendência';
+
         $todas_obs[] = [
             'id' => 'trein_' . $t['id_treinamento'],
             'titulo' => 'Treinamento Encerrado: ' . $t['tema'],
             'conteudo' => $t['observacoes'],
             'tipo' => 'ATUALIZAÇÃO',
             'data_observacao' => $data_obs,
-            'registrado_por' => 'Sistema (Encerramento)'
+            'registrado_por' => 'Sistema (Encerramento)',
+            'tipo_encerramento' => $tipoEncerramento
         ];
     }
 
@@ -1208,12 +1646,12 @@ if (!empty($_GET['open_google_agenda_treinamento_id'])) {
 // Visualização (lista ou calendario)
 $view_mode = $_GET['view'] ?? 'list';
 
-// Ordenação
-$ordenacao = isset($_GET['ordenacao']) ? $_GET['ordenacao'] : 'data_treinamento';
-$direcao = isset($_GET['direcao']) ? $_GET['direcao'] : 'asc';
+// Ordenação: a visão completa inicia pelos treinamentos mais recentes.
+$ordenacao = isset($_GET['ordenacao']) ? $_GET['ordenacao'] : ($mostrar_todos ? 'id_treinamento' : 'data_treinamento');
+$direcao = isset($_GET['direcao']) ? $_GET['direcao'] : ($mostrar_todos ? 'desc' : 'asc');
 
 // Validação da ordenação para segurança
-$colunas_permitidas = ['cliente_nome', 'data_treinamento', 'tema', 'status'];
+$colunas_permitidas = ['id_treinamento', 'cliente_nome', 'data_treinamento', 'tema', 'status'];
 $ordenacao = in_array($ordenacao, $colunas_permitidas) ? $ordenacao : 'data_treinamento';
 $direcao = $direcao === 'desc' ? 'desc' : 'asc';
 
@@ -1224,7 +1662,7 @@ $offset = ($pagina - 1) * $por_pagina;
 
 // Query principal com contagem para paginação
 $sql_base = "
-    SELECT t.*, c.fantasia as cliente_nome, c.status as cliente_status, c.data_fim as cliente_data_fim, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim, c.recursos, c.anexo, c.chamados
+    SELECT t.*, c.fantasia as cliente_nome, c.status as cliente_status, c.data_fim as cliente_data_fim, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim, c.recursos, c.anexo, c.chamados, c.link_videos
     FROM treinamentos t
     LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
     LEFT JOIN contatos co ON t.id_contato = co.id_contato
@@ -1278,7 +1716,7 @@ $hoje_data = date('Y-m-d');
 $total_resultados = count($treinamentos);
 
 $clientes_list = $pdo->query("
-    SELECT id_cliente, fantasia, data_fim 
+    SELECT id_cliente, fantasia, data_fim, recursos 
     FROM clientes 
     ORDER BY fantasia ASC
 ")->fetchAll();
@@ -1299,6 +1737,24 @@ foreach ($stmt_perf->fetchAll(PDO::FETCH_ASSOC) as $row) {
     $total = (int)$row['total'];
     $realizados = (int)$row['realizados'];
     $taxas_clientes[$row['id_cliente']] = $total > 0 ? round(($realizados / $total) * 100, 1) : 0;
+}
+
+// --- AUTONOMIA MEDIA DO SCORECARD (somente modulos utilizados) ---
+$autonomia_clientes = [];
+try {
+    $stmtAutonomia = $pdo->query("SELECT id_cliente,
+                                         ROUND(AVG(CASE
+                                             WHEN uso_real > 0 THEN ((uso_real - operacoes_suporte) / uso_real) * 100
+                                             ELSE 0
+                                         END), 1) AS autonomia_media
+                                  FROM treinamento_efetivo_cliente
+                                  WHERE utiliza_modulo = 1
+                                  GROUP BY id_cliente");
+    foreach ($stmtAutonomia->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $autonomia_clientes[(int) $row['id_cliente']] = (float) $row['autonomia_media'];
+    }
+} catch (Throwable $e) {
+    // A tabela pode ainda nao existir para instalacoes que nao abriram a avaliacao efetiva.
 }
 
 
@@ -1388,6 +1844,32 @@ include 'header.php';
         border-radius: 50px;
         text-transform: uppercase;
         letter-spacing: 0.3px;
+    }
+
+    .treinamento-autonomia-completa > td {
+        background-color: #dcfce7 !important;
+        color: #166534 !important;
+        border-top-color: #86efac !important;
+        border-bottom-color: #86efac !important;
+    }
+
+    .treinamento-autonomia-completa .text-dark,
+    .treinamento-autonomia-completa .text-muted,
+    .treinamento-autonomia-completa .fw-bold {
+        color: #166534 !important;
+    }
+
+    [data-theme="dark"] .treinamento-autonomia-completa > td {
+        background-color: #14532d !important;
+        color: #dcfce7 !important;
+        border-top-color: #4ade80 !important;
+        border-bottom-color: #4ade80 !important;
+    }
+
+    [data-theme="dark"] .treinamento-autonomia-completa .text-dark,
+    [data-theme="dark"] .treinamento-autonomia-completa .text-muted,
+    [data-theme="dark"] .treinamento-autonomia-completa .fw-bold {
+        color: #dcfce7 !important;
     }
 
     /* Page Header - Simplificado */
@@ -1498,6 +1980,15 @@ include 'header.php';
         transform: translateY(15px);
     }
 
+    #agenda-api-icone.spin {
+        animation: agenda-api-spin 0.7s linear infinite;
+        display: inline-block;
+    }
+
+    @keyframes agenda-api-spin {
+        to { transform: rotate(360deg); }
+    }
+
     .fw-800 {
         font-weight: 800;
     }
@@ -1511,6 +2002,21 @@ include 'header.php';
     .btn-outline-primary:hover {
         background: var(--primary);
         color: #fff;
+    }
+
+    .btn-history-client {
+        border-radius: 10px;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        box-shadow: 0 4px 12px rgba(67, 97, 238, 0.08);
+    }
+
+    .btn-history-client:hover,
+    .btn-history-client:focus-visible {
+        transform: translateY(-8px);
+        border-color: var(--primary);
+        color: #fff;
+        background-color: var(--primary);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.28);
     }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -1549,6 +2055,73 @@ include 'header.php';
         </div>
     </div>
 
+    <section class="card border-0 shadow-sm mb-4 gsap-reveal d-none" id="agenda-api-card" style="background: var(--bg-card); border-radius: 16px;">
+        <div class="card-header bg-transparent border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2 p-3 p-md-4">
+            <div>
+                <h5 class="fw-bold mb-1"><i class="bi bi-cloud-arrow-down me-2 text-primary"></i>Treinamentos agendados no GestãoPRO</h5>
+                <div class="small text-muted">Agenda da API Master · usuário 53 · importe para o banco local e integre ao Google Agenda</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge rounded-pill bg-light text-secondary border" id="agenda-api-atualizacao">Carregando agenda...</span>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-atualizar-agenda-api">
+                    <i class="bi bi-arrow-clockwise me-1" id="agenda-api-icone"></i>Atualizar
+                </button>
+            </div>
+        </div>
+        <div class="px-3 px-md-4 pt-3 d-none" id="agenda-api-aviso"></div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="ps-3 ps-md-4">Data</th>
+                        <th>Horário</th>
+                        <th>Cliente</th>
+                        <th>Descrição</th>
+                        <th>Responsável</th>
+                        <th class="text-end pe-3 pe-md-4">ID API</th>
+                        <th class="text-end pe-3 pe-md-4">Integração</th>
+                    </tr>
+                </thead>
+                <tbody id="agenda-api-linhas">
+                    <tr><td colspan="7" class="text-center text-muted py-4">Consultando a agenda do usuário 53...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="modal fade" id="modalVincularContatoAgenda" tabindex="-1" aria-labelledby="tituloModalVincularContatoAgenda" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <form method="post" class="modal-content border-0 shadow-lg" id="formVincularContatoAgenda" style="border-radius: 16px;">
+                <div class="modal-header border-0 px-4 pt-4">
+                    <h5 class="modal-title fw-bold" id="tituloModalVincularContatoAgenda"><i class="bi bi-person-check me-2 text-primary"></i>Vincular contato ao treinamento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body px-4">
+                    <input type="hidden" name="api_agenda_id" id="agenda_contato_evento_id">
+                    <div class="rounded-3 bg-light border p-3 mb-3">
+                        <div class="fw-semibold" id="agenda_contato_cliente"></div>
+                        <div class="small text-muted" id="agenda_contato_resumo"></div>
+                    </div>
+                    <label for="id_contato_api" class="form-label small fw-bold text-muted">Contato que ficará vinculado</label>
+                    <select name="id_contato_api" id="id_contato_api" class="form-select" required><option value="">Selecione o contato...</option></select>
+                    <div id="agenda_contato_sem_opcoes" class="form-text text-danger d-none mt-2">Este cliente ainda não possui contatos cadastrados. Cadastre um contato antes de importar o treinamento.</div>
+                    <label for="tema_api" class="form-label small fw-bold text-muted mt-3">Tema do treinamento</label>
+                    <select name="tema_api" id="tema_api" class="form-select" required>
+                        <option value="">Selecione o tema...</option>
+                        <?php foreach ($temasTreinamentoApi as $temaPermitido): ?>
+                            <option value="<?= htmlspecialchars($temaPermitido, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($temaPermitido, ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="form-text mt-2">O convite do Google continuará sendo enviado a todos os contatos do cliente.</div>
+                </div>
+                <div class="modal-footer border-0 p-4 pt-2">
+                    <button type="button" class="btn btn-light px-4 fw-semibold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" name="importar_agendamento_api" value="1" id="btnConfirmarImportacaoAgenda" class="btn btn-success px-4 fw-bold"><i class="bi bi-cloud-arrow-down me-2"></i>Salvar + Google</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Alertas de Inatividade -->
     <!-- Listagem Principal -->
 
@@ -1558,7 +2131,9 @@ include 'header.php';
             <div class="p-4 border-bottom d-flex justify-content-between align-items-center bg-white">
                 <h5 class="fw-bold mb-0">Listagem de Treinamentos</h5>
                 <div class="d-flex gap-2">
-                    <a href="treinamentos.php?mostrar_todos=1" class="btn btn-sm btn-light border px-3">Ver Resolvidos</a>
+                    <a href="<?= $mostrar_todos ? 'treinamentos.php' : 'treinamentos.php?mostrar_todos=1&ordenacao=id_treinamento&direcao=desc' ?>" class="btn btn-sm btn-light border px-3">
+                        <?= $mostrar_todos ? 'Ver Pendentes' : 'Ver Resolvidos' ?>
+                    </a>
                     <div class="dropdown">
                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
                             data-bs-toggle="dropdown">Ordenar</button>
@@ -1588,7 +2163,9 @@ include 'header.php';
                                 </a>
                             </th>
                             <th>Cliente</th>
+                            <th class="col-recursos">Recursos utilizados</th>
                             <th class="col-mini text-center" title="Performance de Realização (Ativos)">Taxa Histórica</th>
+                            <th class="col-mini text-center" title="Score Geral de Treinamento Efetivo">Score Geral</th>
                             <th class="col-mini text-center">Link Chamados</th>
                             <th class="col-mini">Serv.</th>
                             <th>Contato</th>
@@ -1634,8 +2211,10 @@ include 'header.php';
                                 if (!empty($t['contato_telefone'])) {
                                     $contato_exibicao .= " - " . $t['contato_telefone'];
                                 }
+                                $autonomia_media_cliente = $autonomia_clientes[(int) $t['id_cliente']] ?? 0;
+                                $classe_autonomia_completa = $autonomia_media_cliente >= 100 ? ' treinamento-autonomia-completa' : '';
                                 ?>
-                                <tr class="<?= $bg_class ?>">
+                                <tr class="<?= $bg_class . $classe_autonomia_completa ?>">
                                     <td class="ps-4">
                                         <div class="text-dark fw-bold" style="font-size: 0.85rem; line-height: 1.1;">
                                             <?= $data_t ? date('d/m/Y', $data_t) : '---' ?>
@@ -1671,6 +2250,11 @@ include 'header.php';
                                             <?php endif; ?>
                                         </div>
                                     </td>
+                                    <td class="col-recursos">
+                                        <div class="small fw-bold" title="Recursos utilizados pelo cliente">
+                                            <?= htmlspecialchars($t['recursos'] ?: '---') ?>
+                                        </div>
+                                    </td>
                                     <td class="text-center align-middle">
                                         <?php
                                             $id_cliente_atual = $t['id_cliente'];
@@ -1685,6 +2269,18 @@ include 'header.php';
                                             </div>
                                             <span class="small fw-bold text-muted"><?= $taxa ?>%</span>
                                         </div>
+                                    </td>
+
+                                    <td class="text-center align-middle">
+                                        <?php
+                                            $scoreGeral = calcularScoreGeralCliente($pdo, $t['id_cliente']);
+                                            $scoreNum = (int)$scoreGeral;
+                                            $scoreColor = 'text-success';
+                                            if ($scoreGeral === 'N/A') $scoreColor = 'text-muted';
+                                            elseif ($scoreNum < 45) $scoreColor = 'text-danger';
+                                            elseif ($scoreNum < 80) $scoreColor = 'text-warning';
+                                        ?>
+                                        <div class="fw-bold <?= $scoreColor ?>"><?= htmlspecialchars($scoreGeral) ?></div>
                                     </td>
 
                                     <td class="text-center col-mini">
@@ -1726,26 +2322,41 @@ include 'header.php';
                                     <td class="text-end pe-3 col-mini">
                                         <?php $id_tr = (int) $t['id_treinamento']; ?>
                                         <div class="d-flex justify-content-end gap-1 flex-nowrap">
+                                            <?php if (!empty($t['link_videos'])): ?>
+                                                <a href="<?= htmlspecialchars($t['link_videos'], ENT_QUOTES, 'UTF-8') ?>"
+                                                   target="_blank" rel="noopener noreferrer"
+                                                   class="btn btn-sm btn-outline-danger"
+                                                   data-bs-toggle="tooltip" data-bs-title="Vídeos Passo a Passo"
+                                                   aria-label="Vídeos Passo a Passo">
+                                                    <i class="bi bi-youtube"></i>
+                                                </a>
+                                            <?php endif; ?>
                                             <!-- 1. HISTÓRICO (CRM) -->
                                             <button class="btn btn-sm btn-outline-primary btn-history-client"
                                                 data-bs-toggle="tooltip" data-bs-title="Ver Histórico/CRM"
                                                 data-id="<?= $t['id_cliente'] ?>"
-                                                data-nome="<?= htmlspecialchars($cliente_exibicao) ?>">
-                                                <i class="bi bi-journal-text"></i>
+                                                data-nome="<?= htmlspecialchars($cliente_exibicao) ?>"
+                                                title="Ver Histórico/CRM">
+                                                <i class="bi bi-journal-text"></i> CRM
                                             </button>
 
-                                            <!-- 2. LUPA (OBSERVAÇÕES DO AGENDAMENTO) -->
-                                            <?php if (!empty($t['observacoes'])): ?>
-                                                <button class="btn btn-sm btn-outline-info view-obs-btn" data-bs-toggle="tooltip"
-                                                    data-bs-title="Ver Obs. Agendamento"
-                                                    data-obs="<?= htmlspecialchars($t['observacoes']) ?>"
-                                                    data-cliente="<?= htmlspecialchars($cliente_exibicao) ?>">
-                                                    <i class="bi bi-search"></i>
-                                                </button>
-                                            <?php endif; ?>
+                                            <button class="btn btn-sm btn-outline-info btn-open-effective"
+                                                data-bs-toggle="tooltip" data-bs-title="Abrir avaliação efetiva"
+                                                data-id-cliente="<?= (int) $t['id_cliente'] ?>"
+                                                title="Avaliação efetiva">
+                                                <i class="bi bi-clipboard-check"></i>
+                                            </button>
 
                                             <?php
-                                            $nome_contato_wp = trim((string) ($t['contato_nome'] ?? ($t['nome_contato'] ?? $t['cliente_nome'])));
+                                            $nome_contato_wp = trim((string) ($t['contato_nome'] ?? ''));
+                                            if ($nome_contato_wp === '') {
+                                                $nomeLivre = trim((string) ($t['nome_contato'] ?? ''));
+                                                $nomeCliente = trim((string) ($t['cliente_nome'] ?? ''));
+                                                if ($nomeLivre !== '' && mb_strtolower($nomeLivre, 'UTF-8') !== mb_strtolower($nomeCliente, 'UTF-8')) {
+                                                    $nome_contato_wp = $nomeLivre;
+                                                }
+                                            }
+                                            $saudacao_wp = $nome_contato_wp !== '' ? "Olá, {$nome_contato_wp}!" : 'Olá!';
                                             $dt_treino = new DateTime($t['data_treinamento'], new DateTimeZone('America/Sao_Paulo'));
                                             $dias_semana_wp = ['1' => 'Segunda-Feira', '2' => 'Terça-Feira', '3' => 'Quarta-Feira', '4' => 'Quinta-Feira', '5' => 'Sexta-Feira', '6' => 'Sábado', '7' => 'Domingo'];
                                             $data_f = $dt_treino->format('d/m') . ' ' . ($dias_semana_wp[$dt_treino->format('N')] ?? '');
@@ -1757,7 +2368,7 @@ include 'header.php';
                                             $link_google_meet = trim((string) ($t['google_event_link'] ?? ''));
                                             $link_google_agenda = trim((string) ($t['google_agenda_link'] ?? ''));
 
-                                            $msg_wp = "Olá, {$nome_contato_wp}! 👋\n\n✅ Seu treinamento GestãoPRO está confirmado!\n\n";
+                                            $msg_wp = "{$saudacao_wp} 👋\n\n✅ Seu treinamento GestãoPRO está confirmado!\n\n";
                                             $msg_wp .= "🔢 ID do treinamento: #{$t['id_treinamento']}\n";
                                             $msg_wp .= "📅 *Data:* {$data_f}\n";
                                             $msg_wp .= "🕒 *Horário do treinamento:* das {$hora_inicio}h às {$hora_fim}h, horário de Brasília.\n";
@@ -1784,11 +2395,27 @@ include 'header.php';
                                             <!-- 3. FINALIZAR -->
                                             <?php if (strtoupper($t['status']) == 'PENDENTE'): ?>
                                                 <button class="btn btn-sm btn-outline-success open-finish-modal" data-id="<?= $id_tr ?>"
+                                                    data-id-cliente="<?= (int) $t['id_cliente'] ?>"
                                                     data-cliente="<?= htmlspecialchars($cliente_exibicao) ?>"
                                                     data-tema="<?= htmlspecialchars($t['tema']) ?>" title="Finalizar"
                                                     data-bs-toggle="tooltip">
                                                     <i class="bi bi-check-lg"></i>
                                                 </button>
+                                            <?php endif; ?>
+
+                                            <!-- 3a. REATIVAR (só para treinamentos finalizados/encerrados) -->
+                                            <?php
+                                                $status_atual = strtoupper(trim((string) ($t['status'] ?? '')));
+                                                $status_reativavel = in_array($status_atual, ['RESOLVIDO', 'FINALIZADO', 'ENCERRADO', 'ENCERRADA'], true);
+                                            ?>
+                                            <?php if ($status_reativavel): ?>
+                                                <a href="?reativar_treinamento=<?= $id_tr ?>&mostrar_todos=1"
+                                                    class="btn btn-sm btn-outline-secondary"
+                                                    data-bs-toggle="tooltip"
+                                                    data-bs-title="Reativar treinamento"
+                                                    onclick="return confirm('Deseja realmente reativar este treinamento?')">
+                                                    <i class="bi bi-arrow-repeat"></i> ↻ Reativar
+                                                </a>
                                             <?php endif; ?>
 
                                             <!-- 3b. ENVIAR PARA PENDÊNCIAS (só para resolvidos) -->
@@ -1814,7 +2441,7 @@ include 'header.php';
                             <?php endforeach; ?>
                         <?php else: ?>
                             <tr>
-                                <td colspan="9" class="text-center py-5">
+                                <td colspan="10" class="text-center py-5">
                                     <div class="mb-3">
                                         <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
                                     </div>
@@ -2267,7 +2894,7 @@ include 'header.php';
 
 <!-- Modal para Agendar/Editar Treinamento -->
 <div class="modal fade" id="modalTreinamento" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <form method="POST" class="modal-content border-0 shadow-lg" id="formAgendaTreinamento"
             style="border-radius: 15px;">
             <div class="modal-header border-0 px-4 pt-4">
@@ -2276,6 +2903,7 @@ include 'header.php';
             </div>
             <div class="modal-body px-4">
                 <input type="hidden" name="id_treinamento" id="id_treinamento">
+                <input type="hidden" name="status" id="status" value="PENDENTE">
 
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
@@ -2286,13 +2914,13 @@ include 'header.php';
                         </div>
                     </div>
                     <select name="id_cliente" id="id_cliente" class="form-select" required
-                        onchange="filterContatos(this.value)">
+                        onchange="filterContatos(this.value); atualizarRecursosCliente(this.value)">
                         <option value="">Selecione o cliente...</option>
                         <?php
                         foreach ($clientes_list as $c): 
                             $is_ativo = (empty($c['data_fim']) || $c['data_fim'] === '0000-00-00' || strtotime($c['data_fim']) > time());
                         ?>
-                            <option value="<?= $c['id_cliente'] ?>" data-ativo="<?= $is_ativo ? '1' : '0' ?>" <?= !$is_ativo ? 'style="display:none;"' : '' ?>>
+                            <option value="<?= $c['id_cliente'] ?>" data-ativo="<?= $is_ativo ? '1' : '0' ?>" data-recursos="<?= htmlspecialchars($c['recursos'] ?? '', ENT_QUOTES) ?>" <?= !$is_ativo ? 'style="display:none;"' : '' ?>>
                                 <?= htmlspecialchars($c['fantasia']) ?>
                             </option>
                         <?php endforeach; ?>
@@ -2307,14 +2935,22 @@ include 'header.php';
                 </div>
 
                 <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Recursos utilizados pelo cliente</label>
+                    <div id="recursos_cliente" class="form-control bg-light text-muted" style="min-height: 38px;">Selecione um cliente para consultar.</div>
+                </div>
+
+                <div class="mb-3">
                     <label class="form-label small fw-bold text-muted">Tema</label>
                     <select name="tema" id="tema" class="form-select" required>
                         <option value="INSTALAÇÃO SISTEMA">INSTALAÇÃO SISTEMA</option>
+                        <option value="CONFIGURAR GESTAOGPT">CONFIGURAR GESTAOGPT</option>
+                        <option value="CONFIGURAR ASSISTÊNCIAPRO">CONFIGURAR ASSISTÊNCIAPRO</option>
                         <option value="CADASTROS/ESTOQUE">CADASTROS/ESTOQUE</option>
+                        <option value="CUSTOMIZAÇÕES">CUSTOMIZAÇÕES</option>
                         <option value="VENDAS">VENDAS</option>
                         <option value="COMPRAS">COMPRAS</option>
                         <option value="FATURAMENTO/NF">FATURAMENTO/NF</option>
-                        <option value="FINANCEIRO/CAIXA">FINANCEIRO/CAIXA</option>
+                        <option value="FINANCEIRO/CAIXA">FINANCEIRO/BOLETOS/CAIXA</option>
                         <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
                         <option value="RELATÓRIOS">RELATÓRIOS</option>
                         <option value="ATENDIMENTOS">ATENDIMENTOS</option>
@@ -2323,23 +2959,15 @@ include 'header.php';
                 </div>
 
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-12">
                         <label class="form-label small fw-bold text-muted">Data/Hora</label>
                         <input type="datetime-local" name="data_treinamento" id="data_treinamento" class="form-control">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-bold text-muted">Status</label>
-                        <select name="status" id="status" class="form-select">
-                            <option value="PENDENTE">PENDENTE</option>
-                            <option value="Resolvido">Resolvido</option>
-                        </select>
                     </div>
                 </div>
 
                 <div class="mt-3">
                     <div class="d-flex align-items-center justify-content-between mb-2">
-                        <label class="form-label small fw-bold text-muted mb-0">Horários disponíveis (hoje, amanhã e
-                            depois)</label>
+                        <label class="form-label small fw-bold text-muted mb-0">Horários disponíveis (próximos 5 dias)</label>
                         <div class="d-flex gap-2">
                             <button type="button" class="btn btn-sm btn-outline-primary"
                                 id="btn_buscar_disponibilidade">
@@ -2413,6 +3041,24 @@ include 'header.php';
                     <textarea name="observacoes" class="form-control" rows="4"
                         placeholder="Descreva os detalhes da sessão..." required></textarea>
                 </div>
+                <div class="mb-3 p-3 rounded-3 border bg-light">
+                    <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">O cliente solicitou material passo a passo?</label>
+                    <div class="d-flex flex-wrap gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input material-opcao" type="radio" name="solicitou_material" id="solicitou_material_sim" value="sim" required>
+                            <label class="form-check-label fw-semibold" for="solicitou_material_sim">Sim, enviar vídeo/apostila</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input material-opcao" type="radio" name="solicitou_material" id="solicitou_material_nao" value="nao" required>
+                            <label class="form-check-label fw-semibold" for="solicitou_material_nao">Não</label>
+                        </div>
+                    </div>
+                    <div id="tema-material-wrap" class="mt-3 d-none">
+                        <label for="tema_material" class="form-label small fw-bold text-muted text-uppercase">Tema solicitado</label>
+                            <textarea name="tema_material" id="tema_material" class="form-control" rows="2" placeholder="Informe o procedimento do sistema para o vídeo ou apostila" disabled></textarea>
+                        <div class="form-text">A solicitação ficará acumulada na tela de materiais até ser marcada como enviada.</div>
+                    </div>
+                </div>
                 <div class="mb-3">
                     <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Pendências após o
                         fim?</label>
@@ -2442,9 +3088,14 @@ include 'header.php';
                 <div class="form-text small opacity-75">A marcacao com/sem pendencia e obrigatoria para concluir o
                     treinamento.</div>
             </div>
-            <div class="modal-footer border-0 p-4">
-                <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-success px-4 fw-bold shadow-sm">Encerrar e Salvar</button>
+            <div class="modal-footer border-0 p-4 d-flex justify-content-end align-items-center flex-wrap gap-2">
+                <button type="button" id="btn-abrir-avaliacao-efetiva" class="btn btn-outline-primary px-4 fw-bold d-inline-flex align-items-center">
+                    <i class="bi bi-clipboard-check me-2"></i>Avaliação efetiva
+                </button>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-light px-4 fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success px-4 fw-bold shadow-sm">Encerrar e Salvar</button>
+                </div>
             </div>
         </form>
     </div>
@@ -2499,6 +3150,7 @@ include 'header.php';
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
+                <div id="hist_dashboard_container" class="row g-3 mb-3"></div>
                 <div id="hist_obs_container">
                     <div class="text-center py-5">
                         <div class="spinner-border" role="status" style="color: #7209b7;"></div>
@@ -2506,7 +3158,10 @@ include 'header.php';
                     </div>
                 </div>
             </div>
-            <div class="modal-footer border-0 p-4">
+            <div class="modal-footer border-0 p-4 d-flex flex-column gap-2">
+                <button type="button" id="btn-abrir-avaliacao-efetiva-crm" class="btn btn-outline-primary w-100 fw-bold">
+                    <i class="bi bi-clipboard-check me-2"></i> Abrir avaliação efetiva
+                </button>
                 <button type="button" class="btn btn-premium w-100" onclick="abrirModalNovaObs()"
                     style="background: linear-gradient(135deg, var(--primary) 0%, #1e293b 100%); color: white; border-radius: 12px; font-weight: 700; padding: 12px;">
                     <i class="bi bi-plus-circle me-2"></i> Adicionar Novo Registro Agora
@@ -2677,47 +3332,83 @@ include 'header.php';
         });
     }
 
-    function montarMensagemDisponibilidadeCliente(diasDisponiveis) {
+    function atualizarRecursosCliente(id_cliente) {
+        const recursosContainer = document.getElementById('recursos_cliente');
         const clienteSelect = document.getElementById('id_cliente');
-        const clienteNome = clienteSelect && clienteSelect.selectedIndex > 0 ?
-            clienteSelect.options[clienteSelect.selectedIndex].text : '';
+        if (!recursosContainer || !clienteSelect || !id_cliente) {
+            if (recursosContainer) recursosContainer.textContent = 'Selecione um cliente para consultar.';
+            return;
+        }
 
+        const opcaoCliente = clienteSelect.options[clienteSelect.selectedIndex];
+        const recursos = (opcaoCliente?.dataset.recursos || '').trim();
+        recursosContainer.textContent = recursos || 'Nenhum recurso informado.';
+    }
+
+    function montarMensagemDisponibilidadeCliente(diasDisponiveis) {
         const linhas = [];
         const diasComSlot = diasDisponiveis.filter(dia => Array.isArray(dia.horarios) && dia.horarios.length > 0);
 
-        linhas.push('Olá' + (clienteNome ? ' ' + clienteNome : '') + '! Tudo bem? 👍');
+        linhas.push('Olá! Tudo bem? 😊');
+        linhas.push('');
+        linhas.push('Vamos agendar nosso treinamento? 🚀');
+        linhas.push('');
+        linhas.push('Veja os horários disponíveis e escolha o que fica melhor para você:');
         linhas.push('');
 
         if (diasComSlot.length === 0) {
-            linhas.push('Para agendarmos nosso treinamento, no momento não tenho horários livres para os próximos dias, mas podemos combinar um horário específico se preferir. 😕');
+            linhas.push('📅 Nenhum horário disponível para os próximos dias no momento.');
         } else {
-            linhas.push('Para agendarmos nosso treinamento, veja os horários que tenho disponíveis:');
-            linhas.push('');
             diasDisponiveis.forEach((dia) => {
                 const dataLabel = dia.data_label || dia.data || 'Dia';
                 const horarios = Array.isArray(dia.horarios) ? dia.horarios : [];
                 if (horarios.length > 0) {
                     const horas = horarios.map((slot) => slot.hora).filter(Boolean);
-                    linhas.push('*' + dataLabel + '*: ' + horas.join(', '));
+                    linhas.push('📅 ' + dataLabel + ': ' + horas.join(', '));
                 } else {
-                    linhas.push('*' + dataLabel + '*: Sem horários disponíveis');
+                    linhas.push('📅 ' + dataLabel + ': Sem horários disponíveis.');
                 }
             });
         }
 
         linhas.push('');
-        linhas.push('Qual desses fica melhor para você? *Me informe também o tema/assunto que gostaria de tratar, que eu agendo aqui! 🚀*');
+        linhas.push('💡 Importante: Como os horários podem ser preenchidos por outros clientes, se possível, me confirme o quanto antes para garantir sua preferência.');
         return linhas.join('\n');
     }
 
-    function copiarTabelaDisponibilidadeCliente() {
-        if (!disponibilidadeFoiCarregada) {
-            alert('Atualize a disponibilidade antes de copiar a tabela.');
-            return;
+    async function copiarTabelaDisponibilidadeCliente() {
+        const botao = document.getElementById('btn_copiar_disponibilidade');
+        if (botao) {
+            botao.disabled = true;
+            botao.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Atualizando...';
         }
 
-        const mensagem = montarMensagemDisponibilidadeCliente(diasDisponibilidadeAtual);
-        copiarTextoAreaTransferencia(mensagem, 'Tabela de horarios copiada para enviar ao cliente.');
+        try {
+            // Atualizar no momento da cópia para não enviar horários que já passaram.
+            const resposta = await fetch('google_calendar_disponibilidade.php?dias=4&duracao_min=60', {
+                cache: 'no-store'
+            });
+            const data = await resposta.json();
+            if (!data || !data.success) {
+                throw new Error(data && data.message ? data.message : 'Falha ao atualizar disponibilidade.');
+            }
+
+            diasDisponibilidadeAtual = data.dias_disponiveis || [];
+            disponibilidadeFoiCarregada = true;
+            mensagemErroGlobal = null;
+            const container = document.getElementById('disponibilidade_resultado');
+            if (container) renderDisponibilidade(container, diasDisponibilidadeAtual);
+
+            const mensagem = montarMensagemDisponibilidadeCliente(diasDisponibilidadeAtual);
+            copiarTextoAreaTransferencia(mensagem, 'Tabela de horarios copiada para enviar ao cliente.');
+        } catch (erro) {
+            mensagemErroGlobal = erro.message || 'Erro ao atualizar disponibilidade.';
+            disponibilidadeFoiCarregada = false;
+            atualizarBotaoCopiarDisponibilidade();
+            alert('Não foi possível atualizar os horários: ' + mensagemErroGlobal);
+        } finally {
+            if (!mensagemErroGlobal) atualizarBotaoCopiarDisponibilidade();
+        }
     }
 
     function renderDisponibilidade(container, diasDisponiveis) {
@@ -2808,7 +3499,7 @@ include 'header.php';
 
         container.innerHTML = '<div class="text-muted"><div class="spinner-border spinner-border-sm me-2"></span>Consultando Google Agenda...</div>';
 
-        fetch('google_calendar_disponibilidade.php?dias=2&duracao_min=60', {
+        fetch('google_calendar_disponibilidade.php?dias=4&duracao_min=60', {
             cache: 'no-store'
         })
             .then(r => r.json())
@@ -2966,10 +3657,11 @@ include 'header.php';
             document.getElementById('id_treinamento').value = this.dataset.id;
             document.getElementById('id_cliente').value = this.dataset.cliente;
             document.getElementById('tema').value = this.dataset.tema;
-            document.getElementById('status').value = this.dataset.status;
+            document.getElementById('status').value = 'PENDENTE';
             document.getElementById('data_treinamento').value = this.dataset.data;
 
             filterContatos(this.dataset.cliente, this.dataset.contato);
+            atualizarRecursosCliente(this.dataset.cliente);
             carregarDisponibilidadeGoogle();
             new bootstrap.Modal(document.getElementById('modalTreinamento')).show();
         });
@@ -2983,15 +3675,60 @@ include 'header.php';
             const id = this.dataset.id;
             const cliente = this.dataset.cliente;
             const tema = this.dataset.tema;
+            const idCliente = this.dataset.idCliente || this.dataset.clienteId || null;
 
             document.getElementById('modal_id_treinamento').value = id;
             document.getElementById('modal_cliente_info').innerText = cliente + " | " + tema;
+            document.getElementById('btn-abrir-avaliacao-efetiva').dataset.idCliente = idCliente || '';
             document.querySelectorAll('.pendencia-opcao').forEach(radio => {
                 radio.checked = false;
             });
+            document.querySelectorAll('.material-opcao').forEach(radio => {
+                radio.checked = false;
+            });
+            const temaMaterial = document.getElementById('tema_material');
+            temaMaterial.value = '';
+            temaMaterial.required = false;
+            temaMaterial.disabled = true;
+            document.getElementById('tema-material-wrap').classList.add('d-none');
 
             new bootstrap.Modal(document.getElementById('modalEncerrar')).show();
         });
+    });
+
+    document.querySelectorAll('.material-opcao').forEach(radio => {
+        radio.addEventListener('change', function () {
+            const solicitado = document.getElementById('solicitou_material_sim').checked;
+            const campo = document.getElementById('tema_material');
+            document.getElementById('tema-material-wrap').classList.toggle('d-none', !solicitado);
+            campo.required = solicitado;
+            campo.disabled = !solicitado;
+            if (!solicitado) campo.value = '';
+        });
+    });
+
+    function abrirAvaliacaoEfetiva(idCliente) {
+        if (!idCliente) return;
+        const url = `treinamento_efetivo.php?id_cliente=${encodeURIComponent(idCliente)}`;
+        window.location.href = url;
+    }
+
+    document.getElementById('btn-abrir-avaliacao-efetiva').addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const idCliente = this.dataset.idCliente;
+        if (!idCliente) return;
+        bootstrap.Modal.getInstance(document.getElementById('modalEncerrar'))?.hide();
+        abrirAvaliacaoEfetiva(idCliente);
+    });
+
+    document.getElementById('btn-abrir-avaliacao-efetiva-crm').addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const idCliente = currentClientIdForObs;
+        if (!idCliente) return;
+        bootstrap.Modal.getInstance(document.getElementById('modalHistoricoCliente'))?.hide();
+        abrirAvaliacaoEfetiva(idCliente);
     });
 
     // 6. Link Manual Google (Ex-Relatorio)
@@ -3120,6 +3857,7 @@ include 'header.php';
         document.getElementById('modalTitle').innerHTML = '<i class="bi bi-calendar-plus me-2"></i>Agendar Treinamento';
         document.getElementById('id_treinamento').value = '';
         this.querySelector('form').reset();
+        document.getElementById('recursos_cliente').textContent = 'Selecione um cliente para consultar.';
 
         // Resetar fleg de encerrados
         const flegEncerrados = document.getElementById('mostrar_encerrados_modal');
@@ -3158,20 +3896,102 @@ include 'header.php';
         btn.addEventListener('click', function () {
             currentClientIdForObs = this.dataset.id;
             currentClientNameForObs = this.dataset.nome;
+            document.getElementById('btn-abrir-avaliacao-efetiva-crm').dataset.idCliente = currentClientIdForObs;
             abrirModalHistorico(currentClientIdForObs, currentClientNameForObs);
+        });
+    });
+
+    document.querySelectorAll('.btn-open-effective').forEach(btn => {
+        btn.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const idCliente = this.dataset.idCliente;
+            if (!idCliente) return;
+            abrirAvaliacaoEfetiva(idCliente);
         });
     });
 
     function abrirModalHistorico(id, nome) {
         document.getElementById('hist_cliente_nome').innerText = nome;
         const container = document.getElementById('hist_obs_container');
+        const dashboard = document.getElementById('hist_dashboard_container');
         container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Carregando históricos...</p></div>';
+        dashboard.innerHTML = '';
 
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalHistoricoCliente')).show();
 
         fetch(`treinamentos.php?get_observations=1&id_cliente=${id}`)
             .then(r => r.json())
             .then(data => {
+                const treinamentosEncerrados = data.filter(obs => String(obs.titulo || '').startsWith('Treinamento Encerrado: '));
+                const contagemPorTema = {};
+                const contagemPorTipoEncerramento = {
+                    'Com Pendência': 0,
+                    'Sem Pendência': 0
+                };
+
+                treinamentosEncerrados.forEach(obs => {
+                    const tema = String(obs.titulo || '').replace(/^Treinamento Encerrado:\s*/i, '').trim();
+                    if (tema) {
+                        contagemPorTema[tema] = (contagemPorTema[tema] || 0) + 1;
+                    }
+
+                    const tipoEncerramento = obs.tipo_encerramento || 'Sem Pendência';
+                    if (contagemPorTipoEncerramento.hasOwnProperty(tipoEncerramento)) {
+                        contagemPorTipoEncerramento[tipoEncerramento] += 1;
+                    }
+                });
+
+                const totalEncerrados = treinamentosEncerrados.length;
+                const cardsBase = [
+                    { label: 'Total encerrados', valor: totalEncerrados, icon: 'bi-journal-check', color: '#4f46e5', gradient: 'linear-gradient(135deg, rgba(79,70,229,0.18), rgba(79,70,229,0.05))' },
+                    { label: 'Com pendência', valor: contagemPorTipoEncerramento['Com Pendência'], icon: 'bi-exclamation-triangle', color: '#f59e0b', gradient: 'linear-gradient(135deg, rgba(245,158,11,0.18), rgba(245,158,11,0.05))' },
+                    { label: 'Sem pendência', valor: contagemPorTipoEncerramento['Sem Pendência'], icon: 'bi-check-circle', color: '#10b981', gradient: 'linear-gradient(135deg, rgba(16,185,129,0.18), rgba(16,185,129,0.05))' },
+                    { label: 'Temas principais', valor: Object.keys(contagemPorTema).length, icon: 'bi-bar-chart', color: '#ef4444', gradient: 'linear-gradient(135deg, rgba(239,68,68,0.18), rgba(239,68,68,0.05))' }
+                ];
+
+                const cardsHtml = cardsBase.map((card) => `
+                    <div class="col-md-3 col-6">
+                        <div class="p-3 rounded-4 border h-100 shadow-sm" style="background: ${card.gradient}; border-color: var(--border-color); box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; background: ${card.color}22; color: ${card.color};">
+                                    <i class="${card.icon}" style="font-size: 1rem;"></i>
+                                </div>
+                                <span class="fw-800" style="font-size: 1.5rem; color: var(--text-main);">${card.valor}</span>
+                            </div>
+                            <div class="small fw-700" style="color: var(--text-main); letter-spacing: 0.02em;">${card.label}</div>
+                        </div>
+                    </div>
+                `).join('');
+
+                const temasHtml = Object.keys(contagemPorTema).length > 0
+                    ? Object.entries(contagemPorTema).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([tema, qtd], idx) => {
+                        const cores = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444'];
+                        const percentual = totalEncerrados > 0 ? Math.round((qtd / totalEncerrados) * 100) : 0;
+                        return `
+                            <div class="d-flex justify-content-between align-items-center py-2 border-bottom" style="border-color: var(--border-color);">
+                                <div>
+                                    <div class="fw-700 small" style="color: var(--text-main);">${tema}</div>
+                                    <div class="text-muted" style="font-size:0.68rem;">${percentual}% do total</div>
+                                </div>
+                                <span class="badge rounded-pill" style="background:${cores[idx % cores.length]}20; color:${cores[idx % cores.length]}; font-weight:700;">${qtd}</span>
+                            </div>
+                        `;
+                    }).join('')
+                    : '<div class="text-muted small py-2">Nenhum tema encerrado registrado.</div>';
+
+                dashboard.innerHTML = `
+                    <div class="col-12">
+                        <div class="row g-3 mb-2">${cardsHtml}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="p-3 rounded-4 border shadow-sm" style="background: rgba(15,23,42,0.02); border-color: var(--border-color);">
+                            <div class="fw-800 mb-3" style="font-size:0.75rem; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.08em;">Temas mais recorrentes</div>
+                            ${temasHtml}
+                        </div>
+                    </div>
+                `;
+
                 if (data.length === 0) {
                     container.innerHTML = '<div class="text-center py-5 opacity-50"><i class="bi bi-journal-x display-4 text-muted"></i><p class="mt-2">Nenhum registro encontrado para este cliente.</p></div>';
                 } else {
@@ -3196,6 +4016,7 @@ include 'header.php';
                 }
             })
             .catch(err => {
+                dashboard.innerHTML = '';
                 container.innerHTML = '<div class="alert alert-danger">Erro ao carregar dados.</div>';
             });
     }
@@ -3205,6 +4026,174 @@ include 'header.php';
         document.getElementById('nova_obs_id_cliente').value = currentClientIdForObs;
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalNovaObsCliente')).show();
     }
+</script>
+
+<script>
+    (function () {
+        const urlAgendaApi = 'api_gestaopro_bridge.php?endpoint=mesa&usuario=53&secoes=agenda%2Cchamados%2Cclientes';
+        const cardAgendaApi = document.getElementById('agenda-api-card');
+        const corpoAgendaApi = document.getElementById('agenda-api-linhas');
+        const atualizacaoAgendaApi = document.getElementById('agenda-api-atualizacao');
+        const avisoAgendaApi = document.getElementById('agenda-api-aviso');
+        const botaoAgendaApi = document.getElementById('btn-atualizar-agenda-api');
+        const iconeAgendaApi = document.getElementById('agenda-api-icone');
+        const agendamentosApiImportados = <?= json_encode($agendamentosApiImportados, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        const contatosClientesApi = <?= json_encode($contatosClientesApi, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        const clientesApiVinculados = <?= json_encode($clientesApiVinculados, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        const clientesApiIdsDuplicados = <?= json_encode($clientesApiIdsDuplicados, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        const nomesClientesLocaisNormalizados = <?= json_encode($clientesApiNomesLocais, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>.map(normalizarNomeClienteApi);
+        const contagemNomesClientesLocais = nomesClientesLocaisNormalizados.reduce((contagem, nome) => {
+            contagem[nome] = (contagem[nome] || 0) + 1;
+            return contagem;
+        }, {});
+        const nomesClientesLocais = new Set(nomesClientesLocaisNormalizados.filter(nome => nome && contagemNomesClientesLocais[nome] === 1));
+        const integracaoAgendaApiDisponivel = <?= $integracaoAgendaApiDisponivel ? 'true' : 'false' ?>;
+
+        function normalizarNomeClienteApi(valor) {
+            return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('pt-BR');
+        }
+
+        function escaparHtmlAgenda(valor) {
+            return String(valor == null ? '' : valor)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function hojeSaoPaulo() {
+            const partes = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit'
+            }).formatToParts(new Date());
+            const valores = Object.fromEntries(partes.map(parte => [parte.type, parte.value]));
+            return `${valores.year}-${valores.month}-${valores.day}`;
+        }
+
+        function renderizarAgendaApi(resposta) {
+            const dados = resposta && resposta.dados ? resposta.dados : {};
+            const hoje = hojeSaoPaulo();
+            const eventos = (Array.isArray(dados.agenda) ? dados.agenda : [])
+                .filter(evento => /treinamento/i.test(String(evento.TIPOACOMP || '')))
+                .filter(evento => String(evento.PENDENTE == null ? '' : evento.PENDENTE).trim().toUpperCase() !== 'F')
+                .filter(evento => /^\d{4}-\d{2}-\d{2}$/.test(String(evento.DATA || '')) && evento.DATA >= hoje)
+                .filter(evento => !agendamentosApiImportados[String(evento.ID || '')])
+                .sort((a, b) => String(a.DATA).localeCompare(String(b.DATA)) || String(a.HORA || '').localeCompare(String(b.HORA || '')));
+
+            if (cardAgendaApi) {
+                cardAgendaApi.classList.toggle('d-none', eventos.length === 0);
+            }
+
+            if (resposta.contingencia) {
+                avisoAgendaApi.className = 'px-3 px-md-4 pt-3';
+                avisoAgendaApi.innerHTML = '<div class="alert alert-warning small mb-0">A API não respondeu agora. Exibindo a última agenda disponível em cache.</div>';
+            } else {
+                avisoAgendaApi.className = 'd-none';
+                avisoAgendaApi.textContent = '';
+            }
+
+            if (!integracaoAgendaApiDisponivel) {
+                avisoAgendaApi.className = 'px-3 px-md-4 pt-3';
+                avisoAgendaApi.innerHTML = '<div class="alert alert-danger small mb-0">Não foi possível preparar as colunas locais para registrar as importações. A agenda pode ser consultada, mas não importada.</div>';
+            }
+
+            if (eventos.length === 0) {
+                corpoAgendaApi.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Nenhum treinamento futuro encontrado na agenda.</td></tr>';
+            } else {
+                corpoAgendaApi.innerHTML = eventos.map(evento => {
+                    const [ano, mes, dia] = String(evento.DATA).split('-');
+                    const dataFormatada = `${dia}/${mes}/${ano}`;
+                    const idEvento = String(evento.ID || '');
+                    const importado = agendamentosApiImportados[idEvento];
+                    const idClienteApi = String(evento.ID_CLIENTE || '');
+                    const vinculoApiDuplicado = Boolean(clientesApiIdsDuplicados[idClienteApi]);
+                    const clienteVinculado = !vinculoApiDuplicado && (Boolean(clientesApiVinculados[idClienteApi]) || nomesClientesLocais.has(normalizarNomeClienteApi(evento.CLIENTE)));
+                    let acaoIntegracao = '';
+                    if (!integracaoAgendaApiDisponivel) {
+                        acaoIntegracao = '<span class="badge bg-secondary">Indisponível</span>';
+                    } else if (importado) {
+                        const idLocal = escaparHtmlAgenda(importado.id_treinamento);
+                        const googleIntegrado = Boolean(importado.google_event_id);
+                        acaoIntegracao = `<div class="d-flex flex-column align-items-end gap-1">
+                            <span class="badge bg-success">Local #${idLocal}</span>
+                            ${googleIntegrado
+                                ? '<span class="small text-success">Google sincronizado</span>'
+                                : `<form method="post" class="m-0"><input type="hidden" name="id_treinamento_api" value="${idLocal}"><button type="submit" name="integrar_google_agendamento_api" value="1" class="btn btn-sm btn-outline-primary" title="Tentar novamente a integração com o Google Agenda"><i class="bi bi-arrow-repeat me-1"></i>Integrar Google</button></form>`}
+                        </div>`;
+                    } else if (!clienteVinculado) {
+                        acaoIntegracao = '<span class="badge bg-warning text-dark" title="Vincule o cadastro local ao ID do cliente na API antes de importar">Cliente sem vínculo</span>';
+                    } else {
+                        acaoIntegracao = `<button type="button" class="btn btn-sm btn-outline-success btn-abrir-vinculo-contato" data-evento="${escaparHtmlAgenda(idEvento)}" data-id-api="${escaparHtmlAgenda(idClienteApi)}" data-cliente="${escaparHtmlAgenda(evento.CLIENTE || 'Cliente')}" data-data="${escaparHtmlAgenda(dataFormatada)}" data-hora="${escaparHtmlAgenda(evento.HORA || '')}" data-tema="${escaparHtmlAgenda(evento.DESCRICAO || '')}"><i class="bi bi-cloud-arrow-down me-1"></i>Salvar + Google</button>`;
+                    }
+                    return `<tr>
+                        <td class="ps-3 ps-md-4 fw-semibold">${dataFormatada}</td>
+                        <td class="text-nowrap">${escaparHtmlAgenda(evento.HORA || '—')}</td>
+                        <td class="fw-semibold">${escaparHtmlAgenda(evento.CLIENTE || 'Cliente não informado')}</td>
+                        <td>${escaparHtmlAgenda(evento.DESCRICAO || 'Sem descrição')}</td>
+                        <td>${escaparHtmlAgenda(evento.RESPONSAVEL || 'Usuário 53')}</td>
+                        <td class="text-end pe-3 pe-md-4 text-muted">#${escaparHtmlAgenda(evento.ID || '—')}</td>
+                        <td class="text-end pe-3 pe-md-4">${acaoIntegracao}</td>
+                    </tr>`;
+                }).join('');
+                corpoAgendaApi.querySelectorAll('.btn-abrir-vinculo-contato').forEach(botao => {
+                    botao.addEventListener('click', () => {
+                        const idApi = botao.dataset.idApi || '';
+                        const nomeCliente = botao.dataset.cliente || '';
+                        const contatosPorId = contatosClientesApi.filter(contato => contato.id_api === idApi);
+                        const contatos = contatosPorId.length ? contatosPorId : contatosClientesApi.filter(contato => normalizarNomeClienteApi(contato.cliente) === normalizarNomeClienteApi(nomeCliente));
+                        const selectContato = document.getElementById('id_contato_api');
+                        const avisoSemContato = document.getElementById('agenda_contato_sem_opcoes');
+                        const confirmar = document.getElementById('btnConfirmarImportacaoAgenda');
+                        document.getElementById('agenda_contato_evento_id').value = botao.dataset.evento || '';
+                        document.getElementById('agenda_contato_cliente').textContent = nomeCliente;
+                        document.getElementById('agenda_contato_resumo').textContent = `${botao.dataset.data || ''} ${botao.dataset.hora || ''} · ${botao.dataset.tema || ''}`;
+                        selectContato.innerHTML = '<option value="">Selecione o contato...</option>';
+                        contatos.forEach(contato => {
+                            const opcao = document.createElement('option');
+                            opcao.value = String(contato.id_contato);
+                            opcao.textContent = contato.nome;
+                            selectContato.appendChild(opcao);
+                        });
+                        avisoSemContato.classList.toggle('d-none', contatos.length > 0);
+                        confirmar.disabled = contatos.length === 0;
+                        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalVincularContatoAgenda')).show();
+                    });
+                });
+            }
+
+            const origem = resposta.contingencia ? 'Cache de contingência' : (resposta.origem === 'cache' ? 'Cache' : 'API');
+            atualizacaoAgendaApi.textContent = `${origem}${resposta.gerado_em ? ' · ' + resposta.gerado_em : ''} · ${eventos.length} futuro(s)`;
+        }
+
+        async function carregarAgendaApi(forcar) {
+            if (!corpoAgendaApi || !botaoAgendaApi) return;
+            botaoAgendaApi.disabled = true;
+            iconeAgendaApi.classList.add('spin');
+            atualizacaoAgendaApi.textContent = forcar ? 'Atualizando pela API...' : 'Consultando agenda...';
+            try {
+                const url = urlAgendaApi + (forcar ? '&forcar=1' : '');
+                const response = await fetch(url, { cache: 'no-store' });
+                const resposta = await response.json();
+                if (!response.ok || !resposta.sucesso) {
+                    throw new Error(resposta.erro || 'Não foi possível consultar a agenda da API.');
+                }
+                renderizarAgendaApi(resposta);
+            } catch (erro) {
+                avisoAgendaApi.className = 'px-3 px-md-4 pt-3';
+                avisoAgendaApi.innerHTML = `<div class="alert alert-danger small mb-0">${escaparHtmlAgenda(erro.message || 'Erro ao consultar a agenda.')}</div>`;
+                corpoAgendaApi.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Não foi possível carregar os treinamentos da API.</td></tr>';
+                atualizacaoAgendaApi.textContent = 'Falha ao atualizar';
+            } finally {
+                botaoAgendaApi.disabled = false;
+                iconeAgendaApi.classList.remove('spin');
+            }
+        }
+
+        if (botaoAgendaApi) {
+            botaoAgendaApi.addEventListener('click', function () { carregarAgendaApi(true); });
+            carregarAgendaApi(false);
+        }
+    })();
 </script>
 
 <?php include 'footer.php'; ?>

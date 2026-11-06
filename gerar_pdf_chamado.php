@@ -72,6 +72,16 @@ try {
                     $chamado['status_chamado'] = (string) $apiStatus;
                 }
 
+                $apiIdCliente = $apiDados['ID_CLIENTE'] ?? $apiDados['id_cliente'] ?? $apiDados['IDCLIENTE'] ?? null;
+                if ($apiIdCliente !== null && trim((string) $apiIdCliente) !== '') {
+                  $chamado['id_cliente_api'] = $apiIdCliente;
+                }
+
+                $apiServidor = $apiDados['SERVIDOR'] ?? $apiDados['SERVIDORNUVEM'] ?? $apiDados['servidor'] ?? $apiDados['servidor_nuvem'] ?? null;
+                if ($apiServidor !== null && trim((string) $apiServidor) !== '') {
+                  $chamado['servidor'] = (string) $apiServidor;
+                }
+
                 if (isset($apiDados['status']) && is_string($apiDados['status']) && trim($apiDados['status']) !== '' && !isset($apiDados['CHAMADO_STATUS'])) {
                     $chamado['status_chamado'] = trim($apiDados['status']);
                 }
@@ -88,7 +98,12 @@ try {
 
                 $apiDescricao = $apiDados['DESCRICAO'] ?? $apiDados['descricao'] ?? null;
                 if ($apiDescricao !== null && trim((string) $apiDescricao) !== '') {
-                    $chamado['descricao_problema'] = (string) $apiDescricao;
+                  $apiDescricao = (string) $apiDescricao;
+                  $descricaoLocal = (string) ($chamado['descricao_problema'] ?? '');
+
+                  if (mb_strlen($apiDescricao, 'UTF-8') >= mb_strlen($descricaoLocal, 'UTF-8')) {
+                    $chamado['descricao_problema'] = $apiDescricao;
+                  }
                 }
 
                 $apiDataPrev = $apiDados['DATAPREV_RETORNO'] ?? $apiDados['DATAPREV'] ?? $apiDados['data_prev_retorno'] ?? null;
@@ -96,8 +111,9 @@ try {
                     $chamado['data_prev_retorno'] = (string) $apiDataPrev;
                 }
 
-                $stmtSync = $pdo->prepare('UPDATE chamados_espelho_local SET status_chamado = ?, tipo_acompanhamento = ?, responsavel = ?, descricao_problema = ?, data_prev_retorno = ? WHERE id_chamado_api = ?');
+                $stmtSync = $pdo->prepare('UPDATE chamados_espelho_local SET id_cliente_api = ?, status_chamado = ?, tipo_acompanhamento = ?, responsavel = ?, descricao_problema = ?, data_prev_retorno = ? WHERE id_chamado_api = ?');
                 $stmtSync->execute([
+                  $chamado['id_cliente_api'] ?? null,
                     $chamado['status_chamado'] ?? null,
                     $chamado['tipo_acompanhamento'] ?? null,
                     $chamado['responsavel'] ?? null,
@@ -109,6 +125,74 @@ try {
         }
     } catch (Throwable $e) {
         // Ignora erro e continua com o valor local se a API falhar
+    }
+
+    if (empty($chamado['servidor']) || empty($chamado['id_cliente_api'])) {
+      $cacheFile = __DIR__ . '/logs/gp_cache_chamados.json';
+      if (is_file($cacheFile)) {
+        $cacheDados = json_decode((string) file_get_contents($cacheFile), true);
+        $registrosCache = is_array($cacheDados['chamados'] ?? null) ? $cacheDados['chamados'] : [];
+        foreach ($registrosCache as $registroCache) {
+          if ((string) ($registroCache['ID'] ?? '') !== (string) $idChamado) {
+            continue;
+          }
+
+          if (empty($chamado['id_cliente_api'])) {
+            $chamado['id_cliente_api'] = $registroCache['ID_CLIENTE'] ?? null;
+          }
+          if (empty($chamado['servidor'])) {
+            $chamado['servidor'] = $registroCache['SERVIDOR'] ?? $registroCache['SERVIDORNUVEM'] ?? null;
+          }
+          break;
+        }
+      }
+    }
+
+    if (empty($chamado['servidor']) && !empty($chamado['id_cliente_api'])) {
+      try {
+        $stmtServidor = $pdo->prepare('SELECT servidor FROM clientes WHERE id_cliente_api = ? LIMIT 1');
+        $stmtServidor->execute([$chamado['id_cliente_api']]);
+        $servidorLocal = $stmtServidor->fetchColumn();
+        if ($servidorLocal !== false && trim((string) $servidorLocal) !== '') {
+          $chamado['servidor'] = (string) $servidorLocal;
+        }
+      } catch (Throwable $e) {
+        // Mantém o selo oculto quando não houver servidor disponível.
+      }
+    }
+
+    $descricaoAtual = trim((string) ($chamado['descricao_problema'] ?? ''));
+    try {
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+        $host = $_SERVER['HTTP_HOST'];
+        $baseDir = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
+        $apiDetalheUrl = $protocol . $host . $baseDir . '/api_gestaopro_bridge.php?endpoint=chamados&detalhe=' . urlencode((string) $idChamado);
+        $context = stream_context_create([
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+            ],
+        ]);
+        $apiDetalheResponse = @file_get_contents($apiDetalheUrl, false, $context);
+        if ($apiDetalheResponse !== false) {
+            $apiDetalheData = json_decode($apiDetalheResponse, true);
+            $descricaoDetalhe = '';
+            if (!empty($apiDetalheData['sucesso']) && !empty($apiDetalheData['dados'])) {
+                $dadosChamado = $apiDetalheData['dados']['chamado'] ?? $apiDetalheData['dados'];
+                if (is_array($dadosChamado)) {
+                    $descricaoDetalhe = trim((string) ($dadosChamado['DESCRICAO'] ?? $dadosChamado['descricao'] ?? ''));
+                }
+            }
+
+            if ($descricaoDetalhe !== '' && $descricaoDetalhe !== $descricaoAtual) {
+                $chamado['descricao_problema'] = $descricaoDetalhe;
+
+                $stmtDescricao = $pdo->prepare('UPDATE chamados_espelho_local SET descricao_problema = ? WHERE id_chamado_api = ?');
+                $stmtDescricao->execute([$descricaoDetalhe, $idChamado]);
+            }
+        }
+    } catch (Throwable $e) {
+        // Mantém o valor local se a API de detalhes falhar.
     }
 
     $html = gerarHtmlComprovanteChamado($chamado);
@@ -134,6 +218,8 @@ try {
     $service = null;
     $fileLink = null;
     $folderLink = null;
+    $tipoArquivo = sanitizeFilePart($chamado['tipo_acompanhamento'] ?? 'sem_tipo');
+    $fileName = sprintf('chamado_suporte_%s_%d.html', $tipoArquivo, $idChamado);
 
     try {
         logDebug('Iniciando upload Google Drive');
@@ -142,7 +228,6 @@ try {
         $service = driveGetService();
         $clientFolderId = driveFindOrCreateFolder($service, $folderName, GOOGLE_DRIVE_PDF_ROOT_FOLDER_ID);
 
-        $fileName = sprintf('chamado_suporte_%d.html', $idChamado);
         $fileId = null;
 
         if (!empty($chamado['drive_file_id'])) {
@@ -198,7 +283,7 @@ try {
         if (!is_dir($pdfDir)) {
             @mkdir($pdfDir, 0777, true);
         }
-        $htmlFile = $pdfDir . '/chamado_' . $idChamado . '_' . time() . '.html';
+        $htmlFile = $pdfDir . '/' . $fileName;
         if (file_put_contents($htmlFile, $htmlContent)) {
             $fileLink = 'pdfs/' . basename($htmlFile);
             logDebug('Link local gerado: ' . $fileLink);
@@ -223,8 +308,8 @@ try {
         }
 
         if (!empty($fileLink)) {
-            $stmtUpdate = $pdo->prepare('UPDATE chamados_espelho_local SET drive_pdf_link = ?, drive_pdf_gerado_em = NOW() WHERE id_chamado_api = ?');
-            $stmtUpdate->execute([$fileLink, $idChamado]);
+          $stmtUpdate = $pdo->prepare('UPDATE chamados_espelho_local SET drive_pdf_link = ?, drive_file_name = ?, drive_pdf_gerado_em = NOW() WHERE id_chamado_api = ?');
+          $stmtUpdate->execute([$fileLink, $fileName, $idChamado]);
             logDebug('Banco de dados atualizado');
         }
     } catch (Throwable $e) {
@@ -237,7 +322,7 @@ try {
         'sucesso' => true,
         'link' => $fileLink ?: '',
         'html' => $html,
-        'filename' => 'chamado_suporte_' . $idChamado . '.html',
+        'filename' => $fileName,
         'folder_link' => $folderLink ?: ''
     ]);
     exit;
@@ -263,18 +348,186 @@ function sanitizeFolderName(string $text): string
     return mb_strtolower($text, 'UTF-8');
 }
 
+function sanitizeFilePart(string $text): string
+{
+    $text = trim((string) $text);
+    if ($text === '') {
+        return 'sem_tipo';
+    }
+
+    $text = preg_replace('/[\x00-\x1f\x7f]+/u', '', $text);
+    $text = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text) ?: $text;
+    $text = preg_replace('/[^A-Za-z0-9]+/u', '', $text);
+    $text = trim($text);
+
+    return $text !== '' ? $text : 'sem_tipo';
+}
+
 function gerarHtmlComprovanteChamado(array $chamado)
+{
+    $idChamado = (int) ($chamado['id_chamado_api'] ?? 0);
+    $cliente = trim((string) ($chamado['nome_fantasia'] ?? '')) ?: 'Cliente';
+    $status = trim((string) ($chamado['status_chamado'] ?? '')) ?: 'Aguardando Suporte';
+    $servidor = trim((string) ($chamado['servidor'] ?? ''));
+    $tipo = trim((string) ($chamado['tipo_acompanhamento'] ?? '')) ?: 'Não informado';
+    $responsavel = trim((string) ($chamado['responsavel'] ?? '')) ?: 'Não informado';
+    $descricao = trim((string) ($chamado['descricao_problema'] ?? '')) ?: 'Sem descrição';
+    $dataPrev = '—';
+    if (!empty($chamado['data_prev_retorno']) && $chamado['data_prev_retorno'] !== '0000-00-00 00:00:00') {
+        try { $dataPrev = (new DateTime($chamado['data_prev_retorno']))->format('d/m/Y'); } catch (Throwable $e) {}
+    }
+    $dataImportacao = date('d/m/Y H:i');
+    if (!empty($chamado['data_importacao']) && $chamado['data_importacao'] !== '0000-00-00 00:00:00') {
+        try { $dataImportacao = (new DateTime($chamado['data_importacao']))->format('d/m/Y H:i'); } catch (Throwable $e) {}
+    }
+
+    $esc = static fn($valor) => htmlspecialchars((string) $valor, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $clienteEscHtml = $esc($cliente);
+    $tipoEscHtml = $esc($tipo);
+    $statusEscHtml = $esc($status);
+    $dataPrevEscHtml = $esc($dataPrev);
+    $dataImportacaoEscHtml = $esc($dataImportacao);
+    $responsavelEscHtml = $esc($responsavel);
+    $logoPath = __DIR__ . '/css/pics/logo.webp';
+    $logoBase64 = is_file($logoPath) ? 'data:image/webp;base64,' . base64_encode((string) file_get_contents($logoPath)) : '';
+    $logoHtml = $logoBase64 !== ''
+        ? '<div class="brand"><img src="' . $logoBase64 . '" alt="GestãoPro"></div>'
+        : '<div class="brand brand-text">GestãoPro</div>';
+    $serverHtml = $servidor !== '' ? '<span class="server-badge">' . $esc($servidor) . '</span>' : '';
+
+    $titulosConhecidos = [
+        'tela/rotina', 'necessidade do cliente', 'funcionamento atual', 'funcionamento desejado',
+        'objetivo da solicitação', 'informações necessárias', 'resultado esperado', 'exemplo',
+        'impressão/relatório', 'como localizar a impressão', 'o que precisa ser alterado',
+        'como deve ficar', 'exemplo/modelo desejado', 'módulo/rotina', 'solicitação',
+        'detalhes da solicitação', 'observações'
+    ];
+    $secoesDescricao = [];
+    $tituloAtual = null;
+    $linhasAtual = [];
+    foreach (preg_split('/\r\n|\r|\n/', $descricao) as $linha) {
+        $textoLinha = trim($linha);
+        $chaveTitulo = mb_strtolower(preg_replace('/[:：\s]+$/u', '', $textoLinha), 'UTF-8');
+        if ($textoLinha !== '' && in_array($chaveTitulo, $titulosConhecidos, true)) {
+            if ($tituloAtual !== null || $linhasAtual) {
+                $secoesDescricao[] = [$tituloAtual ?: 'Detalhes da solicitação', $linhasAtual];
+            }
+            $tituloAtual = preg_replace('/[:：\s]+$/u', '', $textoLinha);
+            $linhasAtual = [];
+            continue;
+        }
+        $linhasAtual[] = $linha;
+    }
+    if ($tituloAtual !== null || $linhasAtual) {
+        $secoesDescricao[] = [$tituloAtual ?: 'Detalhes da solicitação', $linhasAtual];
+    }
+    if (!$secoesDescricao) $secoesDescricao[] = ['Detalhes da solicitação', [$descricao]];
+
+    $formatarLinhas = static function (array $linhas) use ($esc): string {
+        $html = '';
+        $textoParagrafo = [];
+        $lista = null;
+        $fecharLista = static function () use (&$html, &$lista): void {
+            if ($lista !== null) { $html .= '</' . $lista . '>'; $lista = null; }
+        };
+        $flushParagrafo = static function () use (&$html, &$textoParagrafo, $esc): void {
+            if ($textoParagrafo) {
+                $valor = implode("\n", $textoParagrafo);
+                $valor = preg_replace_callback('/(https?:\/\/[^\s<]+)/u', static function ($m) use ($esc) {
+                    $url = rtrim($m[1], '.,;:)');
+                    $sufixo = substr($m[1], strlen($url));
+                    $seguro = $esc($url);
+                    return '<a href="' . $seguro . '" target="_blank" rel="noopener noreferrer">' . $seguro . '</a>' . $esc($sufixo);
+                }, $esc($valor));
+                $html .= '<p>' . nl2br($valor, false) . '</p>';
+                $textoParagrafo = [];
+            }
+        };
+        foreach ($linhas as $linha) {
+            $linha = trim((string) $linha);
+            if ($linha === '') { $flushParagrafo(); $fecharLista(); continue; }
+            if (preg_match('/^\d+[.)]\s*(.*)$/u', $linha, $m)) {
+                $flushParagrafo();
+                if ($lista !== 'ol') { $fecharLista(); $html .= '<ol>'; $lista = 'ol'; }
+                $html .= '<li>' . $esc($m[1]) . '</li>';
+            } elseif (preg_match('/^[•*-]\s*(.*)$/u', $linha, $m)) {
+                $flushParagrafo();
+                if ($lista !== 'ul') { $fecharLista(); $html .= '<ul>'; $lista = 'ul'; }
+                $html .= '<li>' . $esc($m[1]) . '</li>';
+            } else {
+                $fecharLista();
+                $textoParagrafo[] = $linha;
+            }
+        }
+        $flushParagrafo();
+        $fecharLista();
+        return $html !== '' ? $html : '<p>Sem descrição.</p>';
+    };
+
+    $descricaoHtml = '';
+    foreach ($secoesDescricao as [$titulo, $linhas]) {
+        $descricaoHtml .= '<article class="ticket"><h3>' . $esc($titulo) . '</h3>' . $formatarLinhas($linhas) . '</article>';
+    }
+
+    $prazo = '';
+    if ($dataPrev !== '—') {
+        try {
+            $inicio = new DateTime('today');
+            $fim = new DateTime($chamado['data_prev_retorno']);
+            $dias = (int) $inicio->diff($fim)->format('%r%a');
+            $prazo = $dias < 0 ? 'atrasado ' . abs($dias) . (abs($dias) === 1 ? ' dia' : ' dias') : ($dias === 0 ? 'hoje' : 'em ' . $dias . ($dias === 1 ? ' dia' : ' dias'));
+        } catch (Throwable $e) {}
+    }
+    $prazoHtml = $prazo !== '' ? '<span class="note">' . $esc($prazo) . '</span>' : '';
+
+    return <<<HTML
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chamado #{$idChamado} · GestãoPro</title>
+<style>
+:root{--bg:#070b1a;--ink:#eef1ff;--mute:#9aa3c7;--line:rgba(255,255,255,.1);--card:rgba(255,255,255,.045);--blue:#7c9cff;--mint:#2de2b0;--amber:#ffb347}*{box-sizing:border-box;margin:0;padding:0}html{scroll-behavior:smooth}body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:radial-gradient(ellipse at 20% 0,rgba(124,156,255,.14),transparent 55%),radial-gradient(ellipse at 90% 90%,rgba(45,226,176,.09),transparent 50%),var(--bg);color:var(--ink);line-height:1.6;overflow-x:hidden}main{max-width:860px;margin:0 auto;padding:72px 20px 80px}h1,h2,.num,.big{font-family:"Segoe UI",Inter,system-ui,sans-serif}.hero{min-height:70vh;display:flex;flex-direction:column;justify-content:center}.brand{background:#fff;border-radius:14px;padding:10px 16px;width:max-content;margin-bottom:40px}.brand img{display:block;height:36px;width:auto}.brand-text{font-weight:800;color:#070b1a}.eyebrow{font-size:.75rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mint);font-weight:600;margin-bottom:14px}h1{font-size:clamp(2.6rem,9vw,5.2rem);line-height:.98;font-weight:800;letter-spacing:-.03em;text-transform:uppercase;overflow-wrap:anywhere}h1 span{background:linear-gradient(90deg,var(--blue),var(--mint));-webkit-background-clip:text;background-clip:text;color:transparent}.client{margin-top:22px;font-size:1.15rem;font-weight:500}.gen{color:var(--mute);font-size:.85rem;margin-top:4px}.server-badge{display:inline-block;margin-top:12px;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--amber);background:rgba(255,179,71,.12);border:1px solid rgba(255,179,71,.35);border-radius:100px;padding:4px 11px}.summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:30px 0 72px}.stat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;backdrop-filter:blur(10px);text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center;min-width:0}.stat p{margin:0 0 8px;font-size:.78rem;text-transform:uppercase;letter-spacing:.07em;color:var(--mute);font-weight:600}.stat .val{font-size:1.35rem;line-height:1.25;font-weight:800;overflow-wrap:anywhere}.stat.status .val{color:var(--amber)}.eta{grid-column:1/-1;text-align:center;background:linear-gradient(135deg,rgba(255,179,71,.12),rgba(124,156,255,.06));border-color:rgba(255,179,71,.35)}.eta .val{font-size:clamp(1.9rem,7vw,3rem);font-weight:800;color:var(--amber)}.note{display:inline-block;margin-top:10px;font-size:.72rem;color:var(--amber);border:1px solid rgba(255,179,71,.4);border-radius:100px;padding:2px 9px}.section-heading{font-size:clamp(1.5rem,4vw,2rem);margin-bottom:10px;letter-spacing:-.02em}.path{color:var(--mute);font-size:.8rem;margin-bottom:18px}.path strong{color:var(--ink)}.rail{position:relative;padding-left:44px}.rail:before,.fill{content:"";position:absolute;left:11px;top:6px;bottom:6px;width:2px;background:var(--line);border-radius:2px}.fill{background:linear-gradient(var(--blue),var(--mint))}.ticket{position:relative;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px;margin-bottom:22px;backdrop-filter:blur(10px);break-inside:avoid}.ticket:before{content:"";position:absolute;left:-40px;top:30px;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--mint);box-shadow:0 0 0 5px rgba(45,226,176,.15)}.ticket h3{font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;color:var(--mint);margin-bottom:10px}.ticket p,.ticket li{font-size:.95rem;overflow-wrap:anywhere}.ticket p+p{margin-top:10px}.ticket ol,.ticket ul{list-style:none;counter-reset:step;display:grid;gap:12px}.ticket ol li{counter-increment:step;position:relative;padding-left:38px}.ticket ol li:before{content:counter(step);position:absolute;left:0;top:1px;width:26px;height:26px;border-radius:50%;background:rgba(124,156,255,.16);color:#b9c8ff;font:700 .75rem Inter,system-ui,sans-serif;display:flex;align-items:center;justify-content:center}.ticket ul li{position:relative;padding-left:24px}.ticket ul li:before{content:"•";position:absolute;left:5px;color:var(--mint)}.ticket a{color:var(--blue);overflow-wrap:anywhere}.foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;text-align:left;padding:22px 26px;margin-top:40px;color:var(--mute);font-size:.85rem;border:1px solid var(--line);background:var(--card);border-radius:22px}.foot a{color:var(--blue);font-weight:600;text-decoration:none}@media(max-width:640px){main{padding:40px 14px 48px}.hero{min-height:62vh}.summary{gap:10px;margin-bottom:52px}.summary .stat{padding:16px 10px}.summary .stat .val{font-size:1.05rem}.eta .val{font-size:2rem}.rail{padding-left:34px}.ticket{padding:18px}.ticket:before{left:-31px}.rail:before,.fill{left:6px}.foot{padding:18px}}@media print{body{background:#fff;color:#111}main{padding:20px}.stat,.ticket,.foot{background:#fff;border-color:#ccc}.client,.gen,.path,.ticket p,.ticket li{color:#333}.rail:before{background:#ccc}.ticket:before{background:#fff}}
+</style></head><body>
+<main>
+  <header class="hero">
+    {$logoHtml}
+    <p class="eyebrow">Cliente · Chamado #{$idChamado}</p>
+    <h1>{$clienteEscHtml}</h1>
+    <p class="client">Solicitação registrada no painel de suporte GestãoPro</p>
+    <p class="gen">Chamado #{$idChamado} · gerado em {$dataImportacaoEscHtml} · Responsável: {$responsavelEscHtml}</p>
+    {$serverHtml}
+  </header>
+  <section class="summary" aria-label="Resumo do chamado">
+    <div class="stat"><p>Tipo</p><div class="val">{$tipoEscHtml}</div></div>
+    <div class="stat status"><p>Status</p><div class="val">{$statusEscHtml}</div></div>
+    <div class="stat eta"><p>Previsão de retorno</p><div class="val">{$dataPrevEscHtml}</div>{$prazoHtml}</div>
+  </section>
+  <h2 class="section-heading">Descrição da solicitação</h2>
+  <p class="path">Suporte › Chamado › <strong>#{$idChamado}</strong></p>
+  <div class="rail"><div class="fill"></div>{$descricaoHtml}</div>
+  <footer class="foot"><span>Documento gerado por GestãoPro</span><a href="https://gestaopro.com.br/" target="_blank" rel="noopener noreferrer">gestaopro.com.br</a></footer>
+</main>
+</body></html>
+HTML;
+}
+
+function gerarHtmlComprovanteChamadoLegado(array $chamado)
 {
     $idChamado = (int) ($chamado['id_chamado_api'] ?? 0);
     $cliente = trim((string) ($chamado['nome_fantasia'] ?: 'Cliente'));
     $status = trim((string) ($chamado['status_chamado'] ?: 'Aguardando Suporte'));
+    $servidor = trim((string) ($chamado['servidor'] ?? ''));
     $tipo = trim((string) ($chamado['tipo_acompanhamento'] ?: '—'));
     $responsavel = trim((string) ($chamado['responsavel'] ?: '—'));
     $descricao = trim((string) ($chamado['descricao_problema'] ?: '—'));
     $dataPrev = $chamado['data_prev_retorno'] ? (new DateTime($chamado['data_prev_retorno']))->format('d/m/Y') : '—';
     $dataImportacao = $chamado['data_importacao'] ? (new DateTime($chamado['data_importacao']))->format('d/m/Y H:i') : date('d/m/Y H:i');
 
-    $logoSvg = '<svg viewBox="0 0 24 24" fill="none"><path d="M4 17V9.5L12 4l8 5.5V17l-8 3-8-3Z" stroke="white" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 9.5 12 13l8-3.5" stroke="white" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 13v7" stroke="white" stroke-width="1.8"/></svg>';
+    // Carrega o logotipo real da empresa em base64 para ficar embutido no HTML
+    $logoPath = __DIR__ . '/css/pics/logo.webp';
+    $logoBase64 = '';
+    if (file_exists($logoPath)) {
+        $logoBase64 = 'data:image/webp;base64,' . base64_encode(file_get_contents($logoPath));
+    }
     $responsavelInicial = strtoupper(mb_substr($responsavel === '—' ? 'V' : $responsavel, 0, 1, 'UTF-8'));
 
     $textoPrazo = '';
@@ -299,6 +552,7 @@ function gerarHtmlComprovanteChamado(array $chamado)
 
     $clienteEsc = htmlspecialchars($cliente, ENT_QUOTES, 'UTF-8');
     $statusEsc = htmlspecialchars($status, ENT_QUOTES, 'UTF-8');
+    $servidorEsc = htmlspecialchars($servidor, ENT_QUOTES, 'UTF-8');
     $tipoEsc = htmlspecialchars($tipo, ENT_QUOTES, 'UTF-8');
     $responsavelEsc = htmlspecialchars($responsavel, ENT_QUOTES, 'UTF-8');
     $responsavelInicialEsc = htmlspecialchars($responsavelInicial, ENT_QUOTES, 'UTF-8');
@@ -307,6 +561,14 @@ function gerarHtmlComprovanteChamado(array $chamado)
     $dataImportacaoEsc = htmlspecialchars($dataImportacao, ENT_QUOTES, 'UTF-8');
     $idChamadoEsc = htmlspecialchars((string) $idChamado, ENT_QUOTES, 'UTF-8');
     $textoPrazoEsc = $textoPrazo !== '' ? '<div class="eta-note">' . htmlspecialchars($textoPrazo, ENT_QUOTES, 'UTF-8') . '</div>' : '';
+    $servidorBadge = $servidor !== '' ? '<div class="status-badge"><span class="status-dot"></span>' . $servidorEsc . '</div>' : '';
+
+    // Tag HTML do logo pré-computada (ternário não funciona dentro de heredoc)
+    if ($logoBase64 !== '') {
+        $logoHtml = '<img src="' . $logoBase64 . '" alt="GestãoPro" class="brand-logo">';
+    } else {
+        $logoHtml = '<span class="brand-name">GestãoPro</span>';
+    }
 
     $html = <<<HTML
 <!DOCTYPE html>
@@ -350,14 +612,12 @@ function gerarHtmlComprovanteChamado(array $chamado)
       flex-wrap: wrap;
     }
     .brand { display: flex; align-items: center; gap: 12px; }
-    .brand-mark {
-      width: 42px; height: 42px;
-      border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      background: linear-gradient(135deg, var(--blue-600), #1a4ec9);
-      box-shadow: 0 12px 22px -14px rgba(45, 109, 246, 0.9);
+    .brand-logo {
+      height: 42px;
+      width: auto;
+      display: block;
+      object-fit: contain;
     }
-    .brand-mark svg { width: 22px; height: 22px; display: block; }
     .brand-name { font-size: 18px; font-weight: 800; letter-spacing: -0.04em; color: var(--navy-900); }
     .brand-name span { color: var(--blue-600); }
     .ticket-tag {
@@ -404,19 +664,6 @@ function gerarHtmlComprovanteChamado(array $chamado)
       color: var(--navy-900);
     }
     .meta-line { margin-top: 4px; font-size: 10px; color: var(--slate-500); }
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 6px;
-      background: var(--blue-100);
-      color: var(--blue-600);
-      border-radius: 999px;
-      padding: 3px 7px;
-      font-size: 9px;
-      font-weight: 700;
-    }
-    .pill svg { width: 14px; height: 14px; }
     .status-badge {
       display: inline-flex;
       align-items: center;
@@ -447,6 +694,13 @@ function gerarHtmlComprovanteChamado(array $chamado)
       border-radius: 10px;
       min-height: 56px;
       padding: 6px 8px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+    .info-card:hover,
+    .eta-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(45, 109, 246, 0.38);
+      box-shadow: 0 10px 20px -16px rgba(16, 33, 61, 0.55);
     }
     .info-label {
       display: flex;
@@ -492,6 +746,7 @@ function gerarHtmlComprovanteChamado(array $chamado)
       border: 1px solid rgba(244,185,66,0.38);
       border-radius: 10px;
       padding: 8px 10px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
     }
     .eta-left { display: flex; align-items: flex-start; gap: 6px; }
     .eta-icon {
@@ -550,6 +805,8 @@ function gerarHtmlComprovanteChamado(array $chamado)
       line-height: 1.45;
       white-space: pre-wrap;
       word-break: break-word;
+      overflow: visible;
+      max-height: none;
     }
     .footer {
       display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -566,14 +823,23 @@ function gerarHtmlComprovanteChamado(array $chamado)
       .eta-value { font-size: 22px; }
       .ticket-tag { width: 100%; text-align: left; }
     }
+    @media (prefers-reduced-motion: reduce) {
+      .info-card,
+      .eta-card {
+        transition: none;
+      }
+      .info-card:hover,
+      .eta-card:hover {
+        transform: none;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="pdf-shell">
     <header class="topbar">
       <div class="brand">
-        <div class="brand-mark">{$logoSvg}</div>
-        <div class="brand-name">Gestão<span>Pro</span></div>
+        {$logoHtml}
       </div>
       <div class="ticket-tag">Chamado <strong>#{$idChamadoEsc}</strong> · gerado em {$dataImportacaoEsc}</div>
     </header>
@@ -584,12 +850,8 @@ function gerarHtmlComprovanteChamado(array $chamado)
           <div class="eyebrow">Cliente</div>
           <h1>{$clienteEsc}</h1>
           <div class="meta-line">Solicitação registrada no painel de suporte GestãoPro</div>
-          <div class="pill">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            {$tipoEsc}
-          </div>
         </div>
-        <div class="status-badge"><span class="status-dot"></span>{$statusEsc}</div>
+        {$servidorBadge}
       </div>
 
       <div class="summary-grid">
@@ -603,7 +865,7 @@ function gerarHtmlComprovanteChamado(array $chamado)
 
         <div class="info-card">
           <div class="info-label">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/></svg>
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c0-3.5 3.5-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
             Status
           </div>
           <div class="info-value">{$statusEsc}</div>

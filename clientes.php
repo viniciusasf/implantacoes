@@ -1,6 +1,7 @@
 <?php
 date_default_timezone_set('America/Sao_Paulo');
 require_once 'config.php';
+require_once __DIR__ . '/ufs_brasil.php';
 
 // 1. DEFINIR VARIÁVEIS COM VALORES PADRÃO
 $view_mode = isset($_GET['view']) ? $_GET['view'] : 'cards';
@@ -49,7 +50,9 @@ function encerrarImplantacaoCliente(PDO $pdo, $idCliente, $cancelada = false)
             $stmtCliente->execute([$dataAtual, $idCliente]);
         }
 
-        // Fecha treinamentos pendentes para remover o cliente dos fluxos de atendimento.
+        // Fecha APENAS treinamentos pendentes já passados (sem data futura).
+        // Treinamentos agendados para hoje ou para o futuro permanecem PENDENTE,
+        // pois ainda precisam ser realizados mesmo com a implantação encerrada.
         $observacaoFechamento = $cancelada
             ? '[Encerrado automaticamente por cancelamento da implantacao em ' . $dataAtual . ']'
             : '[Encerrado automaticamente por conclusao da implantacao em ' . $dataAtual . ']';
@@ -60,7 +63,8 @@ function encerrarImplantacaoCliente(PDO $pdo, $idCliente, $cancelada = false)
                  data_treinamento_encerrado = ?,
                  observacoes = CONCAT(IFNULL(observacoes, ''), CASE WHEN IFNULL(observacoes, '') = '' THEN '' ELSE ' ' END, ?)
              WHERE id_cliente = ?
-               AND status = 'PENDENTE'"
+               AND UPPER(status) = 'PENDENTE'
+               AND (data_treinamento IS NULL OR data_treinamento < NOW())"
         );
         $stmtTreinamentos->execute([$dataHoraAtual, $observacaoFechamento, $idCliente]);
 
@@ -98,6 +102,10 @@ if (isset($_GET['delete'])) {
 
 // 4. Lógica para Adicionar/Editar - ATUALIZADO COM NOVOS CAMPOS
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $abrirFichaContato = ($_POST['abrir_ficha_contato'] ?? '') === '1';
+    $clienteNovoId = null;
+    $contatosApiImportados = 0;
+    $contatosApiCadastro = json_decode((string) ($_POST['contatos_api_json'] ?? '[]'), true);
     $fantasia = $_POST['fantasia'];
     $servidor = $_POST['servidor'];
     $vendedor = $_POST['vendedor'];
@@ -105,66 +113,154 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $data_inicio = $_POST['data_inicio'];
     $data_fim = (!empty($_POST['data_fim']) && $_POST['data_fim'] !== '0000-00-00') ? $_POST['data_fim'] : null;
     $data_previsao_encerramento = !empty($_POST['data_previsao_encerramento']) ? $_POST['data_previsao_encerramento'] : null;
-    $id_cliente_api = !empty($_POST['id_cliente_api']) ? $_POST['id_cliente_api'] : null;
+    $id_cliente_api = !empty($_POST['id_cliente_api']) ? trim($_POST['id_cliente_api']) : null;
+    $anexo = trim($_POST['anexo'] ?? '');
+    if (!empty($id_cliente_api) && empty($anexo)) {
+        $anexo = 'https://interno.gestaopro.srv.br/clientes/' . trim($id_cliente_api);
+    } elseif (!empty($anexo)) {
+        $anexo = preg_match('/^https?:\/\//i', $anexo) ? $anexo : 'https://' . ltrim($anexo, '/');
+        $link_para_id = $anexo;
+        $caminho_link = parse_url($link_para_id, PHP_URL_PATH) ?: '';
+        if (preg_match('~/([0-9]+)/?$~', $caminho_link, $id_api_encontrado)) {
+            $id_cliente_api = $id_api_encontrado[1];
+        }
+    }
     $emitir_nf = $_POST['emitir_nf'] ?? 'Não';
     $configurado = $_POST['configurado'] ?? 'Não';
 
     // NOVOS CAMPOS
     $num_licencas = $_POST['num_licencas'] ?? 0;
-    $anexo = $_POST['anexo'] ?? '';
     $chamados = $_POST['chamados'] ?? '';
+    $link_videos = trim($_POST['link_videos'] ?? '');
+    $serial = trim($_POST['serial'] ?? '');
+    $cnpj = trim($_POST['cnpj'] ?? '');
+    $uf = strtoupper(trim($_POST['uf'] ?? ''));
+    if ($uf !== '' && !array_key_exists($uf, listarUfsBrasil())) {
+        http_response_code(400);
+        exit('UF inválida.');
+    }
+    $link_drive = trim($_POST['link_drive'] ?? '');
     
     // CAMPO DE RECURSOS
     $recursos_arr = $_POST['recursos'] ?? [];
     $recursos = is_array($recursos_arr) ? implode(', ', $recursos_arr) : (string)$recursos_arr;
 
-    if (isset($_POST['id_cliente']) && !empty($_POST['id_cliente'])) {
-        // UPDATE com novos campos
-        $stmt = $pdo->prepare("UPDATE `clientes` SET 
-            `fantasia`=?, `servidor`=?, `vendedor`=?, `telefone_ddd`=?, 
-            `data_inicio`=?, `data_fim`=?, `data_previsao_encerramento`=?, `id_cliente_api`=?, 
-            `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=?
-            WHERE `id_cliente`=?");
-        $stmt->execute([
-            $fantasia,
-            $servidor,
-            $vendedor,
-            $telefone,
-            $data_inicio,
-            $data_fim,
-            $data_previsao_encerramento,
-            $id_cliente_api,
-            $emitir_nf,
-            $configurado,
-            $num_licencas,
-            $anexo,
-            $chamados,
-            $recursos,
-            $_POST['id_cliente']
-        ]);
-    } else {
-        // INSERT com novos campos
-        $stmt = $pdo->prepare("INSERT INTO `clientes` (
-            `fantasia`, `servidor`, `vendedor`, `telefone_ddd`, 
-            `data_inicio`, `data_fim`, `data_previsao_encerramento`, `id_cliente_api`,
-            `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([
-            $fantasia,
-            $servidor,
-            $vendedor,
-            $telefone,
-            $data_inicio,
-            $data_fim,
-            $data_previsao_encerramento,
-            $id_cliente_api,
-            $emitir_nf,
-            $configurado,
-            $num_licencas,
-            $anexo,
-            $chamados,
-            $recursos,
-        ]);
+    try {
+        if (isset($_POST['id_cliente']) && !empty($_POST['id_cliente'])) {
+            // UPDATE com novos campos
+            $stmt = $pdo->prepare("UPDATE `clientes` SET 
+                `fantasia`=?, `servidor`=?, `vendedor`=?, `telefone_ddd`=?, 
+                `data_inicio`=?, `data_fim`=?, `data_previsao_encerramento`=?, `id_cliente_api`=?, 
+                `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=?, `link_videos`=?, `serial`=?, `cnpj`=?, `uf`=?
+                WHERE `id_cliente`=?");
+            $stmt->execute([
+                $fantasia,
+                $servidor,
+                $vendedor,
+                $telefone,
+                $data_inicio,
+                $data_fim,
+                $data_previsao_encerramento,
+                $id_cliente_api,
+                $emitir_nf,
+                $configurado,
+                $num_licencas,
+                $anexo,
+                $chamados,
+                $recursos,
+                $link_videos,
+                $serial ?: null,
+                $cnpj ?: null,
+                $uf ?: null,
+                $_POST['id_cliente']
+            ]);
+            // Atualiza link_drive apenas se veio preenchido no POST (não sobrescreve se vazio)
+            if ($link_drive !== '') {
+                $stmtDrive = $pdo->prepare("UPDATE `clientes` SET `link_drive`=? WHERE `id_cliente`=?");
+                $stmtDrive->execute([$link_drive, $_POST['id_cliente']]);
+            }
+        } else {
+            // INSERT com novos campos
+            $stmt = $pdo->prepare("INSERT INTO `clientes` (
+                `fantasia`, `servidor`, `vendedor`, `telefone_ddd`, 
+                `data_inicio`, `data_fim`, `data_previsao_encerramento`, `id_cliente_api`,
+                `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`, `link_videos`, `serial`, `cnpj`, `uf`, `link_drive`
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->execute([
+                $fantasia,
+                $servidor,
+                $vendedor,
+                $telefone,
+                $data_inicio,
+                $data_fim,
+                $data_previsao_encerramento,
+                $id_cliente_api,
+                $emitir_nf,
+                $configurado,
+                $num_licencas,
+                $anexo,
+                $chamados,
+                $recursos,
+                $link_videos,
+                $serial ?: null,
+                $cnpj ?: null,
+                $uf ?: null,
+                $link_drive ?: null,
+            ]);
+            $clienteNovoId = (int) $pdo->lastInsertId();
+
+            if ($clienteNovoId > 0 && is_array($contatosApiCadastro)) {
+                try {
+                    $stmtContatoApi = $pdo->prepare('INSERT INTO contatos (id_cliente, nome, email, cargo, telefone_ddd, observacao) VALUES (?, ?, ?, ?, ?, ?)');
+                    foreach ($contatosApiCadastro as $contatoApi) {
+                        if (!is_array($contatoApi)) continue;
+                        $nomeContatoApi = trim((string) ($contatoApi['CONTATO'] ?? ''));
+                        if ($nomeContatoApi === '') continue;
+                        $emailContatoApi = trim((string) ($contatoApi['EMAIL'] ?? ''));
+                        $telefoneContatoApi = trim(implode(' ', array_filter([
+                            trim((string) ($contatoApi['DDD'] ?? '')),
+                            trim((string) ($contatoApi['TELEFONE'] ?? '')),
+                        ], static function ($parte) { return $parte !== ''; })));
+                        $stmtContatoApi->execute([
+                            $clienteNovoId,
+                            $nomeContatoApi,
+                            $emailContatoApi !== '' ? $emailContatoApi : null,
+                            trim((string) ($contatoApi['SETOR'] ?? '')) ?: null,
+                            $telefoneContatoApi !== '' ? $telefoneContatoApi : null,
+                            trim((string) ($contatoApi['OBS'] ?? '')) ?: null,
+                        ]);
+                        $contatosApiImportados++;
+                    }
+                    if ($contatosApiImportados > 0) {
+                        $abrirFichaContato = false;
+                    }
+                } catch (Throwable $erroContatoApi) {
+                    error_log('Falha ao importar contatos da API para o cliente local #' . $clienteNovoId . ': ' . $erroContatoApi->getMessage());
+                    $abrirFichaContato = true;
+                }
+            }
+        }
+    } catch (PDOException $e) {
+        if ($e->getCode() === '23000' && $id_cliente_api !== null) {
+            $redirect_to = 'clientes.php';
+            if (!empty($_POST['redirect_to'])) {
+                $candidate = basename($_POST['redirect_to']);
+                $allowed = ['clientes.php', 'monitoramento_gestaopro.php', 'chamados_gestaopro.php'];
+                if (in_array($candidate, $allowed, true)) {
+                    $redirect_to = $candidate;
+                }
+            }
+            header("Location: {$redirect_to}?msg=Este+cliente+da+GestaoPRO+ja+esta+cadastrado&view=" . $view_mode);
+            exit;
+        }
+        throw $e;
+    }
+
+    $destinoContatoSolicitado = $abrirFichaContato
+        || (($_POST['redirect_to'] ?? '') === 'contatos.php');
+    if ($destinoContatoSolicitado && $clienteNovoId) {
+        header('Location: contatos.php?novo=1&id_cliente=' . $clienteNovoId);
+        exit;
     }
 
     $redirect_to = 'clientes.php';
@@ -176,12 +272,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
 
-    header("Location: {$redirect_to}?msg=Dados+atualizados&view=" . $view_mode);
+    $mensagemSalvar = $contatosApiImportados > 0
+        ? 'Cliente+cadastrado+com+' . $contatosApiImportados . '+contato(s)+da+API'
+        : 'Dados+atualizados';
+    header("Location: {$redirect_to}?msg={$mensagemSalvar}&view=" . $view_mode);
     exit;
 }
 
 // 5. Consulta de Dados e Filtros - FILTRAR CLIENTES NÃO ENCERRADOS
 $sql = "SELECT c.*, 
+               COALESCE(c.ID_CLIENTE_API, c.id_cliente_api) as id_cliente_api,
                COUNT(t.id_treinamento) as total_treinamentos,
                MAX(t.data_treinamento) as ultimo_treinamento,
                SUM(CASE WHEN t.status = 'PENDENTE' THEN 1 ELSE 0 END) as treinamentos_pendentes
@@ -217,6 +317,200 @@ if (!empty($ids_clientes)) {
     $stmtCt->execute($ids_clientes);
     foreach ($stmtCt->fetchAll() as $ct) {
         $contatos_por_cliente[$ct['id_cliente']][] = ['id' => $ct['id_contato'], 'nome' => $ct['nome']];
+    }
+}
+
+// Função para extrair ID API com fallback para link do anexo
+function extrairIdClienteApi(array $cliente): string {
+    $id = trim((string)($cliente['ID_CLIENTE_API'] ?? $cliente['id_cliente_api'] ?? ''));
+    if ($id !== '' && ctype_digit($id)) {
+        return $id;
+    }
+    $anexo = trim((string)($cliente['anexo'] ?? ''));
+    if ($anexo !== '') {
+        $caminho = parse_url($anexo, PHP_URL_PATH) ?: '';
+        if (preg_match('~/([0-9]+)/?$~', $caminho, $m)) {
+            return $m[1];
+        }
+    }
+    return '';
+}
+
+// Buscar dados de uso do sistema em cache (da API GestãoPro)
+$uso_clientes_map = [];
+$cache_uso_file = __DIR__ . '/logs/gp_cache_uso_30.json';
+if (file_exists($cache_uso_file)) {
+    $conteudo_cache_uso = @json_decode(file_get_contents($cache_uso_file), true);
+    if (!empty($conteudo_cache_uso['clientes']) && is_array($conteudo_cache_uso['clientes'])) {
+        foreach ($conteudo_cache_uso['clientes'] as $itemUso) {
+            $idApi = trim((string)($itemUso['id_cliente_api'] ?? ''));
+            if ($idApi !== '') {
+                $uso_clientes_map[$idApi] = $itemUso['dados'] ?? null;
+            }
+            $idCli = (int)($itemUso['id_cliente'] ?? 0);
+            if ($idCli > 0) {
+                $uso_clientes_map['id_' . $idCli] = $itemUso['dados'] ?? null;
+            }
+            $serialCad = strtoupper(trim((string)($itemUso['serial_cadastro'] ?? '')));
+            if ($serialCad !== '') {
+                $uso_clientes_map['serial_' . $serialCad] = $itemUso['dados'] ?? null;
+            }
+            if (!empty($itemUso['dados']['seriais']) && is_array($itemUso['dados']['seriais'])) {
+                foreach ($itemUso['dados']['seriais'] as $s) {
+                    $sUpper = strtoupper(trim((string)$s));
+                    if ($sUpper !== '') {
+                        $uso_clientes_map['serial_' . $sUpper] = $itemUso['dados'] ?? null;
+                    }
+                }
+            }
+        }
+    }
+}
+
+function obterInfoUsoCliente(array $cliente, array $usoMap): array {
+    $idApi = extrairIdClienteApi($cliente);
+    $idCli = (int)($cliente['id_cliente'] ?? 0);
+    $serialCli = strtoupper(trim((string)($cliente['serial'] ?? '')));
+    $dadosUso = null;
+
+    if ($idApi !== '' && isset($usoMap[$idApi])) {
+        $dadosUso = $usoMap[$idApi];
+    } elseif ($idCli > 0 && isset($usoMap['id_' . $idCli])) {
+        $dadosUso = $usoMap['id_' . $idCli];
+    } elseif ($serialCli !== '' && isset($usoMap['serial_' . $serialCli])) {
+        $dadosUso = $usoMap['serial_' . $serialCli];
+    }
+
+    if (empty($idApi) && !$dadosUso) {
+        return [
+            'tem_id_api' => false,
+            'id_api_usado' => '',
+            'texto' => 'Sem ID API',
+            'badge' => 'bg-secondary bg-opacity-10 text-secondary',
+            'badge_label' => 'Sem ID API',
+            'ultimo_dt' => null,
+            'pageviews' => 0,
+            'logins' => 0,
+            'atritos' => 0,
+            'erros' => 0,
+            'ativo_hoje' => false,
+        ];
+    }
+
+    if (!$dadosUso || empty($dadosUso['resumo'])) {
+        return [
+            'tem_id_api' => !empty($idApi),
+            'id_api_usado' => $idApi,
+            'texto' => 'Aguardando sincronização',
+            'badge' => 'bg-secondary bg-opacity-10 text-secondary',
+            'badge_label' => 'Sem leitura',
+            'ultimo_dt' => null,
+            'pageviews' => 0,
+            'logins' => 0,
+            'atritos' => 0,
+            'erros' => 0,
+            'ativo_hoje' => false,
+        ];
+    }
+
+    $resumo = $dadosUso['resumo'];
+    $ultimoIso = $resumo['ULTIMO'] ?? null;
+    $ultimoTimestamp = $ultimoIso ? strtotime((string)$ultimoIso) : false;
+    foreach (($dadosUso['usuarios'] ?? []) as $usuarioUso) {
+        if (!is_array($usuarioUso) || empty($usuarioUso['ULTIMO'])) continue;
+        $timestampUsuario = strtotime((string)$usuarioUso['ULTIMO']);
+        if ($timestampUsuario !== false && ($ultimoTimestamp === false || $timestampUsuario > $ultimoTimestamp)) {
+            $ultimoIso = $usuarioUso['ULTIMO'];
+            $ultimoTimestamp = $timestampUsuario;
+        }
+    }
+    $pageviews = (int)($resumo['PAGEVIEWS'] ?? 0);
+    $logins = (int)($resumo['LOGINS'] ?? 0);
+    $atritos = (int)($resumo['ATRITOS'] ?? 0);
+    $erros = (int)($resumo['ERROS'] ?? 0);
+
+    if (empty($ultimoIso)) {
+        return [
+            'tem_id_api' => true,
+            'id_api_usado' => $idApi,
+            'texto' => 'Sem acessos nos 30d',
+            'badge' => 'bg-secondary bg-opacity-10 text-secondary',
+            'badge_label' => 'Sem acessos',
+            'ultimo_dt' => null,
+            'pageviews' => $pageviews,
+            'logins' => $logins,
+            'atritos' => $atritos,
+            'erros' => $erros,
+            'ativo_hoje' => false,
+        ];
+    }
+
+    try {
+        $tz = new DateTimeZone('America/Sao_Paulo');
+        $dt = new DateTime($ultimoIso);
+        $dt->setTimezone($tz);
+        $agora = new DateTime('now', $tz);
+
+        $diffDias = (int)$agora->diff($dt)->days;
+        $mesmoDia = ($dt->format('Y-m-d') === $agora->format('Y-m-d'));
+        $ontem = (new DateTime('yesterday', $tz))->format('Y-m-d');
+        $ehOntem = ($dt->format('Y-m-d') === $ontem);
+
+        if ($mesmoDia) {
+            $tempo = 'Hoje às ' . $dt->format('H:i');
+            $badge = 'bg-success bg-opacity-15 text-success border border-success border-opacity-25';
+            $badge_label = 'Ativo Hoje';
+            $ativo_hoje = true;
+        } elseif ($ehOntem) {
+            $tempo = 'Ontem às ' . $dt->format('H:i');
+            $badge = 'bg-primary bg-opacity-10 text-primary';
+            $badge_label = 'Ativo Ontem';
+            $ativo_hoje = false;
+        } elseif ($diffDias <= 3) {
+            $tempo = "Há {$diffDias} dias ({$dt->format('d/m H:i')})";
+            $badge = 'bg-info bg-opacity-10 text-info';
+            $badge_label = "Há {$diffDias}d";
+            $ativo_hoje = false;
+        } elseif ($diffDias <= 7) {
+            $tempo = "Há {$diffDias} dias ({$dt->format('d/m H:i')})";
+            $badge = 'bg-warning bg-opacity-10 text-warning';
+            $badge_label = "Há {$diffDias}d";
+            $ativo_hoje = false;
+        } else {
+            $tempo = "Há {$diffDias} dias ({$dt->format('d/m/Y')})";
+            $badge = 'bg-danger bg-opacity-10 text-danger';
+            $badge_label = "Inativo há {$diffDias}d";
+            $ativo_hoje = false;
+        }
+
+        return [
+            'tem_id_api' => true,
+            'id_api_usado' => $idApi,
+            'texto' => $tempo,
+            'data_fmt' => $dt->format('d/m/Y H:i'),
+            'badge' => $badge,
+            'badge_label' => $badge_label,
+            'ultimo_dt' => $ultimoIso,
+            'pageviews' => $pageviews,
+            'logins' => $logins,
+            'atritos' => $atritos,
+            'erros' => $erros,
+            'ativo_hoje' => $ativo_hoje,
+        ];
+    } catch (Throwable $e) {
+        return [
+            'tem_id_api' => true,
+            'id_api_usado' => $idApi,
+            'texto' => 'Registro presente',
+            'badge' => 'bg-secondary bg-opacity-10 text-secondary',
+            'badge_label' => 'Atividade',
+            'ultimo_dt' => $ultimoIso,
+            'pageviews' => $pageviews,
+            'logins' => $logins,
+            'atritos' => $atritos,
+            'erros' => $erros,
+            'ativo_hoje' => false,
+        ];
     }
 }
 
@@ -401,6 +695,35 @@ body, html {
     font-weight: 500;
 }
 
+.support-ticket-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    padding: 1rem;
+    box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04);
+}
+
+.support-ticket-description {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.55;
+}
+
+.support-ticket-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: 0.75rem;
+}
+
+.support-ticket-detail {
+    min-width: 0;
+    padding: 0.65rem 0.75rem;
+    background: var(--bg-body);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    overflow-wrap: anywhere;
+}
+
 .client-badge-soft {
     font-size: 0.65rem;
     font-weight: 800;
@@ -487,6 +810,69 @@ body, html {
 .btn-action.chamados { color: #10b981; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); }
 .btn-action.chamados:hover { background: #10b981; color: white; }
 
+.btn-action.uso { color: #06b6d4; background: rgba(6, 182, 212, 0.15); border-color: rgba(6, 182, 212, 0.3); }
+.btn-action.uso:hover { background: #06b6d4; color: white; }
+.btn-action.sintegra { color: #0f766e; background: rgba(20, 184, 166, 0.14); border-color: rgba(20, 184, 166, 0.3); }
+.btn-action.sintegra:hover { color: white; background: #0f766e; }
+
+/* Box de Resumo de Uso do Cliente */
+.client-usage-pill {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 0.6rem 0.8rem;
+    transition: all 0.25s ease;
+    cursor: pointer;
+}
+.client-usage-pill:hover {
+    background: rgba(6, 182, 212, 0.08);
+    border-color: rgba(6, 182, 212, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(6, 182, 212, 0.12);
+}
+
+.pulse-dot-green {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    animation: pulse-green 1.8s infinite;
+}
+@keyframes pulse-green {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    70% { box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+/* Modal Dashboard Premium */
+.dash-kpi-card {
+    background: var(--bg-body);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 1.25rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 100%;
+}
+.dash-kpi-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(6, 182, 212, 0.4);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+.dash-nav-pill {
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    padding: 0.5rem 1rem;
+    transition: all 0.2s ease;
+}
+.dash-nav-pill.active {
+    background: rgba(6, 182, 212, 0.15) !important;
+    color: #06b6d4 !important;
+}
+
 /* Grid & Table Animations */
 .gsap-reveal {
     opacity: 0;
@@ -518,7 +904,7 @@ body, html {
         </div>
         <div class="d-flex align-items-center gap-2">
             <a href="clientes.php?mostrar_encerrados=<?= $mostrar_encerrados == '1' ? '0' : '1' ?>&view=<?= urlencode($view_mode) ?>&busca=<?= urlencode($busca) ?>&estagio="
-               class="btn btn-outline-secondary btn-modern px-3">
+               class="btn btn-outline-primary btn-modern px-3">
                 <i class="bi <?= $mostrar_encerrados == '1' ? 'bi-eye-slash text-danger' : 'bi-eye text-success' ?>"></i>
                 Ver Ativos/Encerrados
             </a>
@@ -664,6 +1050,21 @@ body, html {
                         <div class="d-flex align-items-center mb-1">
                             <i class="bi bi-server me-2 text-muted"></i> <?= htmlspecialchars($c['servidor']) ?>
                         </div>
+                        <?php if (!empty($c['serial'])): ?>
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-upc-scan me-2 text-muted"></i> SERIAL: <?= htmlspecialchars($c['serial'], ENT_QUOTES, 'UTF-8') ?>
+                        </div>
+                        <?php endif; ?>
+                        <?php if (!empty($c['cnpj'])): ?>
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-card-text me-2 text-muted"></i> CNPJ: <?= htmlspecialchars($c['cnpj'], ENT_QUOTES, 'UTF-8') ?>
+                        </div>
+                        <?php endif; ?>
+                        <?php if (!empty($c['id_cliente_api'])): ?>
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-braces-asterisk me-2 text-muted"></i> ID API: <?= htmlspecialchars($c['id_cliente_api']) ?>
+                        </div>
+                        <?php endif; ?>
                         <?php if (!empty($contatos_por_cliente[$c['id_cliente']])): ?>
                         <div class="d-flex align-items-center">
                             <i class="bi bi-person-lines-fill me-2 text-muted"></i> 
@@ -672,9 +1073,40 @@ body, html {
                         <?php endif; ?>
                     </div>
 
+                    <?php 
+                        $infoUso = obterInfoUsoCliente($c, $uso_clientes_map);
+                        $idApiUsado = ($infoUso['id_api_usado'] ?? '') ?: extrairIdClienteApi($c);
+                    ?>
+                    <div class="client-usage-pill mt-3 mb-3 client-usage-box" 
+                         onclick="abrirDashboardUso(this)" 
+                         data-id-api="<?= htmlspecialchars($idApiUsado, ENT_QUOTES, 'UTF-8') ?>" 
+                         data-id-cliente="<?= $c['id_cliente'] ?>" 
+                         data-fantasia="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>" 
+                         data-serial="<?= htmlspecialchars($c['serial'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                         title="Clique para abrir o Dashboard de Uso do GestãoPro">
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <div class="d-flex align-items-center text-truncate me-2">
+                                <i class="bi bi-speedometer2 text-info me-2 fs-6"></i>
+                                <span class="small fw-semibold text-truncate" style="font-size: 0.78rem;">Uso do Sistema</span>
+                            </div>
+                            <span class="badge rounded-pill px-2 py-1 usage-status-badge <?= $infoUso['badge'] ?>" style="font-size: 0.68rem;">
+                                <?php if ($infoUso['ativo_hoje']): ?>
+                                    <span class="pulse-dot-green me-1"></span>
+                                <?php endif; ?>
+                                <?= htmlspecialchars($infoUso['badge_label']) ?>
+                            </span>
+                        </div>
+                        <div class="d-flex align-items-center justify-content-between small text-muted" style="font-size: 0.72rem;">
+                            <span class="text-truncate me-2"><i class="bi bi-clock-history me-1"></i>Último: <strong class="text-main"><?= htmlspecialchars($infoUso['texto']) ?></strong></span>
+                            <?php if ($infoUso['pageviews'] > 0): ?>
+                            <span class="fw-semibold text-info flex-shrink-0"><i class="bi bi-eye me-1"></i><?= number_format($infoUso['pageviews'], 0, ',', '.') ?> views</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
                     <div class="mt-auto">
                         <div class="d-flex justify-content-between small mb-1">
-                            <span class="text-muted">Início: <?= date('d/m/Y', strtotime($c['data_inicio'])) ?></span>
+                            <span class="text-muted">Ini­cio: <?= date('d/m/Y', strtotime($c['data_inicio'])) ?></span>
                             <?php if (!empty($c['data_previsao_encerramento']) && $c['data_previsao_encerramento'] !== '0000-00-00'): ?>
                             <span class="text-warning">Previsão: <?= date('d/m/Y', strtotime($c['data_previsao_encerramento'])) ?></span>
                             <?php endif; ?>
@@ -710,15 +1142,38 @@ body, html {
                                     data-inicio="<?= $c['data_inicio'] ?>" 
                                     data-fim="<?= $c['data_fim'] ?>" 
                                     data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
-                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '') ?>" 
+                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
+                                    data-serial="<?= htmlspecialchars($c['serial'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
+                                    data-cnpj="<?= htmlspecialchars($c['cnpj'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                    data-uf="<?= htmlspecialchars($c['uf'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                     data-cfg="<?= $c['configurado'] ?>" 
                                     data-licencas="<?= $c['num_licencas'] ?>" 
                                     data-anexo="<?= $c['anexo'] ?>" 
                                     data-chamados="<?= htmlspecialchars($c['chamados'] ?? '') ?>" 
                                     data-recursos="<?= htmlspecialchars($c['recursos'] ?? '') ?>" 
+                                    data-link-videos="<?= htmlspecialchars($c['link_videos'] ?? '') ?>" 
                                     title="Editar" onclick="openEditModal(this)">
                                 <i class="bi bi-pencil"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-action sintegra btn-consultar-sintegra"
+                                    data-id-cliente="<?= (int)$c['id_cliente'] ?>"
+                                    data-cliente="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                    data-tem-uf="<?= !empty($c['uf']) ? '1' : '0' ?>"
+                                    title="<?= empty($c['cnpj']) ? 'Cadastre o CNPJ para consultar' : 'Consultar Sintegra e Simples/SIMEI' ?>"
+                                    <?= empty($c['cnpj']) ? 'disabled' : '' ?>>
+                                <i class="bi bi-search"></i>
+                            </button>
+                            <?php $idApiChamados = extrairIdClienteApi($c); ?>
+                            <button type="button" class="btn btn-sm btn-action chamados btn-suporte-cliente"
+                                    data-id-api="<?= htmlspecialchars($idApiChamados, ENT_QUOTES, 'UTF-8') ?>"
+                                    data-fantasia="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                    data-status-implantacao="<?= htmlspecialchars($cfg['label'], ENT_QUOTES, 'UTF-8') ?>"
+                                    data-recursos="<?= htmlspecialchars($c['recursos'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                    aria-label="Chamados de suporte de <?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                    title="<?= $idApiChamados === '' ? 'Cadastre o ID Cliente API para consultar os chamados' : 'Chamados de suporte' ?>"
+                                    onclick="abrirChamadosSuporte(this)" <?= $idApiChamados === '' ? 'disabled' : '' ?>>
+                                <i class="bi bi-headset"></i>
                             </button>
                             <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos" title="Ver Treinamentos">
                                 <i class="bi bi-calendar-check"></i>
@@ -753,6 +1208,12 @@ body, html {
                                     <a href="<?= htmlspecialchars($link_chamados) ?>" 
                                        target="_blank" class="btn btn-sm btn-action chamados" title="Link Chamados">
                                         <i class="bi bi-headset"></i>
+                                    </a>
+                                <?php endif; ?>
+                                <?php if (!empty($c['link_videos'])): ?>
+                                    <a href="<?= htmlspecialchars($c['link_videos']) ?>" 
+                                       target="_blank" class="btn btn-sm btn-action gestaopro" style="color: #ea4335; background: rgba(234, 67, 53, 0.15); border-color: rgba(234, 67, 53, 0.3);" title="Vídeos Passo a Passo">
+                                        <i class="bi bi-youtube"></i>
                                     </a>
                                 <?php endif; ?>
                             <?php if (!$cliente_encerrado): ?>
@@ -823,9 +1284,24 @@ body, html {
                                     <td>
                                         <div class="small fw-bold"><?= htmlspecialchars($c['vendedor']) ?></div>
                                         <div class="text-muted small"><?= htmlspecialchars($c['servidor']) ?></div>
+                                        <?php if (!empty($c['id_cliente_api'])): ?>
+                                        <div class="text-muted small"><i class="bi bi-braces-asterisk me-1"></i>ID API: <?= htmlspecialchars($c['id_cliente_api']) ?></div>
+                                        <?php endif; ?>
                                         <?php if (!empty($contatos_por_cliente[$c['id_cliente']])): ?>
                                         <div class="text-muted small"><i class="bi bi-person-lines-fill me-1"></i><?= htmlspecialchars(implode(', ', array_column($contatos_por_cliente[$c['id_cliente']], 'nome'))) ?></div>
-                                        <?php endif; ?>
+                                        <?php endif;                                         ?>
+                                        <?php 
+                                            $infoUsoT = obterInfoUsoCliente($c, $uso_clientes_map);
+                                        ?>
+                                        <div class="mt-1 d-flex align-items-center gap-1" style="font-size: 0.74rem;">
+                                            <i class="bi bi-speedometer2 text-info"></i>
+                                            <span class="text-muted">Último acesso:</span>
+                                            <strong class="text-main"><?= htmlspecialchars($infoUsoT['texto']) ?></strong>
+                                            <span class="badge rounded-pill px-2 <?= $infoUsoT['badge'] ?>" style="font-size: 0.65rem;">
+                                                <?php if ($infoUsoT['ativo_hoje']): ?><span class="pulse-dot-green me-1"></span><?php endif; ?>
+                                                <?= htmlspecialchars($infoUsoT['badge_label']) ?>
+                                            </span>
+                                        </div>
                                     </td>
                                     <td class="text-center">
                                         <span class="badge bg-light text-dark rounded-pill px-3 shadow-sm"><?= $d ?> dias</span>
@@ -844,7 +1320,9 @@ body, html {
                                                     data-inicio="<?= $c['data_inicio'] ?>" 
                                                     data-fim="<?= $c['data_fim'] ?>" 
                                                     data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
-                                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '') ?>" 
+                                                    data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
+                                                    data-serial="<?= htmlspecialchars($c['serial'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
+                                                    data-cnpj="<?= htmlspecialchars($c['cnpj'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                                                     data-obs="<?= htmlspecialchars($c['observacao']) ?>" 
                                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                                     data-cfg="<?= $c['configurado'] ?>" 
@@ -852,8 +1330,28 @@ body, html {
                                                     data-anexo="<?= $c['anexo'] ?>" 
                                                     data-chamados="<?= htmlspecialchars($c['chamados'] ?? '') ?>" 
                                                     data-recursos="<?= htmlspecialchars($c['recursos'] ?? '') ?>" 
+                                                    data-link-videos="<?= htmlspecialchars($c['link_videos'] ?? '') ?>" 
                                                     onclick="openEditModal(this)">
                                                 <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-action sintegra btn-consultar-sintegra"
+                                                    data-id-cliente="<?= (int)$c['id_cliente'] ?>"
+                                                    data-cliente="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-tem-uf="<?= !empty($c['uf']) ? '1' : '0' ?>"
+                                                    title="<?= empty($c['cnpj']) ? 'Cadastre o CNPJ para consultar' : 'Consultar Sintegra e Simples/SIMEI' ?>"
+                                                    <?= empty($c['cnpj']) ? 'disabled' : '' ?>>
+                                                <i class="bi bi-search"></i>
+                                            </button>
+                                            <?php $idApiChamadosTabela = extrairIdClienteApi($c); ?>
+                                            <button type="button" class="btn btn-sm btn-action chamados btn-suporte-cliente"
+                                                    data-id-api="<?= htmlspecialchars($idApiChamadosTabela, ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-fantasia="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-status-implantacao="<?= htmlspecialchars($cfg['label'], ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-recursos="<?= htmlspecialchars($c['recursos'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                                    aria-label="Chamados de suporte de <?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                                    title="<?= $idApiChamadosTabela === '' ? 'Cadastre o ID Cliente API para consultar os chamados' : 'Chamados de suporte' ?>"
+                                                    onclick="abrirChamadosSuporte(this)" <?= $idApiChamadosTabela === '' ? 'disabled' : '' ?>>
+                                                <i class="bi bi-headset"></i>
                                             </button>
                                             <a href="treinamentos_cliente.php?id_cliente=<?= $c['id_cliente'] ?>" class="btn btn-sm btn-action treinamentos" title="Ver Treinamentos">
                                                 <i class="bi bi-calendar-check"></i>
@@ -890,6 +1388,12 @@ body, html {
                                                     <i class="bi bi-headset"></i>
                                                 </a>
                                             <?php endif; ?>
+                                            <?php if (!empty($c['link_videos'])): ?>
+                                                <a href="<?= htmlspecialchars($c['link_videos']) ?>" 
+                                                   target="_blank" class="btn btn-sm btn-action gestaopro" style="color: #ea4335; background: rgba(234, 67, 53, 0.15); border-color: rgba(234, 67, 53, 0.3);" title="Vídeos Passo a Passo">
+                                                    <i class="bi bi-youtube"></i>
+                                                </a>
+                                            <?php endif; ?>
                                             <a href="?delete=<?= $c['id_cliente'] ?>&view=<?= $view_mode ?>" class="btn btn-sm btn-action delete" onclick="return confirm('Excluir cliente?')">
                                                 <i class="bi bi-trash"></i>
                                             </a>
@@ -909,7 +1413,9 @@ body, html {
 <!-- Modal de Cliente Premium -->
 <div class="modal fade" id="modalCliente" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
-        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden;">
+        <form method="POST" class="modal-content border-0 shadow-lg" style="border-radius: 24px;">
+            <input type="hidden" name="abrir_ficha_contato" value="1">
+            <input type="hidden" name="redirect_to" value="contatos.php">
             <div class="modal-header p-4 border-0 bg-main text-white position-relative">
                 <div class="position-relative z-1">
                     <h5 class="modal-title fw-bold d-flex align-items-center" id="modalTitle">
@@ -921,7 +1427,7 @@ body, html {
                 <div class="position-absolute top-0 start-0 w-100 h-100" style="background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);"></div>
             </div>
 
-            <div class="modal-body p-4 bg-light">
+            <div class="modal-body p-4 bg-light" style="max-height: 70vh; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable;">
                 <input type="hidden" name="id_cliente" id="id_cliente">
                 
                 <div class="dashboard-section p-4 mb-4">
@@ -949,6 +1455,29 @@ body, html {
                                 <span class="input-group-text bg-white border-end-0"><i class="bi bi-server text-primary"></i></span>
                                 <input type="text" name="servidor" id="servidor" class="form-control border-start-0 ps-0" placeholder="Ex: LOCAL / NUVEM">
                             </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">SERIAL</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-upc-scan text-primary"></i></span>
+                                <input type="text" name="serial" id="serial" class="form-control border-start-0 ps-0" placeholder="Ex: ELETROCONSERTOS">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">CNPJ</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-card-text text-primary"></i></span>
+                                <input type="text" name="cnpj" id="cnpj" class="form-control border-start-0 ps-0" inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">UF</label>
+                            <select name="uf" id="uf" class="form-select">
+                                <option value="">Selecione a UF</option>
+                                <?php foreach (listarUfsBrasil() as $sigla => $estado): ?>
+                                    <option value="<?= $sigla ?>"><?= $sigla ?> - <?= htmlspecialchars($estado, ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -994,7 +1523,7 @@ body, html {
                                     </select>
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label small fw-bold text-muted">Link GestãoPRO</label>
+                                    <label class="form-label small fw-bold text-muted">Link GestãooPRO</label>
                                     <div class="input-group mb-1">
                                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-link-45deg text-primary"></i></span>
                                         <input type="text" name="anexo" id="anexo" class="form-control border-start-0 ps-0" placeholder="Ex: https://interno.gestaopro.srv.br/clientes/5190">
@@ -1026,6 +1555,14 @@ body, html {
                                     </div>
                                     <small class="text-muted" style="font-size: 0.7rem;">ID utilizado para vincular os dados da API ao sistema local.</small>
                                 </div>
+                                <div class="col-12">
+                                    <label class="form-label small fw-bold text-muted">Link Vi­deos Passo a Passo</label>
+                                    <div class="input-group mb-1">
+                                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-play-circle text-danger"></i></span>
+                                        <input type="url" name="link_videos" id="link_videos" class="form-control border-start-0 ps-0" placeholder="Ex: https://drive.google.com/drive/folders/...">
+                                    </div>
+                                    <small class="text-muted" style="font-size: 0.7rem;">Link da pasta no Google Drive com os vi­deos didaticos.</small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1038,7 +1575,7 @@ body, html {
                                 <label class="form-label small fw-bold text-muted">Recursos Utilizados</label>
                                 <div class="p-2 border rounded bg-white">
                                     <?php 
-                                    $lista_recursos = ['ORÇAMENTO', 'CATÁLOGO', 'GESTAOGPT', 'SERVIÇO/OS', 'PRODUÇÃO/OS', 'PDV'];
+                                    $lista_recursos = ['ORÇAMENTO', 'GESTAOGPT', 'ASSISTÊNCIAPRO', 'PRODUÇÃO/OS', 'PDV'];
                                     foreach($lista_recursos as $rec): ?>
                                     <div class="form-check mb-1">
                                       <input class="form-check-input recurso-checkbox" type="checkbox" name="recursos[]" value="<?= $rec ?>" id="rec_<?= md5($rec) ?>">
@@ -1101,7 +1638,7 @@ body, html {
                         <option value="FATURAMENTO/NF">FATURAMENTO/NF</option>
                         <option value="FINANCEIRO/CAIXA">FINANCEIRO/CAIXA</option>
                         <option value="PRODUÇÃO/OS">PRODUÇÃO/OS</option>
-                        <option value="RELATÓRIOS">RELATÓRIOS</option>
+                        <option value="RELATORIOS">RELATORIOS</option>
                         <option value="ATENDIMENTOS">ATENDIMENTOS</option>
                         <option value="DUVIDAS">DUVIDAS</option>
                     </select>
@@ -1129,6 +1666,1409 @@ body, html {
         </form>
     </div>
 </div>
+
+<!-- Modal de chamados de suporte do cliente -->
+<div class="modal fade" id="modalChamadosSuporte" tabindex="-1" aria-labelledby="supportTicketsTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 22px; background: var(--bg-card); overflow: hidden;">
+            <div class="modal-header border-0 p-4 text-white" style="background: linear-gradient(135deg, #10234f 0%, #174a79 55%, #0f9f9a 100%);">
+                <div class="d-flex align-items-center gap-3 min-w-0">
+                    <div class="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 48px; height: 48px; background: rgba(255,255,255,.16); font-size: 1.4rem;">
+                        <i class="bi bi-headset"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <h4 class="modal-title fw-bold mb-1 text-truncate" id="supportTicketsTitle">Chamados de suporte</h4>
+                        <div class="small text-white-50">
+                            <span id="supportTicketsClient">Cliente</span>
+                            <span class="mx-1">·</span>
+                            ID GestãoPro <strong class="text-white" id="supportTicketsClientId">—</strong>
+                            <span class="mx-1">·</span>
+                            <span id="supportTicketsUpdated">Aguardando consulta</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2 ms-auto">
+                    <button type="button" class="btn btn-sm btn-outline-light fw-semibold" id="supportTicketsExport" onclick="exportarChamadosSuporteTxt()" disabled>
+                        <i class="bi bi-file-earmark-text me-1"></i>Exportar .txt
+                    </button>
+                    <button type="button" class="btn btn-sm btn-light fw-semibold" id="supportTicketsRefresh" onclick="carregarChamadosSuporteAtual(true)">
+                        <i class="bi bi-arrow-clockwise me-1" id="supportTicketsRefreshIcon"></i>Atualizar
+                    </button>
+                    <button type="button" class="btn-close btn-close-white ms-1" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+            </div>
+            <div class="modal-body p-4" style="background: var(--bg-body); min-height: 430px;">
+                <div class="row g-3 mb-4" id="supportTicketsSummary" hidden>
+                    <div class="col-12 col-sm-4">
+                        <div class="dash-kpi-card py-3">
+                            <div class="text-muted small">Total de chamados</div>
+                            <div class="fs-3 fw-bold text-main" id="supportTicketsTotal">0</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-4">
+                        <div class="dash-kpi-card py-3">
+                            <div class="text-muted small">Não resolvidos</div>
+                            <div class="fs-3 fw-bold text-warning" id="supportTicketsOpen">0</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-sm-4">
+                        <div class="dash-kpi-card py-3">
+                            <div class="text-muted small">Resolvidos</div>
+                            <div class="fs-3 fw-bold text-success" id="supportTicketsResolved">0</div>
+                        </div>
+                    </div>
+                </div>
+                <section class="mb-4" id="supportTicketsStatusBreakdown" hidden aria-live="polite">
+                    <h6 class="fw-bold text-main mb-2">Distribuição por status do GestãoPro</h6>
+                    <div class="d-flex flex-wrap gap-2" id="supportTicketsStatusCounts"></div>
+                    <p class="small text-muted mt-2 mb-0">“Não resolvidos” inclui todos os chamados cujo status não indica resolução. Confira os status acima para identificar cada um.</p>
+                </section>
+
+                <div class="row g-2 align-items-center mb-3" id="supportTicketsFilters" hidden>
+                    <div class="col-12 col-md">
+                        <div class="input-group">
+                            <span class="input-group-text bg-card border-end-0"><i class="bi bi-search text-muted"></i></span>
+                            <input type="search" class="form-control border-start-0" id="supportTicketsSearch" placeholder="Buscar por número, descrição ou informação...">
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <select class="form-select" id="supportTicketsStatusFilter" aria-label="Filtrar chamados por status">
+                            <option value="todos">Todos os chamados</option>
+                            <option value="aberto">Em aberto</option>
+                            <option value="resolvido">Resolvidos</option>
+                            <option value="outro">Outros status</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="supportTicketsLoading" class="py-5 text-center" role="status">
+                    <div class="spinner-border text-info mb-3" aria-hidden="true"></div>
+                    <h5 class="fw-bold text-main mb-1">Carregando chamados</h5>
+                    <p class="text-muted small mb-0">Consultando os registros de suporte deste cliente no GestãoPro.</p>
+                </div>
+                <div id="supportTicketsError" class="alert alert-danger d-none" role="alert"></div>
+                <div id="supportTicketsEmpty" class="py-5 text-center d-none">
+                    <i class="bi bi-inbox fs-1 text-muted"></i>
+                    <h5 class="fw-bold text-main mt-3 mb-1">Nenhum chamado encontrado</h5>
+                    <p class="text-muted small mb-0">A API não retornou chamados para este cliente.</p>
+                </div>
+                <div id="supportTicketsNoMatches" class="py-5 text-center d-none">
+                    <i class="bi bi-search fs-1 text-muted"></i>
+                    <h5 class="fw-bold text-main mt-3 mb-1">Nenhum resultado para os filtros</h5>
+                    <p class="text-muted small mb-0">Tente outro termo ou selecione “Todos os chamados”.</p>
+                </div>
+                <div id="supportTicketsList" class="d-grid gap-3" aria-live="polite"></div>
+            </div>
+            <div class="modal-footer border-0 px-4 py-3">
+                <span class="small text-muted me-auto" id="supportTicketsResultCount"></span>
+                <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Dashboard de Uso do Cliente -->
+<div class="modal fade" id="modalDashboardUso" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 24px; background: var(--bg-card); overflow: hidden;">
+            <!-- Modal Header com gradiente moderno -->
+            <div class="modal-header p-4 border-0 position-relative text-white" style="background: linear-gradient(135deg, #0b1437 0%, #11235a 50%, #0284c7 100%);">
+                <div class="d-flex align-items-center gap-3 flex-grow-1">
+                    <div class="indicator-icon rounded-3 text-white shadow-sm flex-shrink-0" style="background: rgba(255,255,255,0.18); width: 48px; height: 48px; display:flex; align-items:center; justify-content:center; font-size: 1.5rem;">
+                        <i class="bi bi-speedometer2"></i>
+                    </div>
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                            <h4 class="modal-title fw-bold text-white mb-0" id="dashNomeCliente">Dashboard de Uso</h4>
+                            <span class="badge rounded-pill px-3 py-1" id="dashBadgeStatus" style="background: rgba(255,255,255,0.2); font-size: 0.75rem;">—</span>
+                        </div>
+                        <div class="small text-white-50 d-flex align-items-center gap-3 flex-wrap">
+                            <span><i class="bi bi-braces-asterisk me-1"></i>ID API: <strong class="text-white" id="dashIdApi">—</strong></span>
+                            <span><i class="bi bi-upc-scan me-1"></i>SERIAL: <strong class="text-white" id="dashSerial">—</strong></span>
+                            <span id="dashOrigemAtualizacao"><i class="bi bi-clock me-1"></i>Atualizado: —</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-2 flex-wrap ms-auto">
+                    <div class="btn-group btn-group-sm bg-black bg-opacity-25 p-1 rounded-3">
+                        <button type="button" class="btn btn-sm btn-outline-light border-0 dash-btn-dias active" data-dias="30" onclick="alterarDiasDashboard(30)">30 dias</button>
+                        <button type="button" class="btn btn-sm btn-outline-light border-0 dash-btn-dias" data-dias="15" onclick="alterarDiasDashboard(15)">15 dias</button>
+                        <button type="button" class="btn btn-sm btn-outline-light border-0 dash-btn-dias" data-dias="7" onclick="alterarDiasDashboard(7)">7 dias</button>
+                    </div>
+                    <button class="btn btn-sm btn-light fw-bold px-3 d-flex align-items-center gap-2 shadow-sm" id="dashBtnRecarregar" onclick="recarregarDashboardAtual(true)" title="Consultar dados em tempo real na API">
+                        <i class="bi bi-arrow-clockwise" id="dashSpinIcon"></i> <span>Atualizar</span>
+                    </button>
+                    <button type="button" class="btn-close btn-close-white ms-2" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+            </div>
+
+            <div class="modal-body p-4" style="background: var(--bg-body); min-height: 520px;">
+                <!-- Estado Carregando -->
+                <div id="dashLoading" class="py-5 text-center">
+                    <div class="spinner-border text-info mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                    <h5 class="fw-bold text-main mb-1">Consultando dados de uso no GestãoPro…</h5>
+                    <p class="text-muted small mb-0">Analisando histórico de acessos, módulos e usuários deste cliente.</p>
+                </div>
+
+                <!-- Estado Vazio / Sem dados -->
+                <div id="dashEmpty" class="py-5 text-center d-none">
+                    <div class="indicator-icon mx-auto rounded-circle mb-3 text-muted" style="width: 64px; height: 64px; font-size: 2rem; background: var(--bg-card); display: flex; align-items:center; justify-content:center; border: 1px dashed var(--border-color);">
+                        <i class="bi bi-inbox"></i>
+                    </div>
+                    <h5 class="fw-bold text-main mb-2" id="dashEmptyTitle">Nenhum registro de atividade encontrado</h5>
+                    <p class="text-muted small mx-auto mb-4" style="max-width: 480px;" id="dashEmptyText">
+                        O cliente ainda não possui acessos registrados ou a API GestãoPro não retornou telemetria para este ID no período consultado.
+                    </p>
+                    <button class="btn btn-primary px-4 fw-bold" onclick="recarregarDashboardAtual(true)">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Tentar Forçar Consulta na API
+                    </button>
+                </div>
+
+                <!-- Conteúdo do Dashboard -->
+                <div id="dashBody" class="d-none">
+                    <!-- Grade de KPIs Resumo -->
+                    <div class="row g-3 mb-4">
+                        <!-- KPI 1: Último Acesso -->
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="dash-kpi-card position-relative overflow-hidden">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="small text-muted fw-semibold">Último Acesso</span>
+                                    <div class="rounded-3 p-2 text-info" style="background: rgba(6, 182, 212, 0.12);">
+                                        <i class="bi bi-clock-history fs-5"></i>
+                                    </div>
+                                </div>
+                                <h4 class="fw-bold text-main mb-1" id="kpiUltimoAcesso">—</h4>
+                                <div class="small" id="kpiUltimoRecencia"><span class="badge bg-secondary">Sem dados</span></div>
+                            </div>
+                        </div>
+
+                        <!-- KPI 2: Pageviews -->
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="dash-kpi-card position-relative overflow-hidden">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="small text-muted fw-semibold">Visualizações (Pageviews)</span>
+                                    <div class="rounded-3 p-2 text-primary" style="background: rgba(67, 97, 238, 0.12);">
+                                        <i class="bi bi-eye fs-5"></i>
+                                    </div>
+                                </div>
+                                <h4 class="fw-bold text-main mb-1" id="kpiPageviews">0</h4>
+                                <div class="small text-muted" id="kpiMediaDiaria">0 views / dia ativo</div>
+                            </div>
+                        </div>
+
+                        <!-- KPI 3: Logins & Usuários -->
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="dash-kpi-card position-relative overflow-hidden">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="small text-muted fw-semibold">Logins & Operadores</span>
+                                    <div class="rounded-3 p-2 text-purple" style="background: rgba(139, 92, 246, 0.12); color: #8b5cf6;">
+                                        <i class="bi bi-people fs-5"></i>
+                                    </div>
+                                </div>
+                                <h4 class="fw-bold text-main mb-1" id="kpiLogins">0</h4>
+                                <div class="small text-muted" id="kpiUsuariosCount">0 operadores ativos</div>
+                            </div>
+                        </div>
+
+                        <!-- KPI 4: Atritos & Saúde -->
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="dash-kpi-card position-relative overflow-hidden">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <span class="small text-muted fw-semibold">Atritos & Alertas</span>
+                                    <div class="rounded-3 p-2" id="kpiSaudeIconWrap" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b;">
+                                        <i class="bi bi-exclamation-triangle fs-5" id="kpiSaudeIcon"></i>
+                                    </div>
+                                </div>
+                                <h4 class="fw-bold text-main mb-1" id="kpiAtritos">0</h4>
+                                <div class="small text-muted" id="kpiErrosCount">0 erros no sistema</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Navegação por Abas -->
+                    <ul class="nav nav-pills gap-2 p-1 rounded-3 mb-4 border" style="background: var(--bg-card); width: fit-content;" id="dashTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link dash-nav-pill active" id="tab-visao-btn" data-bs-toggle="pill" data-bs-target="#tab-visao" type="button" role="tab">
+                                <i class="bi bi-graph-up me-1"></i> Visão Geral & Módulos
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link dash-nav-pill" id="tab-usuarios-btn" data-bs-toggle="pill" data-bs-target="#tab-usuarios" type="button" role="tab">
+                                <i class="bi bi-person-workspace me-1"></i> Usuários (<span id="tabCountUsuarios">0</span>)
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link dash-nav-pill" id="tab-rotas-btn" data-bs-toggle="pill" data-bs-target="#tab-rotas" type="button" role="tab">
+                                <i class="bi bi-signpost-split me-1"></i> Telas Mais Usadas (<span id="tabCountRotas">0</span>)
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link dash-nav-pill" id="tab-atritos-btn" data-bs-toggle="pill" data-bs-target="#tab-atritos" type="button" role="tab">
+                                <i class="bi bi-shield-exclamation me-1"></i> Dificuldades & Atritos (<span id="tabCountAtritos">0</span>)
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link dash-nav-pill" id="tab-json-btn" data-bs-toggle="pill" data-bs-target="#tab-json" type="button" role="tab">
+                                <i class="bi bi-code-slash me-1"></i> Resposta da API
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- Conteúdo das Abas -->
+                    <div class="tab-content" id="dashTabsContent">
+                        <!-- ABA 1: Visão Geral -->
+                        <div class="tab-pane fade show active" id="tab-visao" role="tabpanel">
+                            <div class="row g-4">
+                                <!-- Gráfico Linha do Tempo (ApexCharts) -->
+                                <div class="col-lg-8">
+                                    <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                        <div class="d-flex align-items-center justify-content-between mb-3">
+                                            <div>
+                                                <h6 class="fw-bold text-main mb-0"><i class="bi bi-calendar3 me-2 text-info"></i>Evolução de Acessos Diários</h6>
+                                                <small class="text-muted">Volume de telas acessadas por dia pelo cliente</small>
+                                            </div>
+                                            <span class="badge bg-info bg-opacity-10 text-info px-3 py-2 rounded-pill small" id="dashDiasAtivosLabel">0 dias com atividade</span>
+                                        </div>
+                                        <div id="chart-uso-timeline" style="min-height: 280px;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Gráfico de Módulos (Donut / Rosca) -->
+                                <div class="col-lg-4">
+                                    <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                        <h6 class="fw-bold text-main mb-1"><i class="bi bi-pie-chart me-2 text-primary"></i>Uso por Módulo</h6>
+                                        <small class="text-muted d-block mb-3">Onde o cliente mais passa tempo</small>
+                                        <div id="chart-uso-modulos" style="min-height: 280px;" class="d-flex align-items-center justify-content-center"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Tabela Detalhada de Módulos -->
+                                <div class="col-12">
+                                    <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                        <h6 class="fw-bold text-main mb-3"><i class="bi bi-grid-3x3-gap me-2 text-info"></i>Detalhamento por Módulo / Aplicativo</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-hover align-middle mb-0">
+                                                <thead style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted);">
+                                                    <tr>
+                                                        <th class="ps-3">Módulo</th>
+                                                        <th>Participação</th>
+                                                        <th class="text-center">Pageviews</th>
+                                                        <th class="text-center">Operadores</th>
+                                                        <th class="pe-3 text-end">Último Acesso no Módulo</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="dashTbodyModulos"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ABA 2: Usuários / Operadores -->
+                        <div class="tab-pane fade" id="tab-usuarios" role="tabpanel">
+                            <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                <div class="d-flex align-items-center justify-content-between mb-4">
+                                    <div>
+                                        <h6 class="fw-bold text-main mb-0"><i class="bi bi-people me-2 text-purple"></i>Operadores e Usuários Ativos</h6>
+                                        <small class="text-muted">Acessos individuais por login do cliente no período</small>
+                                    </div>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted);">
+                                            <tr>
+                                                <th class="ps-3">Operador / Login</th>
+                                                <th class="text-center">Pageviews</th>
+                                                <th class="text-center">Logins Efetuados</th>
+                                                <th class="text-center">Atritos</th>
+                                                <th class="text-center">Derrubadas</th>
+                                                <th class="pe-3 text-end">Último Acesso Deste Usuário</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="dashTbodyUsuarios"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ABA 3: Rotas & Telas -->
+                        <div class="tab-pane fade" id="tab-rotas" role="tabpanel">
+                            <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                <h6 class="fw-bold text-main mb-1"><i class="bi bi-signpost-split me-2 text-info"></i>Funcionalidades e Telas Mais Acessadas</h6>
+                                <small class="text-muted d-block mb-3">Ranking das ações e rotas executadas no sistema</small>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted);">
+                                            <tr>
+                                                <th class="ps-3">Módulo</th>
+                                                <th>Tela / Rota</th>
+                                                <th style="width: 35%;">Volume Relativo</th>
+                                                <th class="pe-3 text-end">Total de Acessos</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="dashTbodyRotas"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ABA 4: Atritos & Dificuldades -->
+                        <div class="tab-pane fade" id="tab-atritos" role="tabpanel">
+                            <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                <div class="alert alert-warning border-0 d-flex align-items-center rounded-3 p-3 mb-4">
+                                    <i class="bi bi-info-circle-fill fs-5 me-3 flex-shrink-0"></i>
+                                    <div class="small">
+                                        <strong>O que são Atritos?</strong> São mensagens de aviso, bloqueio ou validação exibidas ao cliente enquanto operava o sistema (ex: falta de dados obrigatórios, produtos não encontrados, parcelas pendentes). Use isso no treinamento para orientar o cliente onde ele mais tem dúvidas!
+                                    </div>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted);">
+                                            <tr>
+                                                <th class="ps-3">Módulo / Tela</th>
+                                                <th>Mensagem Recebida pelo Cliente</th>
+                                                <th class="pe-3 text-end">Ocorrências</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="dashTbodyAtritos"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ABA 5: JSON Bruto -->
+                        <div class="tab-pane fade" id="tab-json" role="tabpanel">
+                            <div class="card p-4 border" style="background: var(--bg-card); border-radius: 20px;">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="fw-bold text-main mb-0"><i class="bi bi-code me-2 text-muted"></i>Resposta Bruta da API GestãoPro</h6>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="copiarJsonDashboard()">
+                                        <i class="bi bi-clipboard me-1"></i> Copiar JSON
+                                    </button>
+                                </div>
+                                <pre id="dashJsonPre" class="p-3 rounded-3 small mb-0 border" style="background: var(--bg-body); max-height: 480px; overflow-y: auto; color: var(--text-main); font-family: monospace;"></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer p-3 border-0" style="background: var(--bg-card);">
+                <button type="button" class="btn btn-secondary px-4 fw-bold" style="border-radius: 10px;" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Biblioteca ApexCharts para gráficos dinâmicos do Dashboard -->
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+<script>
+    function escaparHtmlChamadosCliente(valor) {
+        return String(valor ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function localizarChamadosCliente(dados) {
+        if (Array.isArray(dados)) {
+            return dados.filter(item => item && typeof item === 'object' && !Array.isArray(item));
+        }
+        if (!dados || typeof dados !== 'object') return null;
+
+        const coletarGruposDeChamados = valor => {
+            if (Array.isArray(valor)) {
+                return valor.filter(item => item && typeof item === 'object' && !Array.isArray(item));
+            }
+            if (!valor || typeof valor !== 'object') return [];
+            return Object.values(valor).flatMap(coletarGruposDeChamados);
+        };
+
+        // A API agrupa os chamados por situação (por exemplo, abertos/finalizados).
+        // Reúne todos os grupos para não exibir somente o primeiro status encontrado.
+        for (const [chave, valor] of Object.entries(dados)) {
+            if (chave.toLowerCase() === 'chamados') {
+                const todos = coletarGruposDeChamados(valor);
+                if (todos.length) {
+                    const porId = new Map();
+                    const semId = [];
+                    todos.forEach(item => {
+                        const id = item.ID ?? item.id ?? item.ID_CHAMADO ?? item.id_chamado ?? item.ticket_id;
+                        if (id === undefined || id === null || String(id).trim() === '') semId.push(item);
+                        else if (!porId.has(String(id))) porId.set(String(id), item);
+                    });
+                    return [...porId.values(), ...semId];
+                }
+            }
+        }
+
+        let encontrouColecaoVazia = false;
+        for (const chave of ['chamados', 'implantacao', 'implantacoes', 'tickets', 'data', 'dados', 'items', 'registros', 'results']) {
+            if (dados[chave] !== undefined) {
+                const encontrados = localizarChamadosCliente(dados[chave]);
+                if (encontrados && encontrados.length) return encontrados;
+                if (encontrados !== null) encontrouColecaoVazia = true;
+            }
+        }
+
+        const chavesConhecidas = new Set(['chamados', 'implantacao', 'implantacoes', 'tickets', 'data', 'dados', 'items', 'registros', 'results']);
+        for (const [chave, valor] of Object.entries(dados)) {
+            if (!chavesConhecidas.has(chave.toLowerCase()) && valor && typeof valor === 'object') {
+                const encontrados = localizarChamadosCliente(valor);
+                if (encontrados && encontrados.length) return encontrados;
+                if (encontrados !== null) encontrouColecaoVazia = true;
+            }
+        }
+
+        const chaves = Object.keys(dados).map(chave => chave.toLowerCase());
+        if (chaves.some(chave => ['id_chamado', 'numero', 'ticket_id'].includes(chave))) {
+            return [dados];
+        }
+        if (chaves.includes('id') && !Object.values(dados).some(valor => valor && typeof valor === 'object')) {
+            return [dados];
+        }
+
+        return encontrouColecaoVazia ? [] : null;
+    }
+
+    function campoChamadoCliente(chamado, alternativas) {
+        for (const chave of alternativas) {
+            if (chamado[chave] !== undefined && chamado[chave] !== null && String(chamado[chave]).trim() !== '') {
+                return chamado[chave];
+            }
+        }
+        const chavesLowercase = new Map(Object.keys(chamado).map(chave => [chave.toLowerCase(), chave]));
+        for (const chave of alternativas) {
+            const chaveReal = chavesLowercase.get(chave.toLowerCase());
+            if (chaveReal && chamado[chaveReal] !== null && String(chamado[chaveReal]).trim() !== '') {
+                return chamado[chaveReal];
+            }
+        }
+        return '';
+    }
+
+    function valorLegivelChamadoCliente(valor) {
+        if (valor === null || valor === undefined || valor === '') return 'Não informado';
+        if (typeof valor === 'object') {
+            return Array.isArray(valor)
+                ? valor.map(valorLegivelChamadoCliente).join(', ')
+                : JSON.stringify(valor);
+        }
+        return String(valor);
+    }
+
+    function rotuloCampoChamadoCliente(chave) {
+        return String(chave)
+            .replace(/_/g, ' ')
+            .toLowerCase()
+            .replace(/\b\w/g, letra => letra.toUpperCase());
+    }
+
+    let chamadosSuporteAtivos = { idApi: '', fantasia: '', statusImplantacao: '', recursos: '', chamados: [], origem: 'api' };
+    const descricoesCompletasChamadosCliente = new Map();
+    let requisicaoChamadosSuporte = 0;
+
+    function classificarStatusChamadoCliente(status) {
+        const normalizado = String(status || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        if (/nao\s+(resolvid|concluid|finalizad|fechad|encerrad)/.test(normalizado)) return 'aberto';
+        if (/(resolvid|concluid|finalizad|fechad|encerrad)/.test(normalizado)) return 'resolvido';
+        if (/(abert|pendente|andamento|atendimento|aguard|novo)/.test(normalizado)) return 'aberto';
+        return 'outro';
+    }
+
+    function formatarDataChamadoCliente(valor) {
+        if (!valor) return '';
+        const texto = String(valor);
+        const data = new Date(texto);
+        if (Number.isNaN(data.getTime())) return texto;
+        return data.toLocaleString('pt-BR', {
+            timeZone: 'America/Sao_Paulo',
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    function atualizarResumoChamadosCliente(chamados) {
+        const resolvidos = chamados.filter(chamado => classificarStatusChamadoCliente(campoChamadoCliente(chamado, ['CHAMADO_STATUS', 'STATUS_CHAMADO', 'STATUS', 'status'])) === 'resolvido').length;
+        document.getElementById('supportTicketsTotal').textContent = chamados.length.toLocaleString('pt-BR');
+        document.getElementById('supportTicketsOpen').textContent = (chamados.length - resolvidos).toLocaleString('pt-BR');
+        document.getElementById('supportTicketsResolved').textContent = resolvidos.toLocaleString('pt-BR');
+        document.getElementById('supportTicketsSummary').hidden = false;
+
+        const contagemPorStatus = new Map();
+        chamados.forEach(chamado => {
+            const status = campoChamadoCliente(chamado, ['CHAMADO_STATUS', 'STATUS_CHAMADO', 'STATUS', 'status']);
+            const rotulo = status || 'Status não informado';
+            contagemPorStatus.set(rotulo, (contagemPorStatus.get(rotulo) || 0) + 1);
+        });
+        const itensStatus = Array.from(contagemPorStatus.entries())
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'))
+            .map(([status, total]) => `<span class="badge rounded-pill bg-secondary-subtle text-secondary px-3 py-2">${escaparHtmlChamadosCliente(status)} <span class="ms-1">${total}</span></span>`)
+            .join('');
+        document.getElementById('supportTicketsStatusCounts').innerHTML = itensStatus;
+        document.getElementById('supportTicketsStatusBreakdown').hidden = chamados.length === 0;
+    }
+
+    function valorCampoChamadoParaTxt(chamado, aliases, fallback = 'Não informado') {
+        const valor = campoChamadoCliente(chamado, aliases);
+        return valor === '' ? fallback : valorLegivelChamadoCliente(valor);
+    }
+
+    function classificarTipoDemandaTxt(chamado) {
+        const tipoOriginal = valorCampoChamadoParaTxt(chamado, ['TIPO', 'TIPO_DEMANDA', 'CATEGORIA', 'TIPOACOMP', 'TIPO_ACOMPANHAMENTO'], 'Não informado');
+        if (tipoOriginal !== 'Não informado') return tipoOriginal;
+        const texto = `${valorCampoChamadoParaTxt(chamado, ['ASSUNTO', 'TITULO', 'TEMA'], '')} ${valorCampoChamadoParaTxt(chamado, ['DESCRICAO', 'DESCRICAO_PROBLEMA', 'MENSAGEM'], '')}`.toLowerCase();
+        if (/customiza|desenvolv|personaliza/.test(texto)) return 'Customização';
+        if (/relat[oó]rio|relatorio/.test(texto)) return 'Relatório';
+        if (/erro|falha|bug|corrig|problema/.test(texto)) return 'Erro de Sistema';
+        return 'Solicitação / Dúvida';
+    }
+
+    function statusChamadoParaTxt(chamado) {
+        const status = valorCampoChamadoParaTxt(chamado, ['CHAMADO_STATUS', 'STATUS_CHAMADO', 'STATUS', 'status'], 'Não informado');
+        if (status === 'Não informado') return status;
+        return classificarStatusChamadoCliente(status) === 'resolvido' ? 'Resolvido / Encerrado' : status;
+    }
+
+    function formatarChamadoParaTxt(chamado) {
+        const id = campoChamadoCliente(chamado, ['ID', 'ID_CHAMADO', 'id_chamado', 'numero', 'ticket_id']);
+        const data = valorCampoChamadoParaTxt(chamado, ['DATA_ABERTURA', 'DATA_CRIACAO', 'DATA', 'CRIADO_EM', 'created_at']);
+        const tipo = classificarTipoDemandaTxt(chamado);
+        const descricao = valorCampoChamadoParaTxt(chamado, ['DESCRICAO', 'DESCRICAO_PROBLEMA', 'MENSAGEM', 'NECESSIDADE', 'SOLICITACAO'], 'Não informado');
+        const responsaveis = valorCampoChamadoParaTxt(chamado, ['RESPONSAVEIS', 'RESPONSAVEL', 'RESPONSAVEL_TECNICO', 'ATENDENTE', 'TECNICO', 'USUARIO'], 'Não informado');
+        return [
+            `CHAMADO #${id || 'Sem número'}`,
+            `- Data: ${data === 'Não informado' ? data : formatarDataChamadoCliente(data)}`,
+            `- Tipo: ${tipo}`,
+            `- Status: ${statusChamadoParaTxt(chamado)}`,
+            `- Descrição da Demanda/Necessidade: ${descricao}`,
+            `- Responsáveis: ${responsaveis}`
+        ].join('\r\n');
+    }
+
+    function agruparChamadosParaTxt(chamados) {
+        const grupos = new Map();
+        chamados.forEach(chamado => {
+            const tipo = classificarTipoDemandaTxt(chamado);
+            const chave = tipo;
+            if (!grupos.has(chave)) grupos.set(chave, { tipo, chamados: [] });
+            grupos.get(chave).chamados.push(chamado);
+        });
+        return Array.from(grupos.values())
+            .sort((a, b) => a.tipo.localeCompare(b.tipo, 'pt-BR'))
+            .map(grupo => `=== TIPO: ${grupo.tipo} ===\r\n\r\n${grupo.chamados.map(formatarChamadoParaTxt).join('\r\n\r\n')}`)
+            .join('\r\n\r\n' + '='.repeat(72) + '\r\n\r\n');
+    }
+
+    async function obterDescricaoCompletaChamadoCliente(chamado) {
+        const id = campoChamadoCliente(chamado, ['ID', 'ID_CHAMADO', 'id_chamado', 'numero', 'ticket_id']);
+        if (id === '') return campoChamadoCliente(chamado, ['DESCRICAO', 'DESCRICAO_PROBLEMA', 'MENSAGEM', 'descricao']);
+        if (descricoesCompletasChamadosCliente.has(String(id))) return descricoesCompletasChamadosCliente.get(String(id));
+        try {
+            const resposta = await fetch('api_gestaopro_bridge.php?endpoint=chamados&detalhe=' + encodeURIComponent(id), { headers: { 'Accept': 'application/json' } }).then(r => r.json());
+            const detalhe = resposta && resposta.sucesso && resposta.dados ? resposta.dados.chamado : null;
+            const descricao = detalhe && (detalhe.DESCRICAO ?? detalhe.descricao ?? detalhe.DESCRICAO_PROBLEMA);
+            if (typeof descricao === 'string' && descricao.trim() !== '') {
+                descricoesCompletasChamadosCliente.set(String(id), descricao);
+                return descricao;
+            }
+        } catch (_) {}
+        return campoChamadoCliente(chamado, ['DESCRICAO', 'DESCRICAO_PROBLEMA', 'MENSAGEM', 'descricao']);
+    }
+
+    async function exportarChamadosSuporteTxt() {
+        const { idApi, fantasia, statusImplantacao, recursos } = chamadosSuporteAtivos;
+        let chamados = chamadosSuporteAtivos.chamados;
+        if (!chamados.length) return;
+
+        const botaoExportar = document.getElementById('supportTicketsExport');
+        botaoExportar.disabled = true;
+        const textoOriginal = botaoExportar.innerHTML;
+        botaoExportar.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Carregando descrições...';
+        try {
+            // Busca a lista novamente sem usar o cache para não exportar uma leitura desatualizada.
+            const query = new URLSearchParams({ endpoint: 'chamados_cliente', id_cliente_api: idApi, forcar: '1' });
+            const respostaLista = await fetch(`api_gestaopro_bridge.php?${query.toString()}`, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } }).then(r => r.json());
+            if (!respostaLista.sucesso) throw new Error(respostaLista.erro || 'Não foi possível atualizar a lista de chamados.');
+            const listaAtualizada = localizarChamadosCliente(respostaLista.dados);
+            if (listaAtualizada === null) throw new Error('A resposta atualizada não contém uma lista válida de chamados.');
+            chamados = listaAtualizada;
+            chamadosSuporteAtivos.chamados = listaAtualizada;
+            document.getElementById('supportTicketsList').innerHTML = chamados.map(renderizarChamadoSuporte).join('');
+            atualizarResumoChamadosCliente(chamados);
+            filtrarChamadosSuporte();
+            await Promise.all(chamados.map(async chamado => {
+                const descricao = await obterDescricaoCompletaChamadoCliente(chamado);
+                if (descricao) {
+                    const chave = Object.keys(chamado).find(k => ['descricao', 'descricao_problema', 'mensagem'].includes(k.toLowerCase())) || 'DESCRICAO';
+                    chamado[chave] = descricao;
+                }
+            }));
+        } catch (erro) {
+            alert(`Não foi possível preparar o arquivo com todos os chamados: ${erro.message || 'erro desconhecido'}`);
+            return;
+        } finally {
+            botaoExportar.disabled = false;
+            botaoExportar.innerHTML = textoOriginal;
+        }
+
+        const dataExportacao = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        const conteudo = [
+            '=== RESUMO EXECUTIVO DA IMPLANTAÇÃO ===',
+            `Cliente: ${fantasia} (ID ${idApi})`,
+            `Status: ${statusImplantacao === 'Encerrado' ? 'Implantação Encerrada' : `Implantação ${statusImplantacao}`}`,
+            `Módulos utilizados: ${recursos || 'Não informado'}`,
+            `Total de Chamados Tratados: ${chamados.length}`,
+            `Data da exportação: ${dataExportacao}`,
+            '',
+            agruparChamadosParaTxt(chamados)
+        ].join('\r\n');
+        const arquivo = new Blob(['\uFEFF', conteudo], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(arquivo);
+        const link = document.createElement('a');
+        const nomeCliente = fantasia
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-zA-Z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .toLowerCase() || 'cliente';
+        link.href = url;
+        link.download = `chamados_${nomeCliente}_${idApi}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function renderizarChamadoSuporte(chamado) {
+        const id = campoChamadoCliente(chamado, ['ID', 'ID_CHAMADO', 'id_chamado', 'numero', 'ticket_id']);
+        const status = campoChamadoCliente(chamado, ['CHAMADO_STATUS', 'STATUS_CHAMADO', 'STATUS', 'status']);
+        const assunto = campoChamadoCliente(chamado, ['ASSUNTO', 'TITULO', 'TEMA', 'assunto']);
+        const descricao = campoChamadoCliente(chamado, ['DESCRICAO', 'DESCRICAO_PROBLEMA', 'MENSAGEM', 'descricao']);
+        const data = campoChamadoCliente(chamado, ['DATA_ABERTURA', 'DATA_CRIACAO', 'DATA', 'CRIADO_EM', 'created_at']);
+        const categoria = classificarStatusChamadoCliente(status);
+        const classeStatus = categoria === 'resolvido' ? 'bg-success-subtle text-success' : (categoria === 'aberto' ? 'bg-warning-subtle text-warning-emphasis' : 'bg-secondary-subtle text-secondary');
+        const ignorados = new Set([
+            'id', 'id_chamado', 'numero', 'ticket_id',
+            'chamado_status', 'status_chamado', 'status',
+            'descricao', 'descricao_problema', 'mensagem',
+            'assunto', 'titulo', 'tema',
+            'data_abertura', 'data_criacao', 'data', 'criado_em', 'created_at'
+        ]);
+        const detalhes = Object.entries(chamado)
+            .filter(([chave, valor]) => !ignorados.has(chave.toLowerCase()) && valor !== null && valor !== '')
+            .map(([chave, valor]) => `<div class="support-ticket-detail"><div class="text-muted small mb-1">${escaparHtmlChamadosCliente(rotuloCampoChamadoCliente(chave))}</div><div class="fw-medium">${escaparHtmlChamadosCliente(valorLegivelChamadoCliente(valor))}</div></div>`)
+            .join('');
+        const textoPrincipal = assunto || descricao || 'Sem descrição disponível.';
+        const descricaoSecundaria = `<details class="mt-2" data-support-description data-ticket-id="${escaparHtmlChamadosCliente(id)}"><summary class="small fw-semibold text-primary" style="cursor:pointer">Ver descrição completa</summary><div class="support-ticket-description text-muted small mt-2">${escaparHtmlChamadosCliente(descricao || '')}</div></details>`;
+
+        return `<article class="support-ticket-card" data-support-ticket data-status="${categoria}" data-search="${escaparHtmlChamadosCliente(JSON.stringify(chamado).toLowerCase())}">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="badge rounded-pill bg-primary-subtle text-primary">${id !== '' ? '#' + escaparHtmlChamadosCliente(id) : 'Chamado'}</span>
+                    ${status !== '' ? `<span class="badge rounded-pill ${classeStatus}">${escaparHtmlChamadosCliente(status)}</span>` : '<span class="badge rounded-pill bg-secondary-subtle text-secondary">Status não informado</span>'}
+                </div>
+                ${data !== '' ? `<span class="small text-muted"><i class="bi bi-calendar3 me-1"></i>${escaparHtmlChamadosCliente(formatarDataChamadoCliente(data))}</span>` : ''}
+            </div>
+            <h6 class="fw-bold text-main mt-3 mb-0">${escaparHtmlChamadosCliente(textoPrincipal)}</h6>
+            ${descricaoSecundaria}
+            ${detalhes ? `<details class="mt-3">
+                <summary class="small fw-semibold text-primary" style="cursor:pointer">Ver outras informações</summary>
+                <div class="support-ticket-details mt-3">${detalhes}</div>
+            </details>` : ''}
+        </article>`;
+    }
+
+    function filtrarChamadosSuporte() {
+        const lista = document.getElementById('supportTicketsList');
+        const termo = document.getElementById('supportTicketsSearch').value.trim().toLowerCase();
+        const statusSelecionado = document.getElementById('supportTicketsStatusFilter').value;
+        let exibidos = 0;
+
+        lista.querySelectorAll('[data-support-ticket]').forEach(item => {
+            const correspondeTermo = !termo || item.dataset.search.includes(termo);
+            const correspondeStatus = statusSelecionado === 'todos' || item.dataset.status === statusSelecionado;
+            const visivel = correspondeTermo && correspondeStatus;
+            item.classList.toggle('d-none', !visivel);
+            if (visivel) exibidos++;
+        });
+
+        document.getElementById('supportTicketsNoMatches').classList.toggle('d-none', exibidos > 0 || chamadosSuporteAtivos.chamados.length === 0);
+        document.getElementById('supportTicketsResultCount').textContent = `${exibidos.toLocaleString('pt-BR')} de ${chamadosSuporteAtivos.chamados.length.toLocaleString('pt-BR')} chamado(s)`;
+    }
+
+    function exibirChamadosSuporte(dados, origem, geradoEm) {
+        const chamados = localizarChamadosCliente(dados);
+        if (chamados === null) {
+            throw new Error('A resposta da API veio em um formato que não permite identificar os chamados.');
+        }
+        chamadosSuporteAtivos.chamados = chamados;
+        chamadosSuporteAtivos.origem = origem;
+        document.getElementById('supportTicketsLoading').classList.add('d-none');
+        document.getElementById('supportTicketsError').classList.add('d-none');
+        document.getElementById('supportTicketsList').innerHTML = chamados.map(renderizarChamadoSuporte).join('');
+        document.getElementById('supportTicketsEmpty').classList.toggle('d-none', chamados.length > 0);
+        document.getElementById('supportTicketsFilters').hidden = chamados.length === 0;
+        document.getElementById('supportTicketsSearch').value = '';
+        document.getElementById('supportTicketsStatusFilter').value = 'todos';
+        const atualizacao = geradoEm ? ` · ${geradoEm}` : '';
+        document.getElementById('supportTicketsUpdated').textContent = `${origem === 'cache' ? 'Cache local' : 'GestãoPro'}${atualizacao}`;
+        atualizarResumoChamadosCliente(chamados);
+        filtrarChamadosSuporte();
+    }
+
+    async function abrirChamadosSuporte(elemento) {
+        const idApi = (elemento.dataset.idApi || '').trim();
+        if (!idApi) return;
+
+        chamadosSuporteAtivos = { idApi, fantasia: elemento.dataset.fantasia || 'Cliente', statusImplantacao: elemento.dataset.statusImplantacao || 'Não informado', recursos: elemento.dataset.recursos || '', chamados: [], origem: 'api' };
+        document.getElementById('supportTicketsClient').textContent = chamadosSuporteAtivos.fantasia;
+        document.getElementById('supportTicketsClientId').textContent = idApi;
+        document.getElementById('supportTicketsUpdated').textContent = 'Consultando GestãoPro...';
+        document.getElementById('supportTicketsSummary').hidden = true;
+        document.getElementById('supportTicketsStatusBreakdown').hidden = true;
+        document.getElementById('supportTicketsFilters').hidden = true;
+        document.getElementById('supportTicketsExport').disabled = true;
+        document.getElementById('supportTicketsList').innerHTML = '';
+        document.getElementById('supportTicketsResultCount').textContent = '';
+        document.getElementById('supportTicketsError').classList.add('d-none');
+        document.getElementById('supportTicketsEmpty').classList.add('d-none');
+        document.getElementById('supportTicketsNoMatches').classList.add('d-none');
+
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalChamadosSuporte')).show();
+        await carregarChamadosSuporte(idApi);
+    }
+
+    async function carregarChamadosSuporte(idApi, forcar = false) {
+        const requisicao = ++requisicaoChamadosSuporte;
+        const loading = document.getElementById('supportTicketsLoading');
+        const refreshButton = document.getElementById('supportTicketsRefresh');
+        const refreshIcon = document.getElementById('supportTicketsRefreshIcon');
+        const error = document.getElementById('supportTicketsError');
+        loading.classList.remove('d-none');
+        error.classList.add('d-none');
+        refreshButton.disabled = true;
+        refreshIcon.classList.add('spin-animation');
+
+        try {
+            const query = new URLSearchParams({ endpoint: 'chamados_cliente', id_cliente_api: idApi });
+            if (forcar) query.set('forcar', '1');
+            const resposta = await fetch(`api_gestaopro_bridge.php?${query.toString()}`, {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const json = await resposta.json();
+            if (!resposta.ok || !json.sucesso) {
+                throw new Error(json.erro || 'Não foi possível carregar os chamados deste cliente.');
+            }
+            if (requisicao !== requisicaoChamadosSuporte || chamadosSuporteAtivos.idApi !== idApi) return;
+            exibirChamadosSuporte(json.dados, json.origem || 'api', json.gerado_em || '');
+            document.getElementById('supportTicketsExport').disabled = chamadosSuporteAtivos.chamados.length === 0;
+        } catch (erro) {
+            if (requisicao !== requisicaoChamadosSuporte || chamadosSuporteAtivos.idApi !== idApi) return;
+            loading.classList.add('d-none');
+            error.textContent = `Falha ao carregar os chamados: ${erro.message || 'erro desconhecido'}`;
+            error.classList.remove('d-none');
+            document.getElementById('supportTicketsUpdated').textContent = 'Falha na consulta';
+            console.error('Erro ao carregar chamados do cliente:', erro);
+        } finally {
+            if (requisicao === requisicaoChamadosSuporte) {
+                refreshButton.disabled = false;
+                refreshIcon.classList.remove('spin-animation');
+            }
+        }
+    }
+
+    function carregarChamadosSuporteAtual(forcar = false) {
+        if (!chamadosSuporteAtivos.idApi) return;
+        carregarChamadosSuporte(chamadosSuporteAtivos.idApi, forcar);
+    }
+
+    document.getElementById('supportTicketsSearch').addEventListener('input', filtrarChamadosSuporte);
+    document.getElementById('supportTicketsStatusFilter').addEventListener('change', filtrarChamadosSuporte);
+    document.getElementById('supportTicketsList').addEventListener('toggle', async event => {
+        const detalhes = event.target;
+        if (!detalhes.matches('details[data-support-description]') || !detalhes.open || detalhes.dataset.loaded === '1') return;
+        const id = detalhes.dataset.ticketId;
+        const chamado = chamadosSuporteAtivos.chamados.find(item => String(campoChamadoCliente(item, ['ID', 'ID_CHAMADO', 'id_chamado', 'numero', 'ticket_id'])) === id);
+        if (!chamado) return;
+        detalhes.dataset.loaded = '1';
+        const area = detalhes.querySelector('.support-ticket-description');
+        const resumoAtual = area.textContent;
+        area.textContent = 'Carregando descrição completa...';
+        const descricao = await obterDescricaoCompletaChamadoCliente(chamado);
+        area.textContent = descricao || resumoAtual || 'Descrição indisponível.';
+    }, true);
+
+    // --- GERENCIADOR DO DASHBOARD POR CLIENTE ---
+    let dashClienteAtivo = null;
+    let dashDiasAtivos = 30;
+    let chartTimelineInstancia = null;
+    let chartModulosInstancia = null;
+    let cacheDadosDashboard = {};
+
+    function formatarDataHoraIso(isoStr) {
+        if (!isoStr) return null;
+        try {
+            const dt = new Date(isoStr);
+            if (isNaN(dt.getTime())) return null;
+            return dt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        } catch (e) { return null; }
+    }
+
+    function formatarTempoRelativo(isoStr) {
+        if (!isoStr) return { texto: 'Sem registros', badge: 'bg-secondary', badgeLabel: 'Sem dados', ehHoje: false };
+        try {
+            const dt = new Date(isoStr);
+            if (isNaN(dt.getTime())) return { texto: 'Inválido', badge: 'bg-secondary', badgeLabel: 'Inválido', ehHoje: false };
+            const agora = new Date();
+            const diffMs = agora.getTime() - dt.getTime();
+            const diffMin = Math.floor(diffMs / 60000);
+            const diffHoras = Math.floor(diffMs / 3600000);
+            const diffDias = Math.floor(diffMs / 86400000);
+
+            const dtFmt = dt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const mesmoDia = dt.toDateString() === agora.toDateString();
+
+            if (mesmoDia) {
+                const tempo = diffMin < 5 ? 'Agora mesmo' : (diffMin < 60 ? `Há ${diffMin} min` : `Há ${diffHoras}h (Hoje às ${dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})`);
+                return { texto: tempo, dataCompleta: dtFmt, badge: 'bg-success bg-opacity-15 text-success border border-success border-opacity-25', badgeLabel: 'Ativo Hoje', ehHoje: true };
+            }
+
+            const ontem = new Date();
+            ontem.setDate(ontem.getDate() - 1);
+            if (dt.toDateString() === ontem.toDateString()) {
+                return { texto: `Ontem às ${dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`, dataCompleta: dtFmt, badge: 'bg-primary bg-opacity-10 text-primary', badgeLabel: 'Ativo Ontem', ehHoje: false };
+            }
+
+            if (diffDias <= 3) {
+                return { texto: `Há ${diffDias} dias (${dtFmt})`, dataCompleta: dtFmt, badge: 'bg-info bg-opacity-10 text-info', badgeLabel: `Há ${diffDias}d`, ehHoje: false };
+            }
+            if (diffDias <= 7) {
+                return { texto: `Há ${diffDias} dias (${dtFmt})`, dataCompleta: dtFmt, badge: 'bg-warning bg-opacity-10 text-warning', badgeLabel: `Atenção (${diffDias}d)`, ehHoje: false };
+            }
+            return { texto: `Há ${diffDias} dias (${dtFmt})`, dataCompleta: dtFmt, badge: 'bg-danger bg-opacity-10 text-danger', badgeLabel: `Inativo há ${diffDias}d`, ehHoje: false };
+        } catch (e) {
+            return { texto: 'Data indisponível', badge: 'bg-secondary', badgeLabel: 'Indisponível', ehHoje: false };
+        }
+    }
+
+    function destruirGraficosDashboard() {
+        if (chartTimelineInstancia) {
+            try { chartTimelineInstancia.destroy(); } catch (e) {}
+            chartTimelineInstancia = null;
+        }
+        if (chartModulosInstancia) {
+            try { chartModulosInstancia.destroy(); } catch (e) {}
+            chartModulosInstancia = null;
+        }
+    }
+
+    async function abrirDashboardUso(elem, dias = 30, forcar = false) {
+        const d = elem.dataset || {};
+        const idApi = (d.idApi || '').trim();
+        const idCliente = d.idCliente || '';
+        const fantasia = d.fantasia || 'Cliente';
+        const serial = d.serial || '';
+
+        dashClienteAtivo = { idApi, idCliente, fantasia, serial };
+        dashDiasAtivos = dias;
+
+        // Atualizar Header do Modal
+        document.getElementById('dashNomeCliente').textContent = fantasia;
+        document.getElementById('dashIdApi').textContent = idApi || 'Não cadastrado';
+        document.getElementById('dashSerial').textContent = serial || 'Não informado';
+        document.getElementById('dashOrigemAtualizacao').innerHTML = '<i class="bi bi-clock me-1"></i>Consultando...';
+        document.getElementById('dashBadgeStatus').className = 'badge rounded-pill px-3 py-1 bg-secondary';
+        document.getElementById('dashBadgeStatus').textContent = 'Carregando...';
+
+        // Atualizar botões de dias
+        document.querySelectorAll('.dash-btn-dias').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.dataset.dias, 10) === dias);
+        });
+
+        // Exibir Modal
+        const modalEl = document.getElementById('modalDashboardUso');
+        const modalInst = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalInst.show();
+
+        if (!idApi) {
+            document.getElementById('dashLoading').classList.add('d-none');
+            document.getElementById('dashBody').classList.add('d-none');
+            document.getElementById('dashEmpty').classList.remove('d-none');
+            document.getElementById('dashEmptyTitle').textContent = 'Cliente sem ID Cliente API';
+            document.getElementById('dashEmptyText').textContent = 'Para visualizar as estatísticas de uso em tempo real do GestãoPro, informe o ID API ou o link do GestãoPro na ficha de edição deste cliente.';
+            document.getElementById('dashBadgeStatus').textContent = 'Sem ID API';
+            return;
+        }
+
+        await consultarDadosUsoCliente(idApi, dias, forcar);
+    }
+
+    async function alterarDiasDashboard(dias) {
+        dashDiasAtivos = dias;
+        document.querySelectorAll('.dash-btn-dias').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.dataset.dias, 10) === dias);
+        });
+        if (dashClienteAtivo && dashClienteAtivo.idApi) {
+            await consultarDadosUsoCliente(dashClienteAtivo.idApi, dias, false);
+        }
+    }
+
+    async function recarregarDashboardAtual(forcar = true) {
+        if (!dashClienteAtivo || !dashClienteAtivo.idApi) return;
+        const icon = document.getElementById('dashSpinIcon');
+        const btn = document.getElementById('dashBtnRecarregar');
+        if (icon) icon.classList.add('spin-animation');
+        if (btn) btn.disabled = true;
+        try {
+            await consultarDadosUsoCliente(dashClienteAtivo.idApi, dashDiasAtivos, forcar);
+        } finally {
+            if (icon) icon.classList.remove('spin-animation');
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    async function consultarDadosUsoCliente(idApi, dias, forcar = false) {
+        const loadingEl = document.getElementById('dashLoading');
+        const emptyEl = document.getElementById('dashEmpty');
+        const bodyEl = document.getElementById('dashBody');
+
+        loadingEl.classList.remove('d-none');
+        emptyEl.classList.add('d-none');
+        bodyEl.classList.add('d-none');
+
+        destruirGraficosDashboard();
+
+        try {
+            const url = `api_gestaopro_bridge.php?endpoint=uso&id_cliente_api=${encodeURIComponent(idApi)}&dias=${dias}${forcar ? '&forcar=1' : ''}`;
+            const resp = await fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+            const json = await resp.json();
+
+            if (!resp.ok || !json.sucesso) {
+                throw new Error(json.erro || 'Não foi possível carregar os dados de uso deste cliente.');
+            }
+
+            const dados = json.dados;
+            if (!dados || (typeof dados === 'object' && Object.keys(dados).length === 0)) {
+                loadingEl.classList.add('d-none');
+                emptyEl.classList.remove('d-none');
+                document.getElementById('dashEmptyTitle').textContent = 'Nenhum dado retornado para este cliente';
+                document.getElementById('dashEmptyText').textContent = 'A API do GestãoPro retornou resposta vazia para o período selecionado.';
+                document.getElementById('dashBadgeStatus').textContent = 'Sem dados';
+                return;
+            }
+
+            renderizarDashboardUso(dados, dias, json.origem || 'api', json.gerado_em || 'agora');
+
+            loadingEl.classList.add('d-none');
+            bodyEl.classList.remove('d-none');
+
+        } catch (err) {
+            console.error('Erro no Dashboard de uso:', err);
+            loadingEl.classList.add('d-none');
+            emptyEl.classList.remove('d-none');
+            document.getElementById('dashEmptyTitle').textContent = 'Falha ao consultar uso';
+            document.getElementById('dashEmptyText').textContent = err.message || 'Houve um erro na comunicação com a API GestãoPro.';
+            document.getElementById('dashBadgeStatus').textContent = 'Erro';
+        }
+    }
+
+    // Pré-carrega o uso ao abrir a tela, consultando a API sem forçar sua atualização.
+    // O botão Atualizar do dashboard continua usando forcar=1.
+    async function preCarregarUsoClientes() {
+        const ids = [...new Set([...document.querySelectorAll('.client-usage-box[data-id-api]')]
+            .map(el => (el.dataset.idApi || '').trim())
+            .filter(id => /^\\d+$/.test(id)))];
+        let proximo = 0;
+        const trabalhador = async () => {
+            while (proximo < ids.length) {
+                const id = ids[proximo++];
+                try {
+                    await fetch(`api_gestaopro_bridge.php?endpoint=uso&id_cliente_api=${encodeURIComponent(id)}&dias=30&consultar_api=1`, {
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                    });
+                } catch (erro) {
+                    console.warn(`Falha ao pré-carregar uso do cliente ${id}.`, erro);
+                }
+            }
+        };
+        await Promise.all(Array.from({ length: Math.min(3, ids.length) }, trabalhador));
+    }
+
+    if ('requestIdleCallback' in window) requestIdleCallback(() => preCarregarUsoClientes());
+    else window.addEventListener('load', () => setTimeout(preCarregarUsoClientes, 250));
+
+    function renderizarDashboardUso(dados, dias, origem, geradoEm) {
+        const resumo = dados.resumo || {};
+        const diario = Array.isArray(dados.diario) ? dados.diario : [];
+        const modulos = Array.isArray(dados.modulos) ? dados.modulos : [];
+        const usuarios = Array.isArray(dados.usuarios) ? dados.usuarios : [];
+        const rotas = Array.isArray(dados.rotas) ? dados.rotas : [];
+        const atritos = Array.isArray(dados.atritos) ? dados.atritos : [];
+        const erros = Array.isArray(dados.erros) ? dados.erros : [];
+
+        // Origem & Atualização
+        const origemTexto = origem === 'cache' ? 'Em cache local' : 'API em tempo real';
+        document.getElementById('dashOrigemAtualizacao').innerHTML = `<i class="bi bi-clock me-1"></i>Atualizado: <strong>${geradoEm}</strong> (${origemTexto})`;
+
+        // Status e KPIs
+        let ultimoIso = resumo.ULTIMO || null;
+        let ultimoTimestamp = ultimoIso ? new Date(ultimoIso).getTime() : Number.NEGATIVE_INFINITY;
+        usuarios.forEach(usuario => {
+            if (!usuario?.ULTIMO) return;
+            const timestampUsuario = new Date(usuario.ULTIMO).getTime();
+            if (!Number.isNaN(timestampUsuario) && timestampUsuario > ultimoTimestamp) {
+                ultimoIso = usuario.ULTIMO;
+                ultimoTimestamp = timestampUsuario;
+            }
+        });
+        const statusUso = formatarTempoRelativo(ultimoIso);
+
+        const badgeStatusEl = document.getElementById('dashBadgeStatus');
+        badgeStatusEl.className = `badge rounded-pill px-3 py-1 ${statusUso.badge}`;
+        badgeStatusEl.innerHTML = statusUso.ehHoje ? `<span class="pulse-dot-green me-1"></span>${statusUso.badgeLabel}` : statusUso.badgeLabel;
+
+        // KPI 1: Último Acesso
+        const kpiUltimoEl = document.getElementById('kpiUltimoAcesso');
+        const kpiUltimoRecenciaEl = document.getElementById('kpiUltimoRecencia');
+        if (ultimoIso) {
+            const dataFmt = formatarDataHoraIso(ultimoIso);
+            kpiUltimoEl.textContent = dataFmt || statusUso.texto;
+            kpiUltimoRecenciaEl.innerHTML = `<span class="badge rounded-pill ${statusUso.badge}">${statusUso.texto}</span>`;
+        } else {
+            kpiUltimoEl.textContent = 'Sem acessos';
+            kpiUltimoRecenciaEl.innerHTML = '<span class="badge bg-secondary">Nenhum login nos últimos 30d</span>';
+        }
+
+        // KPI 2: Pageviews
+        const totalPageviews = parseInt(resumo.PAGEVIEWS || 0, 10);
+        document.getElementById('kpiPageviews').textContent = totalPageviews.toLocaleString('pt-BR');
+        const diasComAtividade = diario.filter(d => (parseInt(d.PAGEVIEWS, 10) || 0) > 0).length;
+        const mediaDiaria = diasComAtividade > 0 ? Math.round(totalPageviews / diasComAtividade) : 0;
+        document.getElementById('kpiMediaDiaria').textContent = `${mediaDiaria.toLocaleString('pt-BR')} views / dia ativo (${diasComAtividade}d ativos)`;
+        document.getElementById('dashDiasAtivosLabel').textContent = `${diasComAtividade} de ${dias} dias com atividade`;
+
+        // KPI 3: Logins & Usuários
+        const totalLogins = parseInt(resumo.LOGINS || 0, 10);
+        const qtdUsuarios = parseInt(resumo.USUARIOS || usuarios.length || 0, 10);
+        document.getElementById('kpiLogins').textContent = totalLogins.toLocaleString('pt-BR');
+        document.getElementById('kpiUsuariosCount').textContent = `${qtdUsuarios} operador(es) ativo(s)`;
+
+        // KPI 4: Atritos & Saúde
+        const totalAtritos = parseInt(resumo.ATRITOS || 0, 10);
+        const totalErros = parseInt(resumo.ERROS || erros.length || 0, 10);
+        document.getElementById('kpiAtritos').textContent = totalAtritos.toLocaleString('pt-BR');
+        document.getElementById('kpiErrosCount').textContent = totalErros > 0 ? `${totalErros} erro(s) técnico(s)` : 'Nenhum erro registrado';
+
+        const saudeWrap = document.getElementById('kpiSaudeIconWrap');
+        if (totalErros > 0) {
+            saudeWrap.style.background = 'rgba(239, 68, 68, 0.15)';
+            saudeWrap.style.color = '#ef4444';
+        } else if (totalAtritos > 20) {
+            saudeWrap.style.background = 'rgba(245, 158, 11, 0.15)';
+            saudeWrap.style.color = '#f59e0b';
+        } else {
+            saudeWrap.style.background = 'rgba(16, 185, 129, 0.15)';
+            saudeWrap.style.color = '#10b981';
+        }
+
+        // Atualizar Badges das Abas
+        document.getElementById('tabCountUsuarios').textContent = usuarios.length;
+        document.getElementById('tabCountRotas').textContent = rotas.length;
+        document.getElementById('tabCountAtritos').textContent = atritos.length;
+
+        // Renderizar Gráficos ApexCharts
+        destruirGraficosDashboard();
+        renderizarGraficoTimeline(diario);
+        renderizarGraficoModulos(modulos);
+
+        // Renderizar Tabelas
+        renderizarTabelaModulos(modulos, totalPageviews);
+        renderizarTabelaUsuarios(usuarios);
+        renderizarTabelaRotas(rotas, totalPageviews);
+        renderizarTabelaAtritos(atritos);
+
+        // Renderizar JSON Bruto
+        document.getElementById('dashJsonPre').textContent = JSON.stringify(dados, null, 2);
+    }
+
+    function renderizarGraficoTimeline(diario) {
+        const container = document.querySelector("#chart-uso-timeline");
+        if (!container) return;
+        container.innerHTML = '';
+
+        if (!diario || diario.length === 0) {
+            container.innerHTML = '<div class="text-center py-5 text-muted small"><i class="bi bi-calendar-x fs-4 d-block mb-2"></i>Sem histórico diário no período</div>';
+            return;
+        }
+
+        const datas = diario.map(d => {
+            const partes = (d.DIA || '').split('-');
+            return partes.length === 3 ? `${partes[2]}/${partes[1]}` : d.DIA;
+        });
+        const pageviews = diario.map(d => parseInt(d.PAGEVIEWS || 0, 10));
+
+        const options = {
+            series: [{ name: 'Pageviews', data: pageviews }],
+            chart: {
+                type: 'area',
+                height: 280,
+                toolbar: { show: false },
+                zoom: { enabled: false },
+                fontFamily: 'Inter, sans-serif',
+                foreColor: 'var(--text-muted)',
+                background: 'transparent'
+            },
+            colors: ['#06b6d4'],
+            dataLabels: { enabled: false },
+            stroke: { curve: 'smooth', width: 2.5 },
+            fill: {
+                type: 'gradient',
+                gradient: {
+                    shadeIntensity: 1,
+                    opacityFrom: 0.45,
+                    opacityTo: 0.05,
+                    stops: [0, 95, 100]
+                }
+            },
+            xaxis: {
+                categories: datas,
+                axisBorder: { show: false },
+                axisTicks: { show: false }
+            },
+            yaxis: {
+                labels: {
+                    formatter: val => Math.round(val)
+                }
+            },
+            grid: {
+                borderColor: 'rgba(255,255,255,0.06)',
+                strokeDashArray: 3
+            },
+            tooltip: {
+                theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light',
+                y: { formatter: val => `${val} acessos a telas` }
+            }
+        };
+
+        chartTimelineInstancia = new ApexCharts(container, options);
+        chartTimelineInstancia.render();
+    }
+
+    function renderizarGraficoModulos(modulos) {
+        const container = document.querySelector("#chart-uso-modulos");
+        if (!container) return;
+        container.innerHTML = '';
+
+        if (!modulos || modulos.length === 0) {
+            container.innerHTML = '<div class="text-center py-5 text-muted small"><i class="bi bi-pie-chart fs-4 d-block mb-2"></i>Sem dados de módulos</div>';
+            return;
+        }
+
+        const labels = modulos.map(m => (m.APP || 'Outros').toUpperCase());
+        const series = modulos.map(m => parseInt(m.PAGEVIEWS || 0, 10));
+        const cores = ['#06b6d4', '#4361ee', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#64748b'];
+
+        const options = {
+            series: series,
+            labels: labels,
+            chart: {
+                type: 'donut',
+                height: 280,
+                fontFamily: 'Inter, sans-serif',
+                foreColor: 'var(--text-muted)'
+            },
+            colors: cores.slice(0, series.length),
+            dataLabels: { enabled: false },
+            legend: { position: 'bottom', fontSize: '11px' },
+            plotOptions: {
+                pie: {
+                    donut: {
+                        size: '72%',
+                        labels: {
+                            show: true,
+                            total: {
+                                show: true,
+                                label: 'Total',
+                                color: 'var(--text-muted)',
+                                formatter: w => w.globals.seriesTotals.reduce((a, b) => a + b, 0).toLocaleString('pt-BR')
+                            }
+                        }
+                    }
+                }
+            },
+            tooltip: {
+                theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
+            }
+        };
+
+        chartModulosInstancia = new ApexCharts(container, options);
+        chartModulosInstancia.render();
+    }
+
+    function renderizarTabelaModulos(modulos, totalGeral) {
+        const tbody = document.getElementById('dashTbodyModulos');
+        if (!tbody) return;
+        if (!modulos || modulos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">Nenhum módulo utilizado no período.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = modulos.map(m => {
+            const pviews = parseInt(m.PAGEVIEWS || 0, 10);
+            const pct = totalGeral > 0 ? Math.round((pviews / totalGeral) * 100) : 0;
+            const ultimo = formatarDataHoraIso(m.ULTIMO) || '—';
+            const usuariosQtd = m.USUARIOS || 1;
+
+            return `
+                <tr>
+                    <td class="ps-3 fw-bold text-main">
+                        <span class="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill me-2">${escapeHtml((m.APP || 'core').toUpperCase())}</span>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2" style="max-width: 220px;">
+                            <div class="progress flex-grow-1" style="height: 6px; border-radius: 10px; background: rgba(255,255,255,0.06);">
+                                <div class="progress-bar bg-info" style="width: ${pct}%"></div>
+                            </div>
+                            <span class="small fw-semibold text-muted">${pct}%</span>
+                        </div>
+                    </td>
+                    <td class="text-center fw-bold text-main">${pviews.toLocaleString('pt-BR')}</td>
+                    <td class="text-center"><span class="badge bg-secondary bg-opacity-10 text-secondary">${usuariosQtd}</span></td>
+                    <td class="pe-3 text-end text-muted small"><i class="bi bi-clock me-1"></i>${ultimo}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderizarTabelaUsuarios(usuarios) {
+        const tbody = document.getElementById('dashTbodyUsuarios');
+        if (!tbody) return;
+        if (!usuarios || usuarios.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">Nenhum usuário registrado.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = usuarios.map(u => {
+            const login = u.LOGIN || `Usuário #${u.ID_USUARIO || ''}`;
+            const pviews = parseInt(u.PAGEVIEWS || 0, 10);
+            const logins = parseInt(u.LOGINS || 0, 10);
+            const atritos = parseInt(u.ATRITOS || 0, 10);
+            const derrubadas = parseInt(u.DERRUBADAS || 0, 10);
+            const ultimo = formatarDataHoraIso(u.ULTIMO) || '—';
+
+            return `
+                <tr>
+                    <td class="ps-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold shadow-sm" style="width: 32px; height: 32px; font-size: 0.8rem; background: linear-gradient(135deg, #0ea5e9, #6366f1);">
+                                ${escapeHtml(login.charAt(0).toUpperCase())}
+                            </div>
+                            <div>
+                                <strong class="text-main d-block">${escapeHtml(login)}</strong>
+                                <small class="text-muted" style="font-size: 0.72rem;">Serial: ${escapeHtml(u.SERIAL || '—')}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-center fw-bold text-main">${pviews.toLocaleString('pt-BR')}</td>
+                    <td class="text-center"><span class="badge bg-primary bg-opacity-10 text-primary">${logins}</span></td>
+                    <td class="text-center"><span class="badge ${atritos > 0 ? 'bg-warning bg-opacity-10 text-warning' : 'bg-light text-muted'}">${atritos}</span></td>
+                    <td class="text-center"><span class="badge ${derrubadas > 0 ? 'bg-danger bg-opacity-10 text-danger' : 'bg-light text-muted'}">${derrubadas}</span></td>
+                    <td class="pe-3 text-end text-muted small"><i class="bi bi-clock me-1"></i>${ultimo}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderizarTabelaRotas(rotas, totalGeral) {
+        const tbody = document.getElementById('dashTbodyRotas');
+        if (!tbody) return;
+        if (!rotas || rotas.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted">Nenhuma rota registrada no período.</td></tr>';
+            return;
+        }
+
+        const maxAcessos = Math.max(...rotas.map(r => parseInt(r.N || 0, 10)), 1);
+
+        tbody.innerHTML = rotas.map(r => {
+            const n = parseInt(r.N || 0, 10);
+            const pct = Math.round((n / maxAcessos) * 100);
+
+            return `
+                <tr>
+                    <td class="ps-3">
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary">${escapeHtml((r.APP || '').toUpperCase())}</span>
+                    </td>
+                    <td>
+                        <code class="text-main fw-semibold" style="font-size: 0.85rem;">${escapeHtml(r.ROTA || '')}</code>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height: 6px; border-radius: 10px; background: rgba(255,255,255,0.06);">
+                                <div class="progress-bar bg-info" style="width: ${pct}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="pe-3 text-end fw-bold text-main">${n.toLocaleString('pt-BR')}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderizarTabelaAtritos(atritos) {
+        const tbody = document.getElementById('dashTbodyAtritos');
+        if (!tbody) return;
+        if (!atritos || atritos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-success"><i class="bi bi-check-circle me-1"></i>Nenhum atrito ou mensagem de bloqueio enfrentada pelo cliente! Operação fluida.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = atritos.map(a => {
+            const n = parseInt(a.N || 1, 10);
+            return `
+                <tr>
+                    <td class="ps-3" style="width: 25%;">
+                        <span class="badge bg-warning bg-opacity-10 text-warning me-1">${escapeHtml((a.APP || '').toUpperCase())}</span>
+                        <div class="small text-muted mt-1"><code>${escapeHtml(a.ROTA || '')}</code></div>
+                    </td>
+                    <td>
+                        <div class="text-main fw-semibold">${escapeHtml(a.MENSAGEM || '')}</div>
+                    </td>
+                    <td class="pe-3 text-end">
+                        <span class="badge bg-warning text-dark px-3 py-1 rounded-pill fw-bold">${n}x</span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function copiarJsonDashboard() {
+        const pre = document.getElementById('dashJsonPre');
+        if (!pre) return;
+        navigator.clipboard.writeText(pre.textContent).then(() => {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({ icon: 'success', title: 'Copiado!', text: 'JSON copiado para a área de transferência.', timer: 1500, showConfirmButton: false });
+            } else {
+                alert('JSON copiado!');
+            }
+        });
+    }
+
+    function escapeHtml(str) {
+        return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+</script>
+
+<style>
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .spin-animation { animation: spin 1s linear infinite; }
+</style>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -1179,19 +3119,26 @@ body, html {
     function openEditModal(button) {
         const d = button.dataset;
         document.getElementById('modalTitle').innerText = 'Editar Cliente';
+        const idClienteApi = (button.getAttribute('data-id-cliente-api') || d.idClienteApi || '').trim();
+
         document.getElementById('id_cliente').value = d.id;
         document.getElementById('fantasia').value = d.fantasia || '';
+        document.getElementById('serial').value = d.serial || '';
+        document.getElementById('cnpj').value = d.cnpj || '';
+        document.getElementById('uf').value = d.uf || '';
         document.getElementById('servidor').value = d.servidor || '';
         document.getElementById('vendedor').value = d.vendedor || '';
         document.getElementById('data_inicio').value = d.inicio || '';
         document.getElementById('id_data_fim').value = d.fim || '';
         document.getElementById('data_previsao_encerramento').value = d.previsaoEncerramento || '';
-        document.getElementById('id_cliente_api').value = d.idClienteApi || d.api || button.getAttribute('data-id-cliente-api') || '';
+        document.getElementById('id_cliente_api').value = idClienteApi;
         document.getElementById('emitir_nf').value = d.nf || 'Não';
         document.getElementById('configurado').value = d.cfg || 'Não';
         document.getElementById('num_licencas').value = d.licencas || 0;
-        document.getElementById('anexo').value = d.anexo || '';
+        document.getElementById('anexo').value = d.anexo || (idClienteApi ? `https://interno.gestaopro.srv.br/clientes/${idClienteApi}` : '');
+        sincronizarIdClienteApi();
         document.getElementById('chamados').value = d.chamados || '';
+        document.getElementById('link_videos').value = d.linkVideos || '';
         
         // Limpar e preencher checkbox de recursos
         document.querySelectorAll('.recurso-checkbox').forEach(cb => cb.checked = false);
@@ -1209,6 +3156,25 @@ body, html {
         const modal = new bootstrap.Modal(document.getElementById('modalCliente'));
         modal.show();
     }
+
+    function sincronizarIdClienteApi() {
+        const link = document.getElementById('anexo').value.trim();
+        const campoId = document.getElementById('id_cliente_api');
+        const linkComProtocolo = /^https?:\/\//i.test(link) ? link : `https://${link}`;
+
+        try {
+            const caminho = new URL(linkComProtocolo).pathname;
+            const resultado = caminho.match(/\/(\d+)\/?$/);
+            if (resultado) {
+                campoId.value = resultado[1];
+            }
+        } catch (erro) {
+            // Mantém o valor existente enquanto o link ainda está incompleto.
+        }
+    }
+
+    document.getElementById('anexo').addEventListener('input', sincronizarIdClienteApi);
+    document.getElementById('anexo').addEventListener('change', sincronizarIdClienteApi);
 
     function toggleConfigurado(valor) {
         const div = document.getElementById('div_configurado');
@@ -1261,6 +3227,243 @@ body, html {
 
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalNovoTreinamento')).show();
     }
+</script>
+
+<div class="modal fade" id="modalConsultaSintegra" tabindex="-1" aria-labelledby="modalConsultaSintegraTitulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
+            <div class="modal-header border-0 text-white" style="background: linear-gradient(135deg, #0f766e, #14b8a6);">
+                <div>
+                    <h5 class="modal-title fw-bold" id="modalConsultaSintegraTitulo"><i class="bi bi-search me-2"></i>Consulta fiscal</h5>
+                    <div class="small text-white-50" id="sintegraNomeCliente">Cliente</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-info py-2 small" id="sintegraCustoAviso">
+                    A primeira consulta consome 2 créditos com UF cadastrada ou 3 créditos sem UF. Consultas bem-sucedidas ficam em cache nesta sessão por 24 horas.
+                </div>
+                <div class="alert alert-info" id="sintegraConsultaStatus" role="status" aria-live="polite">
+                    Preparando consulta...
+                </div>
+                <div id="sintegraConsultaResultados" class="d-none">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="small text-muted">CNPJ</div>
+                                <div class="fw-semibold" id="sintegraCnpj">—</div>
+                                <div class="small text-muted mt-2">UF consultada</div>
+                                <div class="fw-semibold" id="sintegraUf">—</div>
+                                <div class="small text-muted mt-2">Razão social</div>
+                                <div class="fw-semibold" id="sintegraRazaoSocial">—</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="small text-muted">Enquadramento consultado</div>
+                                <div class="fw-semibold" id="sintegraRegime">Não informado pela fonte</div>
+                                <div class="small text-muted mt-2" id="sintegraSimplesDetalhe"></div>
+                                <div class="small text-muted mt-2">Atualização informada pela API</div>
+                                <div class="small" id="sintegraAtualizadoEm">—</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-warning py-2 small">
+                        A consulta Simples/SIMEI não identifica Lucro Presumido ou Lucro Real. A API Sintegra também não informa esses regimes.
+                    </div>
+                    <h6 class="fw-bold mt-4">Inscrições Estaduais</h6>
+                    <div id="sintegraInscricoes" class="d-grid gap-2"></div>
+                    <div class="small text-muted mt-3" id="sintegraRequestId"></div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const modal = document.getElementById('modalConsultaSintegra');
+    if (!modal) return;
+
+    const statusBox = document.getElementById('sintegraConsultaStatus');
+    const resultsBox = document.getElementById('sintegraConsultaResultados');
+    const inscritosBox = document.getElementById('sintegraInscricoes');
+    let solicitacaoAtual = 0;
+
+    function unwrapSintegraData(value) {
+        let current = value;
+        for (let i = 0; i < 3 && current && !Array.isArray(current); i++) {
+            const nested = current.data || current.dados || current.result;
+            if (!nested || typeof nested !== 'object' || Array.isArray(nested)) break;
+            current = nested;
+        }
+        return current && typeof current === 'object' ? current : {};
+    }
+
+    function valorExibicao(valor, quandoAusente = 'Não informado') {
+        if (valor === true) return 'Sim';
+        if (valor === false) return 'Não';
+        if (valor === null || valor === undefined || String(valor).trim() === '') return quandoAusente;
+        return String(valor);
+    }
+
+    function campoInscricao(rotulo, valor) {
+        const linha = document.createElement('div');
+        linha.className = 'd-flex flex-wrap gap-1';
+        const titulo = document.createElement('span');
+        titulo.className = 'text-muted';
+        titulo.textContent = `${rotulo}:`;
+        const texto = document.createElement('span');
+        texto.className = 'fw-semibold';
+        texto.textContent = valorExibicao(valor);
+        linha.append(titulo, texto);
+        return linha;
+    }
+
+    function renderizarInscricoes(dados) {
+        inscritosBox.replaceChildren();
+        const lista = dados.inscricoes_estaduais || dados.inscricoes || [];
+        if (!Array.isArray(lista) || lista.length === 0) {
+            const vazio = document.createElement('div');
+            vazio.className = 'text-muted small border rounded-3 p-3';
+            vazio.textContent = 'A consulta não retornou inscrições estaduais para esta UF.';
+            inscritosBox.appendChild(vazio);
+            return;
+        }
+
+        lista.forEach((inscricao) => {
+            if (!inscricao || typeof inscricao !== 'object') return;
+            const card = document.createElement('div');
+            card.className = 'border rounded-3 p-3';
+            const topo = document.createElement('div');
+            topo.className = 'd-flex justify-content-between align-items-center gap-2 mb-2';
+            const ie = document.createElement('strong');
+            ie.textContent = valorExibicao(inscricao.inscricao_estadual || inscricao.ie);
+            const ativa = document.createElement('span');
+            const ativaValor = inscricao.ativa;
+            ativa.className = `badge ${ativaValor === true ? 'bg-success' : (ativaValor === false ? 'bg-secondary' : 'bg-light text-dark')}`;
+            ativa.textContent = ativaValor === true ? 'Ativa' : (ativaValor === false ? 'Inativa' : 'Situação não informada');
+            topo.append(ie, ativa);
+            card.appendChild(topo);
+            card.append(
+                campoInscricao('UF', inscricao.uf),
+                campoInscricao('Tipo de inscrição', inscricao.tipo_ie),
+                campoInscricao('Situação PJ', inscricao.situacao_pj)
+            );
+            inscritosBox.appendChild(card);
+        });
+    }
+
+    function mostrarResultado(resposta) {
+        const dadosSintegra = resposta.sintegra && resposta.sintegra.sucesso
+            ? unwrapSintegraData(resposta.sintegra.dados)
+            : null;
+        const dadosSimples = resposta.simples && resposta.simples.sucesso
+            ? unwrapSintegraData(resposta.simples.dados)
+            : null;
+
+        document.getElementById('sintegraCnpj').textContent = resposta.cnpj || '—';
+        document.getElementById('sintegraUf').textContent = resposta.uf_consultada === 'BR' ? 'Todas as UFs' : (resposta.uf_consultada || '—');
+        document.getElementById('sintegraRazaoSocial').textContent = dadosSintegra
+            ? valorExibicao(dadosSintegra.razao_social || dadosSintegra.nome_empresarial)
+            : 'Consulta Sintegra indisponível';
+        document.getElementById('sintegraAtualizadoEm').textContent = dadosSimples
+            ? valorExibicao(dadosSimples.atualizado_em || dadosSimples.consultado_em)
+            : 'Consulta Simples/SIMEI indisponível';
+
+        const simples = dadosSimples && dadosSimples.simples_nacional;
+        const simei = dadosSimples && dadosSimples.simei;
+        const regime = document.getElementById('sintegraRegime');
+        const detalhe = document.getElementById('sintegraSimplesDetalhe');
+        if (simei && simei.optante === true) {
+            regime.textContent = 'Optante pelo SIMEI (MEI)';
+        } else if (simples && simples.optante === true) {
+            regime.textContent = 'Optante pelo Simples Nacional';
+        } else if (simples && simples.optante === false) {
+            regime.textContent = 'Não optante pelo Simples Nacional';
+        } else {
+            regime.textContent = 'Enquadramento não informado pela fonte';
+        }
+        detalhe.textContent = simei
+            ? `SIMEI: ${valorExibicao(simei.optante)}${simei.data_opcao ? ` · Opção: ${simei.data_opcao}` : ''}`
+            : '';
+
+        if (dadosSintegra) {
+            renderizarInscricoes(dadosSintegra);
+        } else {
+            inscritosBox.replaceChildren();
+            const erro = document.createElement('div');
+            erro.className = 'text-warning small';
+            erro.textContent = resposta.sintegra && resposta.sintegra.erro
+                ? `Falha na consulta Sintegra: ${resposta.sintegra.erro}`
+                : 'Não foi possível obter as inscrições estaduais.';
+            inscritosBox.appendChild(erro);
+        }
+
+        const requestId = dadosSintegra && (dadosSintegra.request_id || dadosSintegra.requestId);
+        document.getElementById('sintegraRequestId').textContent = requestId ? `Identificador da consulta: ${requestId}` : '';
+        resultsBox.classList.remove('d-none');
+        const houveFalhaParcial = !resposta.sintegra.sucesso || !resposta.simples.sucesso;
+        statusBox.className = `alert ${houveFalhaParcial ? 'alert-warning' : 'alert-success'}`;
+        if (houveFalhaParcial) {
+            const falhas = [];
+            if (!resposta.sintegra.sucesso) falhas.push(`Sintegra: ${resposta.sintegra.erro || 'indisponível'}`);
+            if (!resposta.simples.sucesso) falhas.push(`Simples/SIMEI: ${resposta.simples.erro || 'indisponível'}`);
+            statusBox.textContent = `Consulta parcial. ${falhas.join(' · ')}`;
+        } else {
+            statusBox.textContent = resposta.cache_sessao
+                ? 'Resultado reutilizado do cache da sessão (válido por até 24 horas).'
+                : 'Consulta concluída.';
+        }
+    }
+
+    document.addEventListener('click', async (event) => {
+        const button = event.target.closest('.btn-consultar-sintegra');
+        if (!button || button.disabled) return;
+        const idSolicitacao = ++solicitacaoAtual;
+
+        document.getElementById('sintegraNomeCliente').textContent = button.dataset.cliente || 'Cliente';
+        document.getElementById('sintegraCustoAviso').textContent = button.dataset.temUf === '1'
+            ? 'Primeira consulta: 2 créditos (1 Sintegra na UF cadastrada + 1 Simples/SIMEI). Resultado em cache nesta sessão por 24 horas.'
+            : 'Primeira consulta: 3 créditos (2 Sintegra em todas as UFs + 1 Simples/SIMEI). Resultado em cache nesta sessão por 24 horas.';
+        resultsBox.classList.add('d-none');
+        statusBox.className = 'alert alert-info';
+        statusBox.textContent = 'Consultando Sintegra e Simples/SIMEI...';
+        inscritosBox.replaceChildren();
+        bootstrap.Modal.getOrCreateInstance(modal).show();
+
+        const textoOriginal = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        try {
+            const response = await fetch('api_consultar_sintegra.php', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ id_cliente: button.dataset.idCliente })
+            });
+            const resultado = await response.json();
+            if (!response.ok || !resultado.sucesso || !resultado.dados) {
+                throw new Error(resultado.erro || 'Não foi possível consultar os dados fiscais.');
+            }
+            if (idSolicitacao !== solicitacaoAtual) return;
+            mostrarResultado(resultado.dados);
+        } catch (erro) {
+            if (idSolicitacao !== solicitacaoAtual) return;
+            statusBox.className = 'alert alert-danger';
+            statusBox.textContent = erro.message || 'Falha ao consultar os dados fiscais.';
+        } finally {
+            button.disabled = false;
+            button.innerHTML = textoOriginal;
+        }
+    });
+})();
 </script>
 
 <?php include 'footer.php'; ?>
