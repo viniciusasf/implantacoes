@@ -1,6 +1,7 @@
 <?php
 date_default_timezone_set('America/Sao_Paulo');
 require_once 'config.php';
+require_once __DIR__ . '/ufs_brasil.php';
 
 // 1. DEFINIR VARIÁVEIS COM VALORES PADRÃO
 $view_mode = isset($_GET['view']) ? $_GET['view'] : 'cards';
@@ -133,6 +134,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $link_videos = trim($_POST['link_videos'] ?? '');
     $serial = trim($_POST['serial'] ?? '');
     $cnpj = trim($_POST['cnpj'] ?? '');
+    $uf = strtoupper(trim($_POST['uf'] ?? ''));
+    if ($uf !== '' && !array_key_exists($uf, listarUfsBrasil())) {
+        http_response_code(400);
+        exit('UF inválida.');
+    }
     $link_drive = trim($_POST['link_drive'] ?? '');
     
     // CAMPO DE RECURSOS
@@ -145,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $pdo->prepare("UPDATE `clientes` SET 
                 `fantasia`=?, `servidor`=?, `vendedor`=?, `telefone_ddd`=?, 
                 `data_inicio`=?, `data_fim`=?, `data_previsao_encerramento`=?, `id_cliente_api`=?, 
-                `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=?, `link_videos`=?, `serial`=?, `cnpj`=?
+                `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=?, `link_videos`=?, `serial`=?, `cnpj`=?, `uf`=?
                 WHERE `id_cliente`=?");
             $stmt->execute([
                 $fantasia,
@@ -165,6 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $link_videos,
                 $serial ?: null,
                 $cnpj ?: null,
+                $uf ?: null,
                 $_POST['id_cliente']
             ]);
             // Atualiza link_drive apenas se veio preenchido no POST (não sobrescreve se vazio)
@@ -177,8 +184,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $pdo->prepare("INSERT INTO `clientes` (
                 `fantasia`, `servidor`, `vendedor`, `telefone_ddd`, 
                 `data_inicio`, `data_fim`, `data_previsao_encerramento`, `id_cliente_api`,
-                `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`, `link_videos`, `serial`, `cnpj`, `link_drive`
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`, `link_videos`, `serial`, `cnpj`, `uf`, `link_drive`
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([
                 $fantasia,
                 $servidor,
@@ -197,6 +204,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $link_videos,
                 $serial ?: null,
                 $cnpj ?: null,
+                $uf ?: null,
                 $link_drive ?: null,
             ]);
             $clienteNovoId = (int) $pdo->lastInsertId();
@@ -804,6 +812,8 @@ body, html {
 
 .btn-action.uso { color: #06b6d4; background: rgba(6, 182, 212, 0.15); border-color: rgba(6, 182, 212, 0.3); }
 .btn-action.uso:hover { background: #06b6d4; color: white; }
+.btn-action.sintegra { color: #0f766e; background: rgba(20, 184, 166, 0.14); border-color: rgba(20, 184, 166, 0.3); }
+.btn-action.sintegra:hover { color: white; background: #0f766e; }
 
 /* Box de Resumo de Uso do Cliente */
 .client-usage-pill {
@@ -1045,6 +1055,11 @@ body, html {
                             <i class="bi bi-upc-scan me-2 text-muted"></i> SERIAL: <?= htmlspecialchars($c['serial'], ENT_QUOTES, 'UTF-8') ?>
                         </div>
                         <?php endif; ?>
+                        <?php if (!empty($c['cnpj'])): ?>
+                        <div class="d-flex align-items-center mb-1">
+                            <i class="bi bi-card-text me-2 text-muted"></i> CNPJ: <?= htmlspecialchars($c['cnpj'], ENT_QUOTES, 'UTF-8') ?>
+                        </div>
+                        <?php endif; ?>
                         <?php if (!empty($c['id_cliente_api'])): ?>
                         <div class="d-flex align-items-center mb-1">
                             <i class="bi bi-braces-asterisk me-2 text-muted"></i> ID API: <?= htmlspecialchars($c['id_cliente_api']) ?>
@@ -1129,6 +1144,8 @@ body, html {
                                     data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
                                     data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
                                     data-serial="<?= htmlspecialchars($c['serial'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
+                                    data-cnpj="<?= htmlspecialchars($c['cnpj'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                    data-uf="<?= htmlspecialchars($c['uf'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                     data-cfg="<?= $c['configurado'] ?>" 
                                     data-licencas="<?= $c['num_licencas'] ?>" 
@@ -1138,6 +1155,14 @@ body, html {
                                     data-link-videos="<?= htmlspecialchars($c['link_videos'] ?? '') ?>" 
                                     title="Editar" onclick="openEditModal(this)">
                                 <i class="bi bi-pencil"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-action sintegra btn-consultar-sintegra"
+                                    data-id-cliente="<?= (int)$c['id_cliente'] ?>"
+                                    data-cliente="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                    data-tem-uf="<?= !empty($c['uf']) ? '1' : '0' ?>"
+                                    title="<?= empty($c['cnpj']) ? 'Cadastre o CNPJ para consultar' : 'Consultar Sintegra e Simples/SIMEI' ?>"
+                                    <?= empty($c['cnpj']) ? 'disabled' : '' ?>>
+                                <i class="bi bi-search"></i>
                             </button>
                             <?php $idApiChamados = extrairIdClienteApi($c); ?>
                             <button type="button" class="btn btn-sm btn-action chamados btn-suporte-cliente"
@@ -1297,6 +1322,7 @@ body, html {
                                                     data-previsao-encerramento="<?= $c['data_previsao_encerramento'] ?? '' ?>" 
                                                     data-id-cliente-api="<?= htmlspecialchars($c['id_cliente_api'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
                                                     data-serial="<?= htmlspecialchars($c['serial'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
+                                                    data-cnpj="<?= htmlspecialchars($c['cnpj'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                                                     data-obs="<?= htmlspecialchars($c['observacao']) ?>" 
                                                     data-nf="<?= $c['emitir_nf'] ?>" 
                                                     data-cfg="<?= $c['configurado'] ?>" 
@@ -1307,6 +1333,14 @@ body, html {
                                                     data-link-videos="<?= htmlspecialchars($c['link_videos'] ?? '') ?>" 
                                                     onclick="openEditModal(this)">
                                                 <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-action sintegra btn-consultar-sintegra"
+                                                    data-id-cliente="<?= (int)$c['id_cliente'] ?>"
+                                                    data-cliente="<?= htmlspecialchars($c['fantasia'], ENT_QUOTES, 'UTF-8') ?>"
+                                                    data-tem-uf="<?= !empty($c['uf']) ? '1' : '0' ?>"
+                                                    title="<?= empty($c['cnpj']) ? 'Cadastre o CNPJ para consultar' : 'Consultar Sintegra e Simples/SIMEI' ?>"
+                                                    <?= empty($c['cnpj']) ? 'disabled' : '' ?>>
+                                                <i class="bi bi-search"></i>
                                             </button>
                                             <?php $idApiChamadosTabela = extrairIdClienteApi($c); ?>
                                             <button type="button" class="btn btn-sm btn-action chamados btn-suporte-cliente"
@@ -1428,6 +1462,22 @@ body, html {
                                 <span class="input-group-text bg-white border-end-0"><i class="bi bi-upc-scan text-primary"></i></span>
                                 <input type="text" name="serial" id="serial" class="form-control border-start-0 ps-0" placeholder="Ex: ELETROCONSERTOS">
                             </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">CNPJ</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0"><i class="bi bi-card-text text-primary"></i></span>
+                                <input type="text" name="cnpj" id="cnpj" class="form-control border-start-0 ps-0" inputmode="numeric" maxlength="18" placeholder="00.000.000/0000-00">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">UF</label>
+                            <select name="uf" id="uf" class="form-select">
+                                <option value="">Selecione a UF</option>
+                                <?php foreach (listarUfsBrasil() as $sigla => $estado): ?>
+                                    <option value="<?= $sigla ?>"><?= $sigla ?> - <?= htmlspecialchars($estado, ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -3074,6 +3124,8 @@ body, html {
         document.getElementById('id_cliente').value = d.id;
         document.getElementById('fantasia').value = d.fantasia || '';
         document.getElementById('serial').value = d.serial || '';
+        document.getElementById('cnpj').value = d.cnpj || '';
+        document.getElementById('uf').value = d.uf || '';
         document.getElementById('servidor').value = d.servidor || '';
         document.getElementById('vendedor').value = d.vendedor || '';
         document.getElementById('data_inicio').value = d.inicio || '';
@@ -3175,6 +3227,243 @@ body, html {
 
         bootstrap.Modal.getOrCreateInstance(document.getElementById('modalNovoTreinamento')).show();
     }
+</script>
+
+<div class="modal fade" id="modalConsultaSintegra" tabindex="-1" aria-labelledby="modalConsultaSintegraTitulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
+            <div class="modal-header border-0 text-white" style="background: linear-gradient(135deg, #0f766e, #14b8a6);">
+                <div>
+                    <h5 class="modal-title fw-bold" id="modalConsultaSintegraTitulo"><i class="bi bi-search me-2"></i>Consulta fiscal</h5>
+                    <div class="small text-white-50" id="sintegraNomeCliente">Cliente</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="alert alert-info py-2 small" id="sintegraCustoAviso">
+                    A primeira consulta consome 2 créditos com UF cadastrada ou 3 créditos sem UF. Consultas bem-sucedidas ficam em cache nesta sessão por 24 horas.
+                </div>
+                <div class="alert alert-info" id="sintegraConsultaStatus" role="status" aria-live="polite">
+                    Preparando consulta...
+                </div>
+                <div id="sintegraConsultaResultados" class="d-none">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="small text-muted">CNPJ</div>
+                                <div class="fw-semibold" id="sintegraCnpj">—</div>
+                                <div class="small text-muted mt-2">UF consultada</div>
+                                <div class="fw-semibold" id="sintegraUf">—</div>
+                                <div class="small text-muted mt-2">Razão social</div>
+                                <div class="fw-semibold" id="sintegraRazaoSocial">—</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="border rounded-3 p-3 h-100">
+                                <div class="small text-muted">Enquadramento consultado</div>
+                                <div class="fw-semibold" id="sintegraRegime">Não informado pela fonte</div>
+                                <div class="small text-muted mt-2" id="sintegraSimplesDetalhe"></div>
+                                <div class="small text-muted mt-2">Atualização informada pela API</div>
+                                <div class="small" id="sintegraAtualizadoEm">—</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-warning py-2 small">
+                        A consulta Simples/SIMEI não identifica Lucro Presumido ou Lucro Real. A API Sintegra também não informa esses regimes.
+                    </div>
+                    <h6 class="fw-bold mt-4">Inscrições Estaduais</h6>
+                    <div id="sintegraInscricoes" class="d-grid gap-2"></div>
+                    <div class="small text-muted mt-3" id="sintegraRequestId"></div>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const modal = document.getElementById('modalConsultaSintegra');
+    if (!modal) return;
+
+    const statusBox = document.getElementById('sintegraConsultaStatus');
+    const resultsBox = document.getElementById('sintegraConsultaResultados');
+    const inscritosBox = document.getElementById('sintegraInscricoes');
+    let solicitacaoAtual = 0;
+
+    function unwrapSintegraData(value) {
+        let current = value;
+        for (let i = 0; i < 3 && current && !Array.isArray(current); i++) {
+            const nested = current.data || current.dados || current.result;
+            if (!nested || typeof nested !== 'object' || Array.isArray(nested)) break;
+            current = nested;
+        }
+        return current && typeof current === 'object' ? current : {};
+    }
+
+    function valorExibicao(valor, quandoAusente = 'Não informado') {
+        if (valor === true) return 'Sim';
+        if (valor === false) return 'Não';
+        if (valor === null || valor === undefined || String(valor).trim() === '') return quandoAusente;
+        return String(valor);
+    }
+
+    function campoInscricao(rotulo, valor) {
+        const linha = document.createElement('div');
+        linha.className = 'd-flex flex-wrap gap-1';
+        const titulo = document.createElement('span');
+        titulo.className = 'text-muted';
+        titulo.textContent = `${rotulo}:`;
+        const texto = document.createElement('span');
+        texto.className = 'fw-semibold';
+        texto.textContent = valorExibicao(valor);
+        linha.append(titulo, texto);
+        return linha;
+    }
+
+    function renderizarInscricoes(dados) {
+        inscritosBox.replaceChildren();
+        const lista = dados.inscricoes_estaduais || dados.inscricoes || [];
+        if (!Array.isArray(lista) || lista.length === 0) {
+            const vazio = document.createElement('div');
+            vazio.className = 'text-muted small border rounded-3 p-3';
+            vazio.textContent = 'A consulta não retornou inscrições estaduais para esta UF.';
+            inscritosBox.appendChild(vazio);
+            return;
+        }
+
+        lista.forEach((inscricao) => {
+            if (!inscricao || typeof inscricao !== 'object') return;
+            const card = document.createElement('div');
+            card.className = 'border rounded-3 p-3';
+            const topo = document.createElement('div');
+            topo.className = 'd-flex justify-content-between align-items-center gap-2 mb-2';
+            const ie = document.createElement('strong');
+            ie.textContent = valorExibicao(inscricao.inscricao_estadual || inscricao.ie);
+            const ativa = document.createElement('span');
+            const ativaValor = inscricao.ativa;
+            ativa.className = `badge ${ativaValor === true ? 'bg-success' : (ativaValor === false ? 'bg-secondary' : 'bg-light text-dark')}`;
+            ativa.textContent = ativaValor === true ? 'Ativa' : (ativaValor === false ? 'Inativa' : 'Situação não informada');
+            topo.append(ie, ativa);
+            card.appendChild(topo);
+            card.append(
+                campoInscricao('UF', inscricao.uf),
+                campoInscricao('Tipo de inscrição', inscricao.tipo_ie),
+                campoInscricao('Situação PJ', inscricao.situacao_pj)
+            );
+            inscritosBox.appendChild(card);
+        });
+    }
+
+    function mostrarResultado(resposta) {
+        const dadosSintegra = resposta.sintegra && resposta.sintegra.sucesso
+            ? unwrapSintegraData(resposta.sintegra.dados)
+            : null;
+        const dadosSimples = resposta.simples && resposta.simples.sucesso
+            ? unwrapSintegraData(resposta.simples.dados)
+            : null;
+
+        document.getElementById('sintegraCnpj').textContent = resposta.cnpj || '—';
+        document.getElementById('sintegraUf').textContent = resposta.uf_consultada === 'BR' ? 'Todas as UFs' : (resposta.uf_consultada || '—');
+        document.getElementById('sintegraRazaoSocial').textContent = dadosSintegra
+            ? valorExibicao(dadosSintegra.razao_social || dadosSintegra.nome_empresarial)
+            : 'Consulta Sintegra indisponível';
+        document.getElementById('sintegraAtualizadoEm').textContent = dadosSimples
+            ? valorExibicao(dadosSimples.atualizado_em || dadosSimples.consultado_em)
+            : 'Consulta Simples/SIMEI indisponível';
+
+        const simples = dadosSimples && dadosSimples.simples_nacional;
+        const simei = dadosSimples && dadosSimples.simei;
+        const regime = document.getElementById('sintegraRegime');
+        const detalhe = document.getElementById('sintegraSimplesDetalhe');
+        if (simei && simei.optante === true) {
+            regime.textContent = 'Optante pelo SIMEI (MEI)';
+        } else if (simples && simples.optante === true) {
+            regime.textContent = 'Optante pelo Simples Nacional';
+        } else if (simples && simples.optante === false) {
+            regime.textContent = 'Não optante pelo Simples Nacional';
+        } else {
+            regime.textContent = 'Enquadramento não informado pela fonte';
+        }
+        detalhe.textContent = simei
+            ? `SIMEI: ${valorExibicao(simei.optante)}${simei.data_opcao ? ` · Opção: ${simei.data_opcao}` : ''}`
+            : '';
+
+        if (dadosSintegra) {
+            renderizarInscricoes(dadosSintegra);
+        } else {
+            inscritosBox.replaceChildren();
+            const erro = document.createElement('div');
+            erro.className = 'text-warning small';
+            erro.textContent = resposta.sintegra && resposta.sintegra.erro
+                ? `Falha na consulta Sintegra: ${resposta.sintegra.erro}`
+                : 'Não foi possível obter as inscrições estaduais.';
+            inscritosBox.appendChild(erro);
+        }
+
+        const requestId = dadosSintegra && (dadosSintegra.request_id || dadosSintegra.requestId);
+        document.getElementById('sintegraRequestId').textContent = requestId ? `Identificador da consulta: ${requestId}` : '';
+        resultsBox.classList.remove('d-none');
+        const houveFalhaParcial = !resposta.sintegra.sucesso || !resposta.simples.sucesso;
+        statusBox.className = `alert ${houveFalhaParcial ? 'alert-warning' : 'alert-success'}`;
+        if (houveFalhaParcial) {
+            const falhas = [];
+            if (!resposta.sintegra.sucesso) falhas.push(`Sintegra: ${resposta.sintegra.erro || 'indisponível'}`);
+            if (!resposta.simples.sucesso) falhas.push(`Simples/SIMEI: ${resposta.simples.erro || 'indisponível'}`);
+            statusBox.textContent = `Consulta parcial. ${falhas.join(' · ')}`;
+        } else {
+            statusBox.textContent = resposta.cache_sessao
+                ? 'Resultado reutilizado do cache da sessão (válido por até 24 horas).'
+                : 'Consulta concluída.';
+        }
+    }
+
+    document.addEventListener('click', async (event) => {
+        const button = event.target.closest('.btn-consultar-sintegra');
+        if (!button || button.disabled) return;
+        const idSolicitacao = ++solicitacaoAtual;
+
+        document.getElementById('sintegraNomeCliente').textContent = button.dataset.cliente || 'Cliente';
+        document.getElementById('sintegraCustoAviso').textContent = button.dataset.temUf === '1'
+            ? 'Primeira consulta: 2 créditos (1 Sintegra na UF cadastrada + 1 Simples/SIMEI). Resultado em cache nesta sessão por 24 horas.'
+            : 'Primeira consulta: 3 créditos (2 Sintegra em todas as UFs + 1 Simples/SIMEI). Resultado em cache nesta sessão por 24 horas.';
+        resultsBox.classList.add('d-none');
+        statusBox.className = 'alert alert-info';
+        statusBox.textContent = 'Consultando Sintegra e Simples/SIMEI...';
+        inscritosBox.replaceChildren();
+        bootstrap.Modal.getOrCreateInstance(modal).show();
+
+        const textoOriginal = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        try {
+            const response = await fetch('api_consultar_sintegra.php', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ id_cliente: button.dataset.idCliente })
+            });
+            const resultado = await response.json();
+            if (!response.ok || !resultado.sucesso || !resultado.dados) {
+                throw new Error(resultado.erro || 'Não foi possível consultar os dados fiscais.');
+            }
+            if (idSolicitacao !== solicitacaoAtual) return;
+            mostrarResultado(resultado.dados);
+        } catch (erro) {
+            if (idSolicitacao !== solicitacaoAtual) return;
+            statusBox.className = 'alert alert-danger';
+            statusBox.textContent = erro.message || 'Falha ao consultar os dados fiscais.';
+        } finally {
+            button.disabled = false;
+            button.innerHTML = textoOriginal;
+        }
+    });
+})();
 </script>
 
 <?php include 'footer.php'; ?>

@@ -3,6 +3,7 @@
 return [
     'db' => ['host' => 'localhost', 'name' => 'implantacao', 'user' => 'root', 'pass' => ''],
     'gestaopro' => ['base_url' => 'https://interno.gestaopro.srv.br', 'action_id' => '', 'login' => '', 'password' => ''],
+    'sintegra' => ['api_key' => ''],
     'monitor' => ['user' => '', 'password' => '', 'responsavel' => ''],
     'google' => ['credentials_path' => __DIR__ . '/credentials.json', 'token_path' => __DIR__ . '/token.json'],
 ];

@@ -10,6 +10,59 @@ require_once __DIR__ . '/header.php';
         </div>
         <button id="btn-atualizar-uso" class="btn btn-primary btn-sm"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button>
     </div>
+    <section class="uso-dashboard mb-4" aria-label="Resumo percentual de uso dos clientes">
+        <div class="uso-dashboard-heading">
+            <div>
+                <span class="uso-dashboard-kicker">VISÃO GERAL</span>
+                <h2 class="uso-dashboard-title">Uso do sistema por último acesso</h2>
+                <p class="uso-dashboard-caption mb-0">Percentuais calculados sobre os clientes listados abaixo, considerando os últimos 30 dias.</p>
+            </div>
+        </div>
+        <div class="uso-dashboard-cards">
+            <article class="uso-dashboard-card uso-dashboard-total">
+                <span class="uso-dashboard-icon"><i class="bi bi-people"></i></span>
+                <span class="uso-dashboard-copy">
+                    <span class="uso-dashboard-label">Total de clientes</span>
+                    <strong class="uso-dashboard-count" id="uso-total-clientes">—</strong>
+                    <span class="uso-dashboard-percent">na lista</span>
+                </span>
+            </article>
+            <article class="uso-dashboard-card uso-dashboard-recente">
+                <span class="uso-dashboard-icon"><i class="bi bi-check-circle"></i></span>
+                <span class="uso-dashboard-copy">
+                    <span class="uso-dashboard-label">Acesso hoje ou ontem</span>
+                    <strong class="uso-dashboard-count" id="uso-clientes-recentes">—</strong>
+                    <span class="uso-dashboard-percent" id="uso-percentual-recente">—</span>
+                </span>
+            </article>
+            <article class="uso-dashboard-card uso-dashboard-atencao">
+                <span class="uso-dashboard-icon"><i class="bi bi-clock"></i></span>
+                <span class="uso-dashboard-copy">
+                    <span class="uso-dashboard-label">Acesso há 2 dias</span>
+                    <strong class="uso-dashboard-count" id="uso-clientes-atencao">—</strong>
+                    <span class="uso-dashboard-percent" id="uso-percentual-atencao">—</span>
+                </span>
+            </article>
+            <article class="uso-dashboard-card uso-dashboard-inativo">
+                <span class="uso-dashboard-icon"><i class="bi bi-exclamation-circle"></i></span>
+                <span class="uso-dashboard-copy">
+                    <span class="uso-dashboard-label">Mais de 2 dias ou sem acesso</span>
+                    <strong class="uso-dashboard-count" id="uso-clientes-inativos">—</strong>
+                    <span class="uso-dashboard-percent" id="uso-percentual-inativo">—</span>
+                </span>
+            </article>
+        </div>
+        <div class="uso-dashboard-progress" role="img" aria-label="Distribuição percentual de clientes por último acesso">
+            <span class="uso-progress-recente" id="uso-barra-recente"></span>
+            <span class="uso-progress-atencao" id="uso-barra-atencao"></span>
+            <span class="uso-progress-inativo" id="uso-barra-inativo"></span>
+        </div>
+        <div class="uso-dashboard-legend">
+            <span><i class="uso-legend-dot uso-progress-recente"></i>Acesso recente</span>
+            <span><i class="uso-legend-dot uso-progress-atencao"></i>Atenção</span>
+            <span><i class="uso-legend-dot uso-progress-inativo"></i>Baixo/sem uso recente</span>
+        </div>
+    </section>
     <div class="card border-0">
         <div class="card-body p-0">
             <div id="uso-status" class="px-4 py-3 small" style="color:var(--text-muted)">Carregando dados de uso…</div>
@@ -31,6 +84,32 @@ require_once __DIR__ . '/header.php';
 .table-hover > tbody > .uso-acesso-verde:hover > * { background-color:#bbf7d0 !important; }
 .table-hover > tbody > .uso-acesso-laranja:hover > * { background-color:#fed7aa !important; }
 .table-hover > tbody > .uso-acesso-vermelho:hover > * { background-color:#fecaca !important; }
+.uso-dashboard { padding:20px; border:1px solid var(--border-color); border-radius:18px; background:var(--bg-card); }
+.uso-dashboard-heading { display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; }
+.uso-dashboard-kicker { color:var(--primary); font-size:.65rem; font-weight:800; letter-spacing:.14em; }
+.uso-dashboard-title { margin:3px 0 2px; color:var(--text-dark); font-size:1.05rem; font-weight:750; }
+.uso-dashboard-caption { color:var(--text-muted); font-size:.76rem; }
+.uso-dashboard-cards { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:11px; }
+.uso-dashboard-card { --uso-accent:#64748b; display:flex; align-items:center; gap:11px; min-width:0; padding:14px; border:1px solid var(--border-color); border-radius:14px; background:var(--bg-body); }
+.uso-dashboard-total { --uso-accent:#4361ee; }
+.uso-dashboard-recente { --uso-accent:#16a34a; }
+.uso-dashboard-atencao { --uso-accent:#ea580c; }
+.uso-dashboard-inativo { --uso-accent:#dc2626; }
+.uso-dashboard-icon { display:grid; place-items:center; flex:0 0 36px; height:36px; border-radius:11px; color:var(--uso-accent); background:color-mix(in srgb,var(--uso-accent) 12%,transparent); font-size:1rem; }
+.uso-dashboard-copy { display:grid; min-width:0; gap:2px; }
+.uso-dashboard-label { color:var(--text-muted); font-size:.69rem; line-height:1.25; }
+.uso-dashboard-count { color:var(--text-dark); font-size:1.15rem; line-height:1.2; }
+.uso-dashboard-percent { color:var(--uso-accent); font-size:.72rem; font-weight:700; }
+.uso-dashboard-progress { display:flex; height:9px; margin-top:17px; overflow:hidden; border-radius:99px; background:var(--bg-body); }
+.uso-dashboard-progress > span { width:0; transition:width .35s ease; }
+.uso-progress-recente { background:#22c55e; }
+.uso-progress-atencao { background:#f97316; }
+.uso-progress-inativo { background:#ef4444; }
+.uso-dashboard-legend { display:flex; flex-wrap:wrap; gap:15px; margin-top:9px; color:var(--text-muted); font-size:.69rem; }
+.uso-dashboard-legend span { display:inline-flex; align-items:center; gap:6px; }
+.uso-legend-dot { display:inline-block; width:8px; height:8px; border-radius:50%; }
+@media (max-width:900px) { .uso-dashboard-cards { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:575px) { .uso-dashboard { padding:15px; } .uso-dashboard-cards { gap:8px; } .uso-dashboard-card { padding:10px; gap:8px; } .uso-dashboard-icon { flex-basis:30px; height:30px; } .uso-dashboard-label { font-size:.62rem; } .uso-dashboard-count { font-size:1rem; } .uso-dashboard-legend { gap:9px; font-size:.64rem; } }
 </style>
 <div class="modal fade" id="modalDetalhesUso" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable modal-dialog-centered">
@@ -109,6 +188,8 @@ require_once __DIR__ . '/header.php';
     const tbody = document.getElementById('uso-clientes');
     const status = document.getElementById('uso-status');
     const btn = document.getElementById('btn-atualizar-uso');
+    let clientesUsoAtual = [];
+    const acessosAtualizados = new Map();
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const findSerial = value => {
         if (!value || typeof value !== 'object') return '';
@@ -141,21 +222,51 @@ require_once __DIR__ . '/header.php';
     const formatLastAccess = date => date
         ? new Intl.DateTimeFormat('pt-BR', {dateStyle:'short', timeStyle:'short'}).format(date)
         : 'Sem acesso no período';
-    const accessRowLevel = date => {
-        if (!date) return 'uso-acesso-vermelho';
+    const accessCategory = date => {
+        if (!date) return 'inativo';
         const today = new Date();
         const todayOrdinal = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
         const accessOrdinal = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
         const daysSinceAccess = Math.floor((todayOrdinal - accessOrdinal) / 86400000);
-        if (daysSinceAccess >= 0 && daysSinceAccess <= 1) return 'uso-acesso-verde';
-        if (daysSinceAccess === 2) return 'uso-acesso-laranja';
-        return 'uso-acesso-vermelho';
+        if (daysSinceAccess >= 0 && daysSinceAccess <= 1) return 'recente';
+        if (daysSinceAccess === 2) return 'atencao';
+        return 'inativo';
     };
+    const accessRowLevel = date => ({
+        recente: 'uso-acesso-verde',
+        atencao: 'uso-acesso-laranja',
+        inativo: 'uso-acesso-vermelho'
+    })[accessCategory(date)];
     const updateAccessRowLevel = (row, date) => {
         if (!row) return;
         row.classList.remove('uso-acesso-verde', 'uso-acesso-laranja', 'uso-acesso-vermelho');
         row.classList.add(accessRowLevel(date));
     };
+    function atualizarDashboardUso() {
+        const total = clientesUsoAtual.length;
+        const contagens = {recente:0, atencao:0, inativo:0};
+        clientesUsoAtual.forEach(cliente => {
+            const data = acessosAtualizados.has(String(cliente.id_cliente_api))
+                ? acessosAtualizados.get(String(cliente.id_cliente_api))
+                : lastAccess(cliente.dados);
+            contagens[accessCategory(data)]++;
+        });
+        const percentual = quantidade => total ? `${(quantidade * 100 / total).toLocaleString('pt-BR', {maximumFractionDigits:1})}%` : '0%';
+        document.getElementById('uso-total-clientes').textContent = total.toLocaleString('pt-BR');
+        document.getElementById('uso-clientes-recentes').textContent = contagens.recente.toLocaleString('pt-BR');
+        document.getElementById('uso-clientes-atencao').textContent = contagens.atencao.toLocaleString('pt-BR');
+        document.getElementById('uso-clientes-inativos').textContent = contagens.inativo.toLocaleString('pt-BR');
+        document.getElementById('uso-percentual-recente').textContent = percentual(contagens.recente);
+        document.getElementById('uso-percentual-atencao').textContent = percentual(contagens.atencao);
+        document.getElementById('uso-percentual-inativo').textContent = percentual(contagens.inativo);
+        document.getElementById('uso-barra-recente').style.width = percentual(contagens.recente);
+        document.getElementById('uso-barra-atencao').style.width = percentual(contagens.atencao);
+        document.getElementById('uso-barra-inativo').style.width = percentual(contagens.inativo);
+        document.querySelector('.uso-dashboard-progress').setAttribute(
+            'aria-label',
+            `De ${total} clientes: ${percentual(contagens.recente)} com acesso hoje ou ontem, ${percentual(contagens.atencao)} com acesso há 2 dias e ${percentual(contagens.inativo)} com acesso há mais de 2 dias ou sem acesso.`
+        );
+    }
     async function carregar(forcar = false, somenteCache = false) {
         btn.disabled = true;
         status.textContent = somenteCache ? 'Carregando última consulta salva…' : 'Consultando uso dos clientes…';
@@ -176,6 +287,9 @@ require_once __DIR__ . '/header.php';
                 const acessoB = lastAccess(b.dados)?.getTime() ?? Number.NEGATIVE_INFINITY;
                 return acessoA - acessoB || String(a.fantasia || '').localeCompare(String(b.fantasia || ''), 'pt-BR');
             });
+            clientesUsoAtual = clientes;
+            acessosAtualizados.clear();
+            atualizarDashboardUso();
             tbody.innerHTML = clientes.map(cliente => {
                 const ultimoAcesso = lastAccess(cliente.dados);
                 const apiSerial = findSerial(cliente.dados);
@@ -204,6 +318,9 @@ require_once __DIR__ . '/header.php';
                 status.textContent = error.message;
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-danger">Falha ao carregar os dados de uso.</td></tr>';
             }
+            clientesUsoAtual = [];
+            acessosAtualizados.clear();
+            atualizarDashboardUso();
         } finally { btn.disabled = false; }
     }
     btn.addEventListener('click', () => carregar(true, false));
@@ -230,6 +347,8 @@ require_once __DIR__ . '/header.php';
             const latestCell = button.closest('tr')?.children[1];
             if (latestCell) latestCell.textContent = latestText;
             updateAccessRowLevel(latestCell?.closest('tr'), latest);
+            acessosAtualizados.set(String(button.dataset.idApi), latest);
+            atualizarDashboardUso();
             const utilizationRecord = data.utilizacao_mesa && typeof data.utilizacao_mesa === 'object' ? data.utilizacao_mesa : {};
             const formatLastUse = value => {
                 if (value === null || value === undefined || value === '') return '-';

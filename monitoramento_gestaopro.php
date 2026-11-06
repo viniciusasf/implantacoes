@@ -1,5 +1,6 @@
 <?php 
 require_once 'config.php';
+require_once __DIR__ . '/ufs_brasil.php';
 require_once 'header.php'; 
 
 // Buscar mapeamento de clientes
@@ -480,7 +481,7 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
             const btnUso = /^\d+$/.test(idClienteApiUso) ? `<button type="button" class="btn btn-sm btn-outline-primary fw-bold btn-uso-cliente-gp" data-id-cliente-api="${escapeHtmlAttribute(idClienteApiUso)}" data-cliente="${escapeHtmlAttribute(nomeCliente)}" title="Ver detalhes de uso do cliente"><i class="bi bi-activity me-1"></i>Uso</button>` : '';
 
 
-            const btnCadastrar = !isVinculado ? `<button class="btn btn-sm btn-success fw-bold btn-cadastrar-gp" data-nome="${escapeHtmlAttribute(nomeCliente)}" data-vendedor="${escapeHtmlAttribute(vendedorCliente)}" data-servidor="${escapeHtmlAttribute(servidorCliente)}" data-id-cliente-api="${escapeHtmlAttribute(String(r.ID_CLIENTE || ''))}" data-data-inicio="${escapeHtmlAttribute(dataInicioPadrao)}" data-licencas="${escapeHtmlAttribute(String(licencasCliente))}" data-serial="${escapeHtmlAttribute(String(r.SERIAL || ''))}" data-cnpj="${escapeHtmlAttribute(String(r.CNPJ || r.CNPJ_CPF || r.DOCUMENTO || ''))}" title="Cadastrar cliente local">
+            const btnCadastrar = !isVinculado ? `<button class="btn btn-sm btn-success fw-bold btn-cadastrar-gp" data-nome="${escapeHtmlAttribute(nomeCliente)}" data-vendedor="${escapeHtmlAttribute(vendedorCliente)}" data-servidor="${escapeHtmlAttribute(servidorCliente)}" data-id-cliente-api="${escapeHtmlAttribute(String(r.ID_CLIENTE || ''))}" data-data-inicio="${escapeHtmlAttribute(dataInicioPadrao)}" data-licencas="${escapeHtmlAttribute(String(licencasCliente))}" data-serial="${escapeHtmlAttribute(String(r.SERIAL || ''))}" data-cnpj="${escapeHtmlAttribute(String(r.CNPJ || r.CNPJ_CPF || r.DOCUMENTO || ''))}" data-uf="${escapeHtmlAttribute(String(r.UF || r.uf || ''))}" title="Cadastrar cliente local">
                     <i class="bi bi-plus-circle me-1"></i>Cadastrar
                 </button>` : '';
                 
@@ -1001,7 +1002,8 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                 cadastrarBtn.dataset.dataInicio,
                 cadastrarBtn.dataset.licencas,
                 cadastrarBtn.dataset.serial,
-                cadastrarBtn.dataset.cnpj
+                cadastrarBtn.dataset.cnpj,
+                cadastrarBtn.dataset.uf
             );
             return;
         }
@@ -1083,6 +1085,15 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-card-text text-success"></i></span>
                         <input type="text" name="cnpj" id="cadastroCnpj" class="form-control border-start-0 ps-0" placeholder="CNPJ do cliente">
                     </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">UF</label>
+                    <select name="uf" id="cadastroUf" class="form-select" required>
+                        <option value="">Selecione a UF</option>
+                        <?php foreach (listarUfsBrasil() as $sigla => $estado): ?>
+                            <option value="<?= $sigla ?>"><?= $sigla ?> - <?= htmlspecialchars($estado, ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="alert alert-info py-2 px-3 small border-0 rounded-3" id="cadastroResumoContatosApi" role="status">
                     Consultando os dados detalhados do cliente na API...
@@ -1183,7 +1194,7 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
 <script>
 
 let solicitacaoDetalhesCadastro = 0;
-async function abrirModalCadastroCliente(nome, vendedor, servidor, idClienteApi, dataInicio, numLicencas, serial, cnpj) {
+async function abrirModalCadastroCliente(nome, vendedor, servidor, idClienteApi, dataInicio, numLicencas, serial, cnpj, uf) {
     const idSolicitacao = ++solicitacaoDetalhesCadastro;
     const idApi = idClienteApi ? String(idClienteApi).trim() : '';
     const linkCadastro = idApi ? `https://interno.gestaopro.srv.br/clientes/${idApi}` : '';
@@ -1197,6 +1208,7 @@ async function abrirModalCadastroCliente(nome, vendedor, servidor, idClienteApi,
     document.getElementById('cadastroLinkCadastro').value = linkCadastro;
     document.getElementById('cadastroSerial').value = serial || '';
     document.getElementById('cadastroCnpj').value = cnpj || '';
+    document.getElementById('cadastroUf').value = uf || '';
     document.getElementById('cadastroLinkDrive').value = '';
     document.getElementById('cadastroContatosApiJson').value = '[]';
     document.getElementById('cadastroAbrirFichaContato').value = '1';
@@ -1232,6 +1244,7 @@ async function abrirModalCadastroCliente(nome, vendedor, servidor, idClienteApi,
         document.getElementById('cadastroNumLicencas').value = Number.isFinite(totalLicencas) ? totalLicencas : (numLicencas || 0);
         document.getElementById('cadastroSerial').value = detalhes.SERIAL || serial || '';
         document.getElementById('cadastroCnpj').value = detalhes.CNPJ || cnpj || '';
+        document.getElementById('cadastroUf').value = detalhes.UF || detalhes.uf || uf || '';
 
         const contatosApi = Array.isArray(detalhes.contatos)
             ? detalhes.contatos.filter(contato => contato && String(contato.CONTATO || '').trim() !== '')

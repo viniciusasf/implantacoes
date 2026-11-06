@@ -7,6 +7,7 @@ function appConfig($section, $key = null)
         $config = [
             'db' => ['host' => getenv('APP_DB_HOST') ?: 'localhost', 'name' => getenv('APP_DB_NAME') ?: 'implantacao', 'user' => getenv('APP_DB_USER') ?: 'root', 'pass' => getenv('APP_DB_PASS') ?: ''],
             'gestaopro' => ['base_url' => getenv('APP_GP_BASE_URL') ?: 'https://interno.gestaopro.srv.br', 'action_id' => getenv('APP_GP_ACTION_ID') ?: '', 'login' => getenv('APP_GP_LOGIN') ?: '', 'password' => getenv('APP_GP_PASSWORD') ?: ''],
+            'sintegra' => ['api_key' => getenv('APP_SINTEGRAPI_API_KEY') ?: ''],
             'monitor' => ['user' => getenv('APP_MONITOR_USER') ?: '', 'password' => getenv('APP_MONITOR_PASSWORD') ?: '', 'responsavel' => getenv('APP_MONITOR_RESPONSAVEL') ?: 'Vinicius Ferreira'],
             'google' => ['credentials_path' => getenv('APP_GOOGLE_CREDENTIALS_PATH') ?: __DIR__ . '/credentials.json', 'token_path' => getenv('APP_GOOGLE_TOKEN_PATH') ?: __DIR__ . '/token.json'],
         ];
