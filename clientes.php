@@ -125,8 +125,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $id_cliente_api = $id_api_encontrado[1];
         }
     }
-    $emitir_nf = $_POST['emitir_nf'] ?? 'Não';
-    $configurado = $_POST['configurado'] ?? 'Não';
+    $emitir_nf = in_array($_POST['emitir_nf'] ?? '', ['Sim', "N\xC3\xA3o"], true) ? $_POST['emitir_nf'] : null;
+    $configurado = $emitir_nf === 'Sim' && in_array($_POST['configurado'] ?? '', ['Sim', "N\xC3\xA3o"], true) ? $_POST['configurado'] : null;
+    $emitir_boleto = in_array($_POST['emitir_boleto'] ?? '', ['Sim', "N\xC3\xA3o"], true) ? $_POST['emitir_boleto'] : null;
+    $boleto_configurado = $emitir_boleto === 'Sim' && in_array($_POST['boleto_configurado'] ?? '', ['Sim', "N\xC3\xA3o"], true) ? $_POST['boleto_configurado'] : null;
 
     // NOVOS CAMPOS
     $num_licencas = $_POST['num_licencas'] ?? 0;
@@ -151,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $pdo->prepare("UPDATE `clientes` SET 
                 `fantasia`=?, `servidor`=?, `vendedor`=?, `telefone_ddd`=?, 
                 `data_inicio`=?, `data_fim`=?, `data_previsao_encerramento`=?, `id_cliente_api`=?, 
-                `emitir_nf`=?, `configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=?, `link_videos`=?, `serial`=?, `cnpj`=?, `uf`=?
+                `emitir_nf`=?, `configurado`=?, `emitir_boleto`=?, `boleto_configurado`=?, `num_licencas`=?, `anexo`=?, `chamados`=?, `recursos`=?, `link_videos`=?, `serial`=?, `cnpj`=?, `uf`=?
                 WHERE `id_cliente`=?");
             $stmt->execute([
                 $fantasia,
@@ -164,6 +166,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $id_cliente_api,
                 $emitir_nf,
                 $configurado,
+                $emitir_boleto,
+                $boleto_configurado,
                 $num_licencas,
                 $anexo,
                 $chamados,
@@ -184,8 +188,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $pdo->prepare("INSERT INTO `clientes` (
                 `fantasia`, `servidor`, `vendedor`, `telefone_ddd`, 
                 `data_inicio`, `data_fim`, `data_previsao_encerramento`, `id_cliente_api`,
-                `emitir_nf`, `configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`, `link_videos`, `serial`, `cnpj`, `uf`, `link_drive`
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                `emitir_nf`, `configurado`, `emitir_boleto`, `boleto_configurado`, `num_licencas`, `anexo`, `chamados`, `recursos`, `link_videos`, `serial`, `cnpj`, `uf`, `link_drive`
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->execute([
                 $fantasia,
                 $servidor,
@@ -197,6 +201,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $id_cliente_api,
                 $emitir_nf,
                 $configurado,
+                $emitir_boleto,
+                $boleto_configurado,
                 $num_licencas,
                 $anexo,
                 $chamados,
@@ -209,28 +215,58 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             ]);
             $clienteNovoId = (int) $pdo->lastInsertId();
 
-            if ($clienteNovoId > 0 && is_array($contatosApiCadastro)) {
+            if ($clienteNovoId > 0) {
                 try {
                     $stmtContatoApi = $pdo->prepare('INSERT INTO contatos (id_cliente, nome, email, cargo, telefone_ddd, observacao) VALUES (?, ?, ?, ?, ?, ?)');
-                    foreach ($contatosApiCadastro as $contatoApi) {
-                        if (!is_array($contatoApi)) continue;
-                        $nomeContatoApi = trim((string) ($contatoApi['CONTATO'] ?? ''));
-                        if ($nomeContatoApi === '') continue;
-                        $emailContatoApi = trim((string) ($contatoApi['EMAIL'] ?? ''));
-                        $telefoneContatoApi = trim(implode(' ', array_filter([
-                            trim((string) ($contatoApi['DDD'] ?? '')),
-                            trim((string) ($contatoApi['TELEFONE'] ?? '')),
-                        ], static function ($parte) { return $parte !== ''; })));
-                        $stmtContatoApi->execute([
-                            $clienteNovoId,
-                            $nomeContatoApi,
-                            $emailContatoApi !== '' ? $emailContatoApi : null,
-                            trim((string) ($contatoApi['SETOR'] ?? '')) ?: null,
-                            $telefoneContatoApi !== '' ? $telefoneContatoApi : null,
-                            trim((string) ($contatoApi['OBS'] ?? '')) ?: null,
-                        ]);
-                        $contatosApiImportados++;
+                    if (is_array($contatosApiCadastro)) {
+                        foreach ($contatosApiCadastro as $contatoApi) {
+                            if (!is_array($contatoApi)) continue;
+                            $nomeContatoApi = trim((string) ($contatoApi['CONTATO'] ?? ''));
+                            if ($nomeContatoApi === '') continue;
+                            $emailContatoApi = trim((string) ($contatoApi['EMAIL'] ?? ''));
+                            $telefoneContatoApi = trim(implode(' ', array_filter([
+                                trim((string) ($contatoApi['DDD'] ?? '')),
+                                trim((string) ($contatoApi['TELEFONE'] ?? '')),
+                            ], static function ($parte) { return $parte !== ''; })));
+                            $stmtContatoApi->execute([
+                                $clienteNovoId,
+                                $nomeContatoApi,
+                                $emailContatoApi !== '' ? $emailContatoApi : null,
+                                trim((string) ($contatoApi['SETOR'] ?? '')) ?: null,
+                                $telefoneContatoApi !== '' ? $telefoneContatoApi : null,
+                                trim((string) ($contatoApi['OBS'] ?? '')) ?: null,
+                            ]);
+                            $contatosApiImportados++;
+                        }
                     }
+
+                    $emailsVendedores = [
+                        'Douglas' => 'douglas@gestaopro.com.br',
+                        'Marcelo' => 'marcelo.andrade@gestaopro.com.br',
+                        'Diego' => 'diego@gestaopro.com.br',
+                    ];
+                    foreach ($emailsVendedores as $nomeVendedor => $emailVendedor) {
+                        if (!preg_match('/(?:^|[^\p{L}])' . preg_quote($nomeVendedor, '/') . '(?:$|[^\p{L}])/iu', (string) $vendedor)) {
+                            continue;
+                        }
+
+                        $stmtVendedorExistente = $pdo->prepare(
+                            'SELECT 1 FROM contatos WHERE id_cliente = ? AND LOWER(email) = LOWER(?) LIMIT 1'
+                        );
+                        $stmtVendedorExistente->execute([$clienteNovoId, $emailVendedor]);
+                        if (!$stmtVendedorExistente->fetchColumn()) {
+                            $stmtContatoApi->execute([
+                                $clienteNovoId,
+                                trim((string) $vendedor) ?: $nomeVendedor,
+                                $emailVendedor,
+                                'Vendedor',
+                                null,
+                                null,
+                            ]);
+                        }
+                        break;
+                    }
+
                     if ($contatosApiImportados > 0) {
                         $abrirFichaContato = false;
                     }
@@ -1147,7 +1183,9 @@ body, html {
                                     data-cnpj="<?= htmlspecialchars($c['cnpj'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                                     data-uf="<?= htmlspecialchars($c['uf'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                                     data-nf="<?= $c['emitir_nf'] ?>" 
-                                    data-cfg="<?= $c['configurado'] ?>" 
+                                    data-cfg="<?= $c['configurado'] ?>"
+                                    data-emitir-boleto="<?= $c['emitir_boleto'] ?? '' ?>"
+                                    data-boleto-configurado="<?= $c['boleto_configurado'] ?? '' ?>" 
                                     data-licencas="<?= $c['num_licencas'] ?>" 
                                     data-anexo="<?= $c['anexo'] ?>" 
                                     data-chamados="<?= htmlspecialchars($c['chamados'] ?? '') ?>" 
@@ -1325,7 +1363,9 @@ body, html {
                                                     data-cnpj="<?= htmlspecialchars($c['cnpj'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
                                                     data-obs="<?= htmlspecialchars($c['observacao']) ?>" 
                                                     data-nf="<?= $c['emitir_nf'] ?>" 
-                                                    data-cfg="<?= $c['configurado'] ?>" 
+                                                    data-cfg="<?= $c['configurado'] ?>"
+                                    data-emitir-boleto="<?= $c['emitir_boleto'] ?? '' ?>"
+                                    data-boleto-configurado="<?= $c['boleto_configurado'] ?? '' ?>" 
                                                     data-licencas="<?= $c['num_licencas'] ?>" 
                                                     data-anexo="<?= $c['anexo'] ?>" 
                                                     data-chamados="<?= htmlspecialchars($c['chamados'] ?? '') ?>" 
@@ -1504,7 +1544,24 @@ body, html {
                                 <div class="col-md-6">
                                     <label class="form-label small fw-bold text-muted">Emitir NF?</label>
                                     <select name="emitir_nf" id="emitir_nf" class="form-select" onchange="toggleConfigurado(this.value)">
+                                        <option value="">Selecione</option>
                                         <option value="Não">Não</option>
+                                        <option value="Sim">Sim</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-muted">Emitir Boletos?</label>
+                                    <select name="emitir_boleto" id="emitir_boleto" class="form-select" onchange="toggleBoletoConfigurado(this.value)">
+                                        <option value="">Selecione</option>
+                                        <option value="N&#227;o">N&#227;o</option>
+                                        <option value="Sim">Sim</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6" id="div_boleto_configurado" style="display: none;">
+                                    <label class="form-label small fw-bold text-muted">Boleto j&#225; configurado?</label>
+                                    <select name="boleto_configurado" id="boleto_configurado" class="form-select bg-warning bg-opacity-10 border-warning border-opacity-25">
+                                        <option value="">Selecione</option>
+                                        <option value="N&#227;o">N&#227;o</option>
                                         <option value="Sim">Sim</option>
                                     </select>
                                 </div>
@@ -1518,6 +1575,7 @@ body, html {
                                 <div class="col-md-6" id="div_configurado" style="display: none;">
                                     <label class="form-label small fw-bold text-muted">Já Configurado?</label>
                                     <select name="configurado" id="configurado" class="form-select bg-warning bg-opacity-10 border-warning border-opacity-25">
+                                        <option value="">Selecione</option>
                                         <option value="Não">Não</option>
                                         <option value="Sim">Sim</option>
                                     </select>
@@ -1575,7 +1633,7 @@ body, html {
                                 <label class="form-label small fw-bold text-muted">Recursos Utilizados</label>
                                 <div class="p-2 border rounded bg-white">
                                     <?php 
-                                    $lista_recursos = ['ORÇAMENTO', 'GESTAOGPT', 'ASSISTÊNCIAPRO', 'PRODUÇÃO/OS', 'PDV'];
+                                    $lista_recursos = ['GESTAO27', 'GESTAOGPT', 'ASSISTÊNCIAPRO', 'PRODUÇÃO/OS', 'PDV'];
                                     foreach($lista_recursos as $rec): ?>
                                     <div class="form-check mb-1">
                                       <input class="form-check-input recurso-checkbox" type="checkbox" name="recursos[]" value="<?= $rec ?>" id="rec_<?= md5($rec) ?>">
@@ -3132,8 +3190,10 @@ body, html {
         document.getElementById('id_data_fim').value = d.fim || '';
         document.getElementById('data_previsao_encerramento').value = d.previsaoEncerramento || '';
         document.getElementById('id_cliente_api').value = idClienteApi;
-        document.getElementById('emitir_nf').value = d.nf || 'Não';
-        document.getElementById('configurado').value = d.cfg || 'Não';
+        document.getElementById('emitir_nf').value = d.nf || '';
+        document.getElementById('configurado').value = d.cfg || '';
+        document.getElementById('emitir_boleto').value = d.emitirBoleto || '';
+        document.getElementById('boleto_configurado').value = d.boletoConfigurado || '';
         document.getElementById('num_licencas').value = d.licencas || 0;
         document.getElementById('anexo').value = d.anexo || (idClienteApi ? `https://interno.gestaopro.srv.br/clientes/${idClienteApi}` : '');
         sincronizarIdClienteApi();
@@ -3152,6 +3212,7 @@ body, html {
         }
         
         toggleConfigurado(d.nf);
+        toggleBoletoConfigurado(d.emitirBoleto);
         
         const modal = new bootstrap.Modal(document.getElementById('modalCliente'));
         modal.show();
@@ -3178,6 +3239,11 @@ body, html {
 
     function toggleConfigurado(valor) {
         const div = document.getElementById('div_configurado');
+        if (div) div.style.display = (valor === 'Sim') ? 'block' : 'none';
+    }
+
+    function toggleBoletoConfigurado(valor) {
+        const div = document.getElementById('div_boleto_configurado');
         if (div) div.style.display = (valor === 'Sim') ? 'block' : 'none';
     }
 

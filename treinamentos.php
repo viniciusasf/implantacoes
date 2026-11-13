@@ -1662,7 +1662,7 @@ $offset = ($pagina - 1) * $por_pagina;
 
 // Query principal com contagem para paginação
 $sql_base = "
-    SELECT t.*, c.fantasia as cliente_nome, c.status as cliente_status, c.data_fim as cliente_data_fim, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim, c.recursos, c.anexo, c.chamados, c.link_videos
+    SELECT t.*, c.fantasia as cliente_nome, c.id_cliente_api, c.status as cliente_status, c.data_fim as cliente_data_fim, c.servidor, co.nome as contato_nome, co.telefone_ddd as contato_telefone, c.vendedor, c.num_licencas, c.data_inicio, c.data_fim, c.recursos, c.anexo, c.chamados, c.link_videos
     FROM treinamentos t
     LEFT JOIN clientes c ON t.id_cliente = c.id_cliente
     LEFT JOIN contatos co ON t.id_contato = co.id_contato
@@ -2285,13 +2285,9 @@ include 'header.php';
 
                                     <td class="text-center col-mini">
                                         <?php
-                                        $link_chamados_tr = '';
-                                        if (!empty($t['chamados'])) {
-                                            $link_chamados_tr = $t['chamados'];
-                                        } elseif (!empty($t['anexo'])) {
-                                            $base_tr = (strpos($t['anexo'], 'http') === 0) ? $t['anexo'] : 'https://' . $t['anexo'];
-                                            $link_chamados_tr = rtrim($base_tr, '?') . '?tab=chamados-abertos';
-                                        }
+                                        $link_chamados_tr = !empty($t['id_cliente_api'])
+                                            ? 'https://interno.gestaopro.srv.br/?cliente=' . rawurlencode((string)$t['id_cliente_api']) . '&aba=chamados'
+                                            : '';
                                         ?>
                                         <?php if (!empty($link_chamados_tr)): ?>
                                             <a href="<?= htmlspecialchars($link_chamados_tr) ?>" target="_blank"
