@@ -142,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit('UF inválida.');
     }
     $link_drive = trim($_POST['link_drive'] ?? '');
-    
+
     // CAMPO DE RECURSOS
     $recursos_arr = $_POST['recursos'] ?? [];
     $recursos = is_array($recursos_arr) ? implode(', ', $recursos_arr) : (string)$recursos_arr;
@@ -1051,7 +1051,7 @@ body, html {
                     : null;
                 $dias_restantes = $tem_previsao ? ($dias_previsao - $d) : null;
                 $cliente_encerrado = (!empty($c['data_fim']) && $c['data_fim'] !== '0000-00-00');
-                
+
                 $status_config = [
                     'integracao' => ['label' => 'Integração', 'class' => 'bg-info bg-opacity-10 text-info', 'icon' => 'bi-rocket-takeoff'],
                     'operacional' => ['label' => 'Operacional', 'class' => 'bg-primary bg-opacity-10 text-primary', 'icon' => 'bi-gear'],
@@ -1078,7 +1078,7 @@ body, html {
                             <i class="bi <?= $cfg['icon'] ?> me-1"></i> <?= $cfg['label'] ?>
                         </span>
                     </div>
-                    
+
                     <div class="client-meta">
                         <div class="d-flex align-items-center mb-1">
                             <i class="bi bi-person-badge me-2 text-muted"></i> <?= htmlspecialchars($c['vendedor']) ?>
@@ -1296,7 +1296,7 @@ body, html {
                                 <?php foreach ($clientes_filtrados as $c): 
                                     $d = (new DateTime($c['data_inicio']))->diff(new DateTime())->days;
                                     $cliente_encerrado = (!empty($c['data_fim']) && $c['data_fim'] !== '0000-00-00');
-                                    
+
                                     $status_config = [
                                         'integracao' => ['label' => 'Integração', 'class' => 'bg-info bg-opacity-10 text-info', 'icon' => 'bi-rocket-takeoff'],
                                         'operacional' => ['label' => 'Operacional', 'class' => 'bg-primary bg-opacity-10 text-primary', 'icon' => 'bi-gear'],
@@ -1469,7 +1469,7 @@ body, html {
 
             <div class="modal-body p-4 bg-light" style="max-height: 70vh; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable;">
                 <input type="hidden" name="id_cliente" id="id_cliente">
-                
+
                 <div class="dashboard-section p-4 mb-4">
                     <h6 class="text-main fw-bold mb-3 d-flex align-items-center">
                         <i class="bi bi-info-circle me-2"></i> Identificação Principal
@@ -1541,30 +1541,9 @@ body, html {
                                     <label class="form-label small fw-bold text-muted">Data Previsão Encerramento</label>
                                     <input type="date" name="data_previsao_encerramento" id="data_previsao_encerramento" class="form-control" title="Data prevista combinada com o cliente">
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label small fw-bold text-muted">Emitir NF?</label>
-                                    <select name="emitir_nf" id="emitir_nf" class="form-select" onchange="toggleConfigurado(this.value)">
-                                        <option value="">Selecione</option>
-                                        <option value="Não">Não</option>
-                                        <option value="Sim">Sim</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label small fw-bold text-muted">Emitir Boletos?</label>
-                                    <select name="emitir_boleto" id="emitir_boleto" class="form-select" onchange="toggleBoletoConfigurado(this.value)">
-                                        <option value="">Selecione</option>
-                                        <option value="N&#227;o">N&#227;o</option>
-                                        <option value="Sim">Sim</option>
-                                    </select>
-                                </div>
-                                <div class="col-md-6" id="div_boleto_configurado" style="display: none;">
-                                    <label class="form-label small fw-bold text-muted">Boleto j&#225; configurado?</label>
-                                    <select name="boleto_configurado" id="boleto_configurado" class="form-select bg-warning bg-opacity-10 border-warning border-opacity-25">
-                                        <option value="">Selecione</option>
-                                        <option value="N&#227;o">N&#227;o</option>
-                                        <option value="Sim">Sim</option>
-                                    </select>
-                                </div>
+
+
+
                                 <div class="col-md-6">
                                     <label class="form-label small fw-bold text-muted">Nº de Licenças</label>
                                     <div class="input-group">
@@ -1572,14 +1551,7 @@ body, html {
                                         <input type="number" name="num_licencas" id="num_licencas" class="form-control border-start-0 ps-0" placeholder="0">
                                     </div>
                                 </div>
-                                <div class="col-md-6" id="div_configurado" style="display: none;">
-                                    <label class="form-label small fw-bold text-muted">Já Configurado?</label>
-                                    <select name="configurado" id="configurado" class="form-select bg-warning bg-opacity-10 border-warning border-opacity-25">
-                                        <option value="">Selecione</option>
-                                        <option value="Não">Não</option>
-                                        <option value="Sim">Sim</option>
-                                    </select>
-                                </div>
+
                                 <div class="col-12">
                                     <label class="form-label small fw-bold text-muted">Link GestãooPRO</label>
                                     <div class="input-group mb-1">
@@ -1644,7 +1616,40 @@ body, html {
                             </div>
                         </div>
                     </div>
-                    
+
+                </div>
+
+                <div class="dashboard-section p-4 mt-4">
+                    <h6 class="text-main fw-bold mb-1 d-flex align-items-center">
+                        <i class="bi bi-receipt me-2"></i> Faturamento do Cliente
+                    </h6>
+                    <p class="text-muted small mb-3">Prefer&ecirc;ncias de emiss&atilde;o e configura&ccedil;&atilde;o fiscal e de cobran&ccedil;a.</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Emitir NF?</label>
+                            <select name="emitir_nf" id="emitir_nf" class="form-select" onchange="toggleConfigurado(this.value)">
+                                <option value="">Selecione</option><option value="N&#227;o">N&#227;o</option><option value="Sim">Sim</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">Emitir Boletos?</label>
+                            <select name="emitir_boleto" id="emitir_boleto" class="form-select" onchange="toggleBoletoConfigurado(this.value)">
+                                <option value="">Selecione</option><option value="N&#227;o">N&#227;o</option><option value="Sim">Sim</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6" id="div_configurado" style="display: none;">
+                            <label class="form-label small fw-bold text-muted">Já Configurado?</label>
+                            <select name="configurado" id="configurado" class="form-select bg-warning bg-opacity-10 border-warning border-opacity-25">
+                                <option value="">Selecione</option><option value="N&#227;o">N&#227;o</option><option value="Sim">Sim</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6" id="div_boleto_configurado" style="display: none;">
+                            <label class="form-label small fw-bold text-muted">Boleto já Configurado?</label>
+                            <select name="boleto_configurado" id="boleto_configurado" class="form-select bg-warning bg-opacity-10 border-warning border-opacity-25">
+                                <option value="">Selecione</option><option value="N&#227;o">N&#227;o</option><option value="Sim">Sim</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -3199,7 +3204,7 @@ body, html {
         sincronizarIdClienteApi();
         document.getElementById('chamados').value = d.chamados || '';
         document.getElementById('link_videos').value = d.linkVideos || '';
-        
+
         // Limpar e preencher checkbox de recursos
         document.querySelectorAll('.recurso-checkbox').forEach(cb => cb.checked = false);
         if (d.recursos) {
@@ -3210,10 +3215,10 @@ body, html {
                 }
             });
         }
-        
+
         toggleConfigurado(d.nf);
         toggleBoletoConfigurado(d.emitirBoleto);
-        
+
         const modal = new bootstrap.Modal(document.getElementById('modalCliente'));
         modal.show();
     }

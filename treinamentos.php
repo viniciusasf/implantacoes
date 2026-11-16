@@ -2055,17 +2055,18 @@ include 'header.php';
         </div>
     </div>
 
+    <div class="d-flex justify-content-end align-items-center gap-2 mb-2">
+        <span class="badge rounded-pill bg-light text-secondary border" id="agenda-api-atualizacao">Carregando agenda...</span>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="btn-atualizar-agenda-api">
+            <i class="bi bi-arrow-clockwise me-1" id="agenda-api-icone"></i>Atualizar agenda do GestãoPRO
+        </button>
+    </div>
+
     <section class="card border-0 shadow-sm mb-4 gsap-reveal d-none" id="agenda-api-card" style="background: var(--bg-card); border-radius: 16px;">
         <div class="card-header bg-transparent border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2 p-3 p-md-4">
             <div>
                 <h5 class="fw-bold mb-1"><i class="bi bi-cloud-arrow-down me-2 text-primary"></i>Treinamentos agendados no GestãoPRO</h5>
                 <div class="small text-muted">Agenda da API Master · usuário 53 · importe para o banco local e integre ao Google Agenda</div>
-            </div>
-            <div class="d-flex align-items-center gap-2">
-                <span class="badge rounded-pill bg-light text-secondary border" id="agenda-api-atualizacao">Carregando agenda...</span>
-                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-atualizar-agenda-api">
-                    <i class="bi bi-arrow-clockwise me-1" id="agenda-api-icone"></i>Atualizar
-                </button>
             </div>
         </div>
         <div class="px-3 px-md-4 pt-3 d-none" id="agenda-api-aviso"></div>
