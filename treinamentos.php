@@ -2319,6 +2319,21 @@ include 'header.php';
                                     <td class="text-end pe-3 col-mini">
                                         <?php $id_tr = (int) $t['id_treinamento']; ?>
                                         <div class="d-flex justify-content-end gap-1 flex-nowrap">
+                                            <?php
+                                            $id_agenda_api = (int) ($t['gestaopro_agenda_id'] ?? 0);
+                                            $link_treinamento_gestaopro = $id_agenda_api > 0
+                                                ? 'https://interno.gestaopro.srv.br/?eventoId=' . rawurlencode((string) $id_agenda_api)
+                                                : '';
+                                            ?>
+                                            <?php if ($link_treinamento_gestaopro !== ''): ?>
+                                                <a href="<?= htmlspecialchars($link_treinamento_gestaopro, ENT_QUOTES, 'UTF-8') ?>"
+                                                   target="_blank" rel="noopener noreferrer"
+                                                   class="btn btn-sm btn-outline-primary"
+                                                   data-bs-toggle="tooltip" data-bs-title="Abrir treinamento no GestãoPRO"
+                                                   aria-label="Abrir treinamento no GestãoPRO">
+                                                    <i class="bi bi-box-arrow-up-right"></i> API
+                                                </a>
+                                            <?php endif; ?>
                                             <?php if (!empty($t['link_videos'])): ?>
                                                 <a href="<?= htmlspecialchars($t['link_videos'], ENT_QUOTES, 'UTF-8') ?>"
                                                    target="_blank" rel="noopener noreferrer"
