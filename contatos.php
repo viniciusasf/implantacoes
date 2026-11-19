@@ -263,7 +263,7 @@ body, html {
         <div class="search-container position-relative flex-grow-1" style="max-width: 500px;">
             <i class="bi bi-search position-absolute text-muted" style="left: 1rem; top: 50%; transform: translateY(-50%);"></i>
             <form method="GET" action="contatos.php" id="searchForm">
-                <input type="text" name="filtro" class="form-control search-input-modern w-100" 
+                <input type="text" name="filtro" id="searchInput" class="form-control search-input-modern w-100" 
                        placeholder="Buscar por nome, empresa ou cargo..." value="<?= htmlspecialchars($filtro) ?>">
             </form>
         </div>
@@ -447,6 +447,35 @@ body, html {
         } else {
             document.querySelectorAll(".gsap-reveal").forEach(el => el.style.opacity = 1);
         }
+
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+            const val = searchInput.value;
+            searchInput.value = '';
+            searchInput.focus();
+            searchInput.value = val;
+
+            let timeout = null;
+            searchInput.addEventListener('input', function() {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    document.getElementById('searchForm').submit();
+                }, 500);
+            });
+        }
+
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const params = new URLSearchParams(window.location.search);
+        const clienteNovo = params.get('novo') === '1' ? params.get('id_cliente') : null;
+        if (!clienteNovo || !/^\d+$/.test(clienteNovo)) return;
+
+        const seletorCliente = document.getElementById('id_cliente');
+        const opcaoCliente = Array.from(seletorCliente.options).find(opcao => opcao.value === clienteNovo);
+        if (opcaoCliente) seletorCliente.value = clienteNovo;
+        document.getElementById('modalTitle').innerText = 'Ficha de Contato';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalContato')).show();
     });
 
     function openEditModal(element) {

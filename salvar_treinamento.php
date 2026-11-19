@@ -30,7 +30,7 @@ function normalizarDataTreinamento($valor)
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Aplicando cast para int para segurança e tipagem
-    $id_cliente    = (int)$_POST['id_cliente'];
+    $id_cliente    = (int)($_POST['id_cliente'] ?? 0);
     $id_treinamento = isset($_POST['id_treinamento']) && !empty($_POST['id_treinamento']) ? (int)$_POST['id_treinamento'] : null;
     $id_contato    = isset($_POST['id_contato']) && !empty($_POST['id_contato']) ? (int)$_POST['id_contato'] : null;
 
@@ -41,6 +41,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $observacoes      = $_POST['observacoes'] ?? '';
     // Campo livre para digitação de contato
     $nome_contato_livre = trim($_POST['nome_contato'] ?? '');
+    if ($id_contato !== null) {
+        $stmtContato = $pdo->prepare('SELECT nome FROM contatos WHERE id_contato = ? AND id_cliente = ? LIMIT 1');
+        $stmtContato->execute([$id_contato, $id_cliente]);
+        $nomeContatoSelecionado = trim((string) ($stmtContato->fetchColumn() ?: ''));
+        if ($nomeContatoSelecionado === '') {
+            $id_contato = null;
+        } elseif ($nome_contato_livre === '') {
+            $nome_contato_livre = $nomeContatoSelecionado;
+        }
+    }
 
     // Validar dados obrigatórios
     if (empty($id_cliente) || empty($tema) || empty($data_treinamento)) {

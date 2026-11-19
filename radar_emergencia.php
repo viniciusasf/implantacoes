@@ -6,7 +6,7 @@ $dias_limite_inatividade = 7;
 $dias_aguardando_retorno = 7;
 
 // Consulta principal:
-// 1. Pega todos os clientes ativos (data_fim is null)
+// 1. Pega somente clientes com implantação ativa (data_fim nula ou zerada)
 // 2. Que não tem nenhum treinamento PENDENTE
 // 3. Onde o ULTIMO treinamento foi há > 5 dias (ou nunca teve e a data adesão > 5 dias)
 $query_clientes_inativos = "

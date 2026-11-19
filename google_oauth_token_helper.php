@@ -1,8 +1,9 @@
 <?php
+require_once __DIR__ . '/app_config.php';
 
 function googleTokenPath()
 {
-    return __DIR__ . '/token.json';
+    return appGoogleTokenPath();
 }
 
 function googleLoadTokenData($tokenPath = null)

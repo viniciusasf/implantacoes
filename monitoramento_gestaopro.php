@@ -1,5 +1,6 @@
 <?php 
 require_once 'config.php';
+require_once __DIR__ . '/ufs_brasil.php';
 require_once 'header.php'; 
 
 // Buscar mapeamento de clientes
@@ -37,11 +38,19 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
             <i class="bi bi-cloud-arrow-down-fill me-2" style="color:var(--primary)"></i>
             Monitoramento GestãoPro
         </h1>
-        <p class="mb-0" style="color:var(--text-muted);font-size:.85rem;">
-            Dados em tempo real da API <strong>interno.gestaopro.srv.br</strong>
+        <p class="mb-0" style="color:var(--text-muted);font-size:.85rem;" id="subtitulo-monitoramento">
+            Dados em tempo real da API <strong>interno.gestaopro.srv.br/api/mesa?usuario=53&secoes=clientes</strong>
         </p>
     </div>
-    <div class="d-flex gap-2 align-items-center">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        <div class="btn-group btn-group-sm p-1 rounded-3" style="background:var(--bg-body); border:1px solid var(--border-color);" role="group" id="btn-group-fonte">
+            <button type="button" class="btn btn-sm btn-primary fw-bold" id="btn-fonte-mesa" data-fonte="mesa" title="Carregar clientes da Mesa (Vinicius #53)">
+                <i class="bi bi-kanban me-1"></i> Mesa (#53)
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary fw-bold" id="btn-fonte-geral" data-fonte="implantacoes" title="Carregar todos os clientes da API Geral de Implantações">
+                <i class="bi bi-globe me-1"></i> Geral (/api/implantacoes)
+            </button>
+        </div>
         <span id="badge-origem" class="badge rounded-pill" style="font-size:.75rem;background:var(--primary-light);color:var(--primary)">—</span>
         <span id="badge-atualizacao" style="font-size:.75rem;color:var(--text-muted)"></span>
         <button id="btn-refresh" class="btn btn-primary btn-sm">
@@ -58,9 +67,10 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
         ['id'=>'kpi-clienteok','label'=>'Cliente OK',     'icon'=>'bi-check-circle',      'color'=>'primary'],
         ['id'=>'kpi-aguardando','label'=>'Aguard. Cliente','icon'=>'bi-hourglass-split',  'color'=>'warning'],
         ['id'=>'kpi-encerrado','label'=>'Encerrados',     'icon'=>'bi-check-circle-fill', 'color'=>'success'],
+        ['id'=>'kpi-total-licencas','label'=>'Total de Licenças','icon'=>'bi-key-fill', 'color'=>'primary'],
     ];
     foreach ($kpis as $k): ?>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md">
         <div class="card h-100 border-0">
             <div class="card-body d-flex align-items-center gap-3 p-3">
                 <div style="width:44px;height:44px;border-radius:12px;background:var(--<?=$k['color']?>-light);display:flex;align-items:center;justify-content:center;">
@@ -97,14 +107,26 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
                         </li>
                         <li>
                             <div class="form-check mb-1">
+                                <input class="form-check-input filtro-status-cb" type="checkbox" value="CLIENTE.OK" id="chk-status-cliente-ok" checked>
+                                <label class="form-check-label w-100" for="chk-status-cliente-ok" style="cursor:pointer;">Cliente OK</label>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="form-check mb-1">
+                                <input class="form-check-input filtro-status-cb" type="checkbox" value="RISCO CANC" id="chk-status-risco-canc" checked>
+                                <label class="form-check-label w-100" for="chk-status-risco-canc" style="cursor:pointer;">Risco Cancelamento</label>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="form-check mb-1">
                                 <input class="form-check-input filtro-status-cb" type="checkbox" value="AGUARD.CLI" id="chk-status-aguardando" checked>
                                 <label class="form-check-label w-100" for="chk-status-aguardando" style="cursor:pointer;">Aguard. Cliente</label>
                             </div>
                         </li>
                         <li>
                             <div class="form-check mb-1">
-                                <input class="form-check-input filtro-status-cb" type="checkbox" value="CLIENTE.OK" id="chk-status-cliente-ok" checked>
-                                <label class="form-check-label w-100" for="chk-status-cliente-ok" style="cursor:pointer;">Cliente OK</label>
+                                <input class="form-check-input filtro-status-cb" type="checkbox" value="OUTROS" id="chk-status-outros" checked>
+                                <label class="form-check-label w-100" for="chk-status-outros" style="cursor:pointer;">Outros / Sem Status</label>
                             </div>
                         </li>
                         <li>
@@ -154,9 +176,10 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
                         <tr style="background:var(--bg-body);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">
                             <th class="px-4 py-3 sortable" data-col="FANTASIA">Cliente <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3 sortable" data-col="STATUS_IMPLANTACAO">Status <i class="bi bi-chevron-expand ms-1"></i></th>
-                            <th class="py-3 sortable" data-col="TIPOACOMP">TIPOACOMP <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3 sortable" data-col="SERIAL">Serial <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3 sortable" data-col="VENDEDOR">Consultor <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3 sortable" data-col="SERVIDOR">Servidor <i class="bi bi-chevron-expand ms-1"></i></th>
+                            <th class="py-3 sortable" data-col="NUM_LICENCAS" style="text-align:center">Licenças <i class="bi bi-chevron-expand ms-1"></i></th>
                             <th class="py-3" style="text-align:center">Chamados</th>
                             <th class="py-3" style="text-align:center">Ações</th>
                         </tr>
@@ -170,7 +193,85 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
 
 </div><!-- /container-fluid -->
 
+<div class="modal fade" id="modalUsoClienteGP" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content gp-usage-modal">
+            <div class="modal-header gp-usage-head">
+                <div class="gp-usage-heading">
+                    <div class="gp-usage-mark"><i class="bi bi-activity"></i></div>
+                    <div><span class="gp-usage-kicker">GESTAOPRO / ATIVIDADE</span><h5 class="gp-usage-title" id="modalUsoClienteGPTitulo">Uso do cliente</h5><div class="gp-usage-status" id="modalUsoClienteGPStatus">Consulta atualizada pela API da mesa</div></div>
+                </div>
+                <span class="gp-usage-live"><span class="gp-usage-live-dot"></span> Atualiza&ccedil;&atilde;o for&ccedil;ada</span>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body gp-usage-body" id="modalUsoClienteGPBody"></div>
+        </div>
+    </div>
+</div>
+
 <style>
+
+.gp-usage-modal { border:1px solid var(--border-color); border-radius:22px; overflow:hidden; background:var(--bg-card); box-shadow:0 24px 80px rgba(15,23,42,.28); }
+.gp-usage-head { min-height:116px; padding:22px 26px; border:0; color:#fff; background:radial-gradient(circle at 88% 0%,rgba(45,212,191,.28),transparent 28%),linear-gradient(125deg,#182353 0%,#273b83 58%,#3155a5 100%); }
+.gp-usage-head .btn-close { filter:invert(1); opacity:.82; }
+.gp-usage-heading { display:flex; align-items:center; gap:15px; min-width:0; }
+.gp-usage-mark { display:grid; place-items:center; flex:0 0 48px; height:48px; border:1px solid rgba(255,255,255,.22); border-radius:15px; color:#b8fff2; background:rgba(255,255,255,.12); font-size:1.3rem; }
+.gp-usage-kicker { display:block; margin-bottom:4px; color:#b8c6f3; font-size:.64rem; font-weight:800; letter-spacing:.16em; }
+.gp-usage-title { margin:0; color:#fff; font-size:1.18rem; font-weight:750; letter-spacing:-.02em; }
+.gp-usage-status { margin-top:4px; color:#d4defa; font-size:.76rem; }
+.gp-usage-live { display:inline-flex; align-items:center; gap:8px; margin:0 20px 0 auto; padding:7px 11px; border:1px solid rgba(255,255,255,.2); border-radius:999px; color:#eef2ff; background:rgba(255,255,255,.1); font-size:.72rem; white-space:nowrap; }
+.gp-usage-live-dot { width:7px; height:7px; border-radius:50%; background:#5eead4; box-shadow:0 0 0 4px rgba(94,234,212,.15); }
+.gp-usage-body { padding:24px 26px 28px; background:var(--bg-body); }
+.gp-usage-toolbar { display:flex; align-items:end; justify-content:space-between; gap:12px; margin-bottom:16px; }
+.gp-usage-section-kicker { color:var(--primary); font-size:.62rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
+.gp-usage-section-title { margin:4px 0 0; color:var(--text-dark); font-size:1rem; font-weight:750; }
+.gp-usage-period { display:inline-flex; align-items:center; gap:7px; padding:8px 11px; border:1px solid var(--border-color); border-radius:10px; color:var(--text-muted); background:var(--bg-card); font-size:.74rem; white-space:nowrap; }
+.gp-usage-kpis { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:11px; margin-bottom:19px; }
+.gp-usage-card { position:relative; display:flex; align-items:center; gap:11px; min-width:0; min-height:86px; padding:14px 12px; overflow:hidden; border:1px solid var(--border-color); border-radius:15px; background:var(--bg-card); animation:gpUsageEnter .36s both; }
+.gp-usage-card:before { position:absolute; inset:0 auto 0 0; width:3px; background:var(--usage-accent,var(--primary)); content:""; }
+.gp-usage-card-icon { display:grid; place-items:center; flex:0 0 34px; height:34px; border-radius:11px; color:var(--usage-accent,var(--primary)); background:rgba(67,97,238,.10); font-size:.95rem; }
+.gp-usage-card-copy { min-width:0; }
+.gp-usage-card-label { display:block; color:var(--text-muted); font-size:.66rem; line-height:1.25; }
+.gp-usage-card-value { display:block; margin-top:5px; overflow:hidden; color:var(--text-dark); font-size:.98rem; font-weight:800; line-height:1.1; text-overflow:ellipsis; white-space:nowrap; }
+.gp-usage-panel { margin-top:14px; padding:17px 18px; border:1px solid var(--border-color); border-radius:16px; background:var(--bg-card); }
+.gp-usage-panel-head { display:flex; align-items:center; gap:10px; margin-bottom:13px; }
+.gp-usage-panel-icon { display:grid; place-items:center; flex:0 0 31px; height:31px; border-radius:10px; color:var(--primary); background:var(--primary-light); }
+.gp-usage-panel-title { margin:0; color:var(--text-dark); font-size:.86rem; font-weight:750; }
+.gp-usage-panel-note { margin-left:auto; color:var(--text-muted); font-size:.7rem; }
+.gp-usage-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+.gp-usage-field { min-width:0; padding:10px 12px; border:1px solid var(--border-color); border-radius:11px; background:var(--bg-body); }
+.gp-usage-field-label { display:block; margin-bottom:4px; color:var(--text-muted); font-size:.66rem; }
+.gp-usage-field-value { display:block; overflow-wrap:anywhere; color:var(--text-dark); font-size:.78rem; font-weight:650; }
+.gp-usage-table-wrap { overflow:auto; border:1px solid var(--border-color); border-radius:11px; }
+.gp-usage-table { min-width:520px; margin:0; color:var(--text-dark); font-size:.77rem; }
+.gp-usage-table thead th { padding:10px 12px; border-bottom:1px solid var(--border-color); color:var(--text-muted); background:var(--bg-body); font-size:.64rem; letter-spacing:.06em; text-transform:uppercase; }
+.gp-usage-table tbody td { padding:10px 12px; border-color:var(--border-color); }
+.gp-usage-raw { margin-top:15px; border-top:1px solid var(--border-color); padding-top:12px; }
+.gp-usage-raw summary { color:var(--text-muted); cursor:pointer; font-size:.75rem; font-weight:650; }
+.gp-usage-raw pre { max-height:280px; margin:12px 0 0; padding:14px; overflow:auto; border:1px solid var(--border-color); border-radius:12px; color:var(--text-dark); background:var(--bg-body); font-size:.72rem; white-space:pre-wrap; }
+.gp-usage-state { display:grid; min-height:230px; place-content:center; justify-items:center; gap:12px; color:var(--text-muted); text-align:center; }
+.gp-usage-state-icon { display:grid; place-items:center; width:50px; height:50px; border-radius:16px; color:var(--primary); background:var(--primary-light); font-size:1.2rem; }
+.gp-usage-state.is-error .gp-usage-state-icon { color:var(--danger); background:var(--danger-light); }
+@keyframes gpUsageEnter { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:translateY(0); } }
+@media (max-width:1100px) { .gp-usage-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media (max-width:575px) {
+    .gp-usage-head { align-items:flex-start; padding:17px 16px; }
+    .gp-usage-heading { gap:10px; }
+    .gp-usage-mark { flex-basis:40px; height:40px; border-radius:12px; }
+    .gp-usage-title { font-size:1rem; }
+    .gp-usage-live { display:none; }
+    .gp-usage-body { padding:17px 14px 20px; }
+    .gp-usage-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .gp-usage-card { min-height:76px; padding:11px 9px; gap:8px; }
+    .gp-usage-card-icon { flex-basis:30px; height:30px; }
+    .gp-usage-card-label { font-size:.62rem; }
+    .gp-usage-card-value { font-size:.87rem; }
+    .gp-usage-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .gp-usage-toolbar { align-items:flex-start; flex-direction:column; }
+    .gp-usage-panel { padding:14px 12px; }
+}
+@media (prefers-reduced-motion:reduce) { .gp-usage-card { animation:none; } }
+
 .sortable { cursor:pointer; user-select:none; }
 .sortable:hover { color:var(--primary) !important; }
 .badge-status { font-size:.68rem; font-weight:700; padding:4px 10px; border-radius:20px; letter-spacing:.04em; }
@@ -217,7 +318,7 @@ while ($row_retorno = $stmt_retornos->fetch(PDO::FETCH_ASSOC)) {
 const MAPA_CLIENTES_LOCAL = <?php echo json_encode($mapa_clientes_local); ?>;
 const MAPA_LINKS_CHAMADOS = <?php echo json_encode($mapa_links_chamados); ?>;
 const CHAMADOS_BAIXADOS = <?php echo json_encode($chamados_retornos_local); ?>;
-const CHAMADOS_STATUS_WHATSAPP = ['Aguardando Desenvolvimento','Aguardando Fila','Aguardando Cliente','Aguardando Testes','Resolvido','Encerrado'];
+const CHAMADOS_STATUS_WHATSAPP = ['Aguardando Desenvolvimento','Aguardando Autorização','Aguardando Fila','Aguardando Cliente','Aguardando Testes','Resolvido','Encerrado'];
 const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
 
 (function(){
@@ -278,17 +379,19 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
     }
 
     function badgeStatus(s){
-        if (!s) return '<span class="badge-status badge-outros">—</span>';
+        if (!s || s === 'OUTROS') return '<span class="badge-status badge-outros">—</span>';
         const mapa = {
             'ANDAMENTO':'badge-andamento',
             'AGUARD.CLI':'badge-aguardando',
             'CLIENTE.OK':'badge-clienteok',
             'ENCERRADA':'badge-encerrada',
+            'RISCO CANC':'badge-aguardando',
         };
         const cls = mapa[s] || 'badge-outros';
         let label = s.charAt(0)+s.slice(1).toLowerCase();
         if (s === 'AGUARD.CLI') label = 'Aguard. Cliente';
         if (s === 'CLIENTE.OK') label = 'Cliente OK';
+        if (s === 'RISCO CANC') label = 'Risco Canc';
         return `<span class="badge-status ${cls}">${label}</span>`;
     }
 
@@ -303,6 +406,25 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
         return '<span style="color:var(--text-muted)">—</span>';
     }
 
+    function obterNumeroLicencas(cliente){
+        if ('NUMLIC' in cliente || 'NUMLIC_GPT' in cliente) {
+            const numLic = Number(cliente.NUMLIC ?? 0);
+            const numLicGpt = Number(cliente.NUMLIC_GPT ?? 0);
+            return (Number.isFinite(numLic) ? numLic : 0) + (Number.isFinite(numLicGpt) ? numLicGpt : 0);
+        }
+
+        const campos = ['NUMLIC_GPT', 'NUMLIC', 'NUM_LICENCAS', 'LICENCAS', 'NUM_LICENCIAS'];
+        let valorExplicito = null;
+        for (const campo of campos) {
+            const valor = cliente[campo];
+            if (valor === null || valor === undefined || String(valor).trim() === '') continue;
+            const numero = Number(valor);
+            if (!Number.isFinite(numero)) continue;
+            if (valorExplicito === null) valorExplicito = numero;
+            if (numero !== 0) return numero;
+        }
+        return valorExplicito ?? 0;
+    }
     function nomeConsultor(row){
         const v  = (row.VENDEDOR  || '').trim();
         const v2 = (row.VENDEDOR2 || '').trim();
@@ -314,7 +436,7 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
     function renderTabela(lista){
         const tbody = document.getElementById('tbody-gp');
         if (!lista.length){
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-5" style="color:var(--text-muted)">Nenhum registro encontrado.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center py-5" style="color:var(--text-muted)">Nenhum registro encontrado.</td></tr>`;
             document.getElementById('lbl-contagem').textContent = '0 registros';
             return;
         }
@@ -344,10 +466,22 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
             const vendedorCliente = r.VENDEDOR || r.RESPONSAVEL || '';
             const servidorCliente = r.SERVIDOR || r.SERVIDORNUVEM || '';
             const dataInicioPadrao = r.DATA_INICIO || r.INICIO || r.DATAINICIO || '';
-            const licencasCliente = r.NUM_LICENCAS || r.LICENCAS || r.NUM_LICENCIAS || 0;
+            const licencasCliente = r.NUM_LICENCAS ?? obterNumeroLicencas(r);
+            const licencasApi = licencasCliente;
+            const dadosAtualizacao = {
+                fantasia: nomeCliente,
+                vendedor: r.VENDEDOR || r.VENDEDOR2 || r.RESPONSAVEL || '',
+                servidor: servidorCliente,
+                num_licencas: licencasApi,
+                serial: r.SERIAL || '',
+                cnpj: r.CNPJ || r.CNPJ_CPF || r.DOCUMENTO || ''
+            };
+            const btnAtualizar = isVinculado ? `<button type="button" class="btn btn-sm btn-outline-warning fw-bold btn-atualizar-cliente-gp" data-id-cliente-api="${escapeHtmlAttribute(String(r.ID_CLIENTE || ''))}" data-dados="${escapeHtmlAttribute(JSON.stringify(dadosAtualizacao))}" title="Atualizar cadastro local com os dados da API"><i class="bi bi-arrow-repeat me-1"></i>Atualizar</button>` : '';
+            const idClienteApiUso = String(r.ID_CLIENTE || r.ID_CLIENTE_API || '');
+            const btnUso = /^\d+$/.test(idClienteApiUso) ? `<button type="button" class="btn btn-sm btn-outline-primary fw-bold btn-uso-cliente-gp" data-id-cliente-api="${escapeHtmlAttribute(idClienteApiUso)}" data-cliente="${escapeHtmlAttribute(nomeCliente)}" title="Ver detalhes de uso do cliente"><i class="bi bi-activity me-1"></i>Uso</button>` : '';
 
 
-            const btnCadastrar = !isVinculado ? `<button class="btn btn-sm btn-success fw-bold btn-cadastrar-gp" data-nome="${escapeHtmlAttribute(nomeCliente)}" data-vendedor="${escapeHtmlAttribute(vendedorCliente)}" data-servidor="${escapeHtmlAttribute(servidorCliente)}" data-id-cliente-api="${escapeHtmlAttribute(String(r.ID_CLIENTE || ''))}" data-data-inicio="${escapeHtmlAttribute(dataInicioPadrao)}" data-licencas="${escapeHtmlAttribute(String(licencasCliente))}" title="Cadastrar cliente local">
+            const btnCadastrar = !isVinculado ? `<button class="btn btn-sm btn-success fw-bold btn-cadastrar-gp" data-nome="${escapeHtmlAttribute(nomeCliente)}" data-vendedor="${escapeHtmlAttribute(vendedorCliente)}" data-servidor="${escapeHtmlAttribute(servidorCliente)}" data-id-cliente-api="${escapeHtmlAttribute(String(r.ID_CLIENTE || ''))}" data-data-inicio="${escapeHtmlAttribute(dataInicioPadrao)}" data-licencas="${escapeHtmlAttribute(String(licencasCliente))}" data-serial="${escapeHtmlAttribute(String(r.SERIAL || ''))}" data-cnpj="${escapeHtmlAttribute(String(r.CNPJ || r.CNPJ_CPF || r.DOCUMENTO || ''))}" data-uf="${escapeHtmlAttribute(String(r.UF || r.uf || ''))}" title="Cadastrar cliente local">
                     <i class="bi bi-plus-circle me-1"></i>Cadastrar
                 </button>` : '';
                 
@@ -406,15 +540,20 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                     </div>
                 </td>
                 <td>${badgeStatus(r.STATUS_IMPLANTACAO)}</td>
-                <td style="font-size:.82rem">${escapeHtml(r.TIPOACOMP || '—')}</td>
+                <td style="font-size:.82rem;font-family:monospace;">${escapeHtml(r.SERIAL || '—')}</td>
                 <td style="font-size:.82rem">${nomeConsultor(r)}</td>
                 <td><span style="font-size:.78rem;font-family:monospace;background:var(--bg-body);padding:2px 8px;border-radius:6px">${r.SERVIDOR || '—'}</span></td>
+                <td style="text-align:center;font-size:.82rem;font-weight:600;">
+                    ${licencasCliente}
+                </td>
                 <td style="text-align:center;font-size:.82rem;font-weight:600;color:var(--primary);">
                     ${totalChamados}
                 </td>
                 <td style="text-align:center">
                     <div class="d-flex justify-content-center align-items-center flex-nowrap gap-1">
                         ${btnCadastrar}                        
+                        ${btnAtualizar}
+                        ${btnUso}
                         ${btnChamados}
                         ${btnWhatsapp}
                         ${btnEnviarResolvidos}
@@ -467,8 +606,13 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
     function atualizarKPIs(lista){
         document.getElementById('kpi-andamento').textContent = lista.filter(r=>r.STATUS_IMPLANTACAO==='ANDAMENTO').length;
         document.getElementById('kpi-clienteok').textContent = lista.filter(r=>r.STATUS_IMPLANTACAO==='CLIENTE.OK').length;
-        document.getElementById('kpi-aguardando').textContent= lista.filter(r=>r.STATUS_IMPLANTACAO==='AGUARD.CLI').length;
-        document.getElementById('kpi-encerrado').textContent = todosRegistros.filter(r=>r.STATUS_IMPLANTACAO==='ENCERRADA' && r.VENDEDOR2 === 'VINICIUS').length;
+        document.getElementById('kpi-aguardando').textContent= lista.filter(r=>r.STATUS_IMPLANTACAO==='AGUARD.CLI' || r.STATUS_IMPLANTACAO==='RISCO CANC').length;
+        document.getElementById('kpi-encerrado').textContent = todosRegistros.filter(r=>r.STATUS_IMPLANTACAO==='ENCERRADA' && (r.VENDEDOR2 === 'VINICIUS' || r.VENDEDOR === 'VINICIUS')).length;
+        const totalLicencas = lista.reduce((total, cliente) => {
+            const valor = Number(cliente.NUM_LICENCAS ?? obterNumeroLicencas(cliente));
+            return total + (Number.isFinite(valor) ? valor : 0);
+        }, 0);
+        document.getElementById('kpi-total-licencas').textContent = totalLicencas.toLocaleString('pt-BR');
     }
 
     function criarMensagemWhatsappChamados(nomeCliente, chamados){
@@ -510,30 +654,125 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                `\r\n\r\nE para que receba essa atualização, *deslogue do sistema e logue novamente.*`;
     }
 
+    function getFonteAtiva() {
+        return localStorage.getItem('gp_monitoramento_fonte') || 'mesa';
+    }
+
+    function atualizarBotoesFonte(fonte) {
+        const btnMesa = document.getElementById('btn-fonte-mesa');
+        const btnGeral = document.getElementById('btn-fonte-geral');
+        const subtitulo = document.getElementById('subtitulo-monitoramento');
+
+        if (fonte === 'mesa') {
+            if (btnMesa) btnMesa.className = 'btn btn-sm btn-primary fw-bold';
+            if (btnGeral) btnGeral.className = 'btn btn-sm btn-outline-secondary fw-bold';
+            if (subtitulo) {
+                subtitulo.innerHTML = 'Leitura em tempo real de <strong>interno.gestaopro.srv.br/api/mesa?usuario=53&secoes=clientes</strong>';
+            }
+        } else {
+            if (btnMesa) btnMesa.className = 'btn btn-sm btn-outline-secondary fw-bold';
+            if (btnGeral) btnGeral.className = 'btn btn-sm btn-primary fw-bold';
+            if (subtitulo) {
+                subtitulo.innerHTML = 'Leitura em tempo real de <strong>interno.gestaopro.srv.br/api/implantacoes</strong>';
+            }
+        }
+    }
+
     // ── carregar dados ─────────────────────────────────────────────────────────
-    function carregarDados(forcar){
+    function carregarDados(forcar, somenteCache = false){
+        const fonte = getFonteAtiva();
+        atualizarBotoesFonte(fonte);
+
         document.getElementById('estado-carregando').classList.remove('d-none');
         document.getElementById('estado-erro').classList.add('d-none');
         document.getElementById('wrapper-tabela').classList.add('d-none');
         document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise';
 
-        const url = forcar ? 'api_gestaopro_bridge.php?forcar=1' : 'api_gestaopro_bridge.php';
-        const urlChamados = forcar ? 'api_gestaopro_bridge.php?endpoint=chamados&forcar=1' : 'api_gestaopro_bridge.php?endpoint=chamados';
+        let pClientes, pChamados, pLicencas;
 
-        Promise.all([
-            fetch(url).then(r => r.json()),
-            fetch(urlChamados).then(r => r.json())
-        ])
-            .then(([resp, respChamados]) => {
-                if (!resp.sucesso) throw new Error(resp.erro || 'Erro desconhecido em implantações');
-                if (!respChamados.sucesso) throw new Error(respChamados.erro || 'Erro desconhecido em chamados');
+        if (fonte === 'mesa') {
+            const urlMesa = 'api_gestaopro_bridge.php?endpoint=mesa&usuario=53&secoes=clientes,chamados' + (forcar ? '&forcar=1' : (somenteCache ? '&somente_cache=1' : ''));
+            pClientes = fetch(urlMesa).then(r => r.json());
+            const urlImplantacoes = forcar
+                ? 'api_gestaopro_bridge.php?endpoint=implantacoes&forcar=1'
+                : (somenteCache ? 'api_gestaopro_bridge.php?endpoint=implantacoes&somente_cache=1' : 'api_gestaopro_bridge.php?endpoint=implantacoes');
+            pLicencas = fetch(urlImplantacoes)
+                .then(r => r.json())
+                .catch(() => null);
+            pChamados = Promise.resolve({ sucesso: true, dados: { chamados: [] } });
+        } else {
+            const url = forcar
+                ? 'api_gestaopro_bridge.php?forcar=1'
+                : (somenteCache ? 'api_gestaopro_bridge.php?somente_cache=1' : 'api_gestaopro_bridge.php');
+            const urlChamados = forcar
+                ? 'api_gestaopro_bridge.php?endpoint=chamados&forcar=1'
+                : (somenteCache ? 'api_gestaopro_bridge.php?endpoint=chamados&somente_cache=1' : 'api_gestaopro_bridge.php?endpoint=chamados');
 
-                const clientes = resp.dados.clientes || resp.dados || [];
+            pClientes = fetch(url).then(r => r.json());
+            pLicencas = Promise.resolve(null);
+            pChamados = fetch(urlChamados)
+                .then(r => r.json())
+                .catch(err => ({ sucesso: false, erro: err.message || 'Falha de conexão' }));
+        }
+
+        Promise.all([pClientes, pChamados, pLicencas])
+            .then(([resp, respChamados, respLicencas]) => {
+                if (!resp.sucesso) throw new Error(resp.erro || 'Erro ao carregar clientes');
+
+                let clientes = resp.dados.clientes || resp.dados || [];
+                const dadosImplantacoes = respLicencas && respLicencas.sucesso ? respLicencas.dados : null;
+                const registrosImplantacoes = Array.isArray(dadosImplantacoes)
+                    ? dadosImplantacoes
+                    : (Array.isArray(dadosImplantacoes?.clientes)
+                        ? dadosImplantacoes.clientes
+                        : (Array.isArray(dadosImplantacoes?.implantacoes) ? dadosImplantacoes.implantacoes : []));
+                const licencasPorCliente = new Map();
+                const implantacaoPorCliente = new Map();
+                const normalizarNomeCliente = nome => String(nome || '')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .toUpperCase();
+                registrosImplantacoes.forEach(registro => {
+                    const idCliente = String(registro.ID_CLIENTE || registro.ID || registro.ID_CLIENTE_API || '');
+                    if (idCliente) implantacaoPorCliente.set(idCliente, registro);
+                    const licencas = obterNumeroLicencas(registro);
+                    if (idCliente && licencas > 0) licencasPorCliente.set(idCliente, licencas);
+                    const nomeCliente = normalizarNomeCliente(registro.FANTASIA || registro.RAZAOSOCIAL);
+                    if (nomeCliente && licencas > 0) licencasPorCliente.set(`nome:${nomeCliente}`, licencas);
+                });
+                clientes = clientes.map(c => {
+                    const idApi = c.ID_CLIENTE || c.ID;
+                    const st = (c.STATUS_IMPLANTACAO || '').trim().toUpperCase();
+                    const registroImplantacao = implantacaoPorCliente.get(String(idApi)) || {};
+                    const nomeCliente = normalizarNomeCliente(c.FANTASIA || c.RAZAOSOCIAL);
+                    const licencasApi = licencasPorCliente.get(String(idApi))
+                        ?? licencasPorCliente.get(`nome:${nomeCliente}`)
+                        ?? obterNumeroLicencas(c);
+                    return {
+                        ...c,
+                        ID_CLIENTE: idApi,
+                        ID: c.ID || idApi,
+                        FANTASIA: c.FANTASIA || c.RAZAOSOCIAL || '',
+                        RAZAOSOCIAL: c.RAZAOSOCIAL || c.FANTASIA || '',
+                        VENDEDOR: c.VENDEDOR || registroImplantacao.VENDEDOR || '',
+                        VENDEDOR2: c.VENDEDOR2 || registroImplantacao.VENDEDOR2 || '',
+                        SERVIDOR: c.SERVIDOR || '',
+                        NUVEM: c.NUVEM || ((c.SERVIDOR && c.SERVIDOR.toUpperCase() !== 'LOCAL') ? 'T' : 'F'),
+                        NUM_LICENCAS: licencasApi,
+                        STATUS_IMPLANTACAO: st || 'OUTROS',
+                    };
+                });
                 todosRegistros = clientes;
 
                 window.chamadosValidos = {};
                 window.chamadosByCliente = {};
-                const chamadosList = respChamados.dados.chamados || respChamados.dados || [];
+
+                const chamadosList = (fonte === 'mesa' && resp.dados && Array.isArray(resp.dados.chamados))
+                    ? resp.dados.chamados
+                    : ((respChamados && respChamados.sucesso && respChamados.dados) ? (respChamados.dados.chamados || respChamados.dados || []) : []);
+
                 chamadosList.forEach(ch => {
                     if (!window.chamadosByCliente[ch.ID_CLIENTE]) {
                         window.chamadosByCliente[ch.ID_CLIENTE] = [];
@@ -565,7 +804,11 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
             .catch(err => {
                 document.getElementById('estado-carregando').classList.add('d-none');
                 document.getElementById('estado-erro').classList.remove('d-none');
-                document.getElementById('msg-erro').textContent = err.message;
+                let msg = err.message;
+                if (fonte === 'implantacoes') {
+                    msg += ' <br><br><button type="button" class="btn btn-sm btn-outline-primary fw-bold" onclick="alternarParaMesaMonitoramento()"><i class="bi bi-kanban me-1"></i> Carregar Clientes da Mesa (#53)</button>';
+                }
+                document.getElementById('msg-erro').innerHTML = msg;
             })
             .finally(() => {
                 document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise';
@@ -573,15 +816,31 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
             });
     }
 
+    window.alternarParaMesaMonitoramento = function() {
+        localStorage.setItem('gp_monitoramento_fonte', 'mesa');
+        carregarDados(false);
+    };
+
     // ── eventos ────────────────────────────────────────────────────────────────
+    const btnMesa = document.getElementById('btn-fonte-mesa');
+    if (btnMesa) {
+        btnMesa.addEventListener('click', function(){
+            localStorage.setItem('gp_monitoramento_fonte', 'mesa');
+            carregarDados(false);
+        });
+    }
+
+    const btnGeral = document.getElementById('btn-fonte-geral');
+    if (btnGeral) {
+        btnGeral.addEventListener('click', function(){
+            localStorage.setItem('gp_monitoramento_fonte', 'implantacoes');
+            carregarDados(false);
+        });
+    }
     document.getElementById('btn-refresh').addEventListener('click', function(){
         this.disabled = true;
         document.getElementById('ico-refresh').className = 'bi bi-arrow-clockwise spin';
-        // Invalida cache deletando arquivo via parâmetro
-        Promise.all([
-            fetch('api_gestaopro_bridge.php?forcar=1'),
-            fetch('api_gestaopro_bridge.php?endpoint=chamados&forcar=1')
-        ]).then(()=>carregarDados(false));
+        carregarDados(true);
     });
 
     ['filtro-busca','filtro-vendedor','filtro-nuvem'].forEach(id => {
@@ -627,7 +886,89 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
         });
     });
 
-    document.addEventListener('click', function(event){
+    document.addEventListener('click', async function(event){
+        const usoBtn = event.target.closest('.btn-uso-cliente-gp');
+        if (usoBtn) {
+            event.preventDefault();
+            const modalEl = document.getElementById('modalUsoClienteGP');
+            const body = document.getElementById('modalUsoClienteGPBody');
+            const status = document.getElementById('modalUsoClienteGPStatus');
+            document.getElementById('modalUsoClienteGPTitulo').textContent = `Uso \u2014 ${usoBtn.dataset.cliente || 'Cliente'}`;
+            status.textContent = 'Consultando os \u00faltimos 30 dias...';
+            body.innerHTML = '<div class="gp-usage-state"><span class="spinner-border text-primary"></span><div>Consultando os dados mais recentes do cliente...</div></div>';
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            const textoOriginal = usoBtn.innerHTML;
+            usoBtn.disabled = true;
+            usoBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            try {
+                const url = `api_gestaopro_bridge.php?endpoint=uso&id_cliente_api=${encodeURIComponent(usoBtn.dataset.idClienteApi)}&dias=30&forcar=1&apenas_mesa=1`;
+                const response = await fetch(url, {headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
+                const json = await response.json();
+                if (!response.ok || !json.sucesso) throw new Error(json.erro || 'Falha ao carregar o uso do cliente.');
+                const data = json.dados || {};
+                const summary = data.resumo || {};
+                const users = Array.isArray(data.usuarios) ? data.usuarios : [];
+                const modules = Array.isArray(data.modulos) ? data.modulos : [];
+                const daily = Array.isArray(data.diario) ? data.diario : [];
+                const latestCandidates = [summary.ULTIMO, data.utilizacao_mesa?.ultimoLogin, data.utilizacao_mesa?.ULTIMO_LOGIN];
+                users.forEach(user => latestCandidates.push(user?.ULTIMO, user?.ultimo, user?.ultimoAcesso));
+                const latest = latestCandidates.map(value => value ? new Date(value) : null).filter(value => value && !Number.isNaN(value.getTime())).sort((a,b)=>b-a)[0];
+                const latestLabel = latest ? new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short'}).format(latest) : 'Sem acesso registrado';
+                const escUso = value => escapeHtml(String(value ?? '-'));
+                const countLabel = value => value === null || value === undefined || value === '' ? '-' : Number(value).toLocaleString('pt-BR');
+                const cards = [['\u00daltimo acesso (todos os usu\u00e1rios)',latestLabel],['Pageviews',countLabel(summary.PAGEVIEWS)],['Logins',countLabel(summary.LOGINS)],['Usu\u00e1rios',countLabel(summary.USUARIOS ?? (users.length || null))],['Atritos',countLabel(summary.ATRITOS)],['Erros',countLabel(summary.ERROS)]];
+                const utilizationRecord = data.utilizacao_mesa && typeof data.utilizacao_mesa === 'object' ? data.utilizacao_mesa : {};
+                const utilizationFields = Object.entries(utilizationRecord).map(([key,value]) => `<div class="gp-usage-field"><span class="gp-usage-field-label">${escUso(key)}</span><strong class="gp-usage-field-value">${escUso(typeof value === 'object' ? JSON.stringify(value) : value)}</strong></div>`).join('');
+                const moduleRows = modules.map(item=>`<tr><td>${escUso(item.APP||item.MODULO||item.modulo)}</td><td>${escUso(item.PAGEVIEWS||0)}</td><td>${escUso(item.ULTIMO||item.ultimoAcesso)}</td></tr>`).join('');
+                const userRows = users.map(item=>`<tr><td>${escUso(item.USUARIO||item.LOGIN||item.NOME||item.usuario)}</td><td>${escUso(item.PAGEVIEWS||0)}</td><td>${escUso(item.LOGINS||0)}</td><td>${escUso(item.ULTIMO||item.ultimoAcesso)}</td></tr>`).join('');
+                const dailyRows = daily.slice(-14).map(item=>`<tr><td>${escUso(item.DATA||item.data||item.DIA)}</td><td>${escUso(item.PAGEVIEWS||0)}</td><td>${escUso(item.LOGINS||0)}</td></tr>`).join('');
+                const moduleSection = moduleRows ? `<section class="gp-usage-panel"><div class="gp-usage-panel-head"><span class="gp-usage-panel-icon"><i class="bi bi-grid-3x3-gap"></i></span><h6 class="gp-usage-panel-title">Uso por m\u00f3dulo</h6></div><div class="gp-usage-table-wrap"><table class="table gp-usage-table"><thead><tr><th>M\u00f3dulo</th><th>Pageviews</th><th>\u00daltimo acesso</th></tr></thead><tbody>${moduleRows}</tbody></table></div></section>` : '';
+                const userSection = userRows ? `<section class="gp-usage-panel"><div class="gp-usage-panel-head"><span class="gp-usage-panel-icon"><i class="bi bi-people"></i></span><h6 class="gp-usage-panel-title">Usu\u00e1rios</h6></div><div class="gp-usage-table-wrap"><table class="table gp-usage-table"><thead><tr><th>Usu\u00e1rio</th><th>Pageviews</th><th>Logins</th><th>\u00daltimo acesso</th></tr></thead><tbody>${userRows}</tbody></table></div></section>` : '';
+                const dailySection = dailyRows ? `<section class="gp-usage-panel"><div class="gp-usage-panel-head"><span class="gp-usage-panel-icon"><i class="bi bi-calendar3"></i></span><h6 class="gp-usage-panel-title">Atividade di\u00e1ria</h6><span class="gp-usage-panel-note">At\u00e9 14 dias recentes</span></div><div class="gp-usage-table-wrap"><table class="table gp-usage-table"><thead><tr><th>Data</th><th>Pageviews</th><th>Logins</th></tr></thead><tbody>${dailyRows}</tbody></table></div></section>` : '';
+                body.innerHTML = `<div class="gp-usage-toolbar"><div><span class="gp-usage-section-kicker">Resumo do cliente</span><h6 class="gp-usage-section-title">Atividade e utiliza\u00e7\u00e3o</h6></div><span class="gp-usage-period"><i class="bi bi-calendar3"></i> \u00daltimos 30 dias</span></div>
+                    <div class="gp-usage-kpis">${cards.map(([label,value],index)=>{const icons=['bi-clock-history','bi-eye','bi-box-arrow-in-right','bi-people','bi-exclamation-circle','bi-bug'];const accents=['#14b8a6','#4361ee','#8b5cf6','#0ea5e9','#f59e0b','#ef4444'];return `<article class="gp-usage-card" style="--usage-accent:${accents[index]}"><span class="gp-usage-card-icon"><i class="bi ${icons[index]}"></i></span><span class="gp-usage-card-copy"><small class="gp-usage-card-label">${label}</small><strong class="gp-usage-card-value">${escUso(value)}</strong></span></article>`;}).join('')}</div>
+                    ${utilizationFields?`<section class="gp-usage-panel"><div class="gp-usage-panel-head"><span class="gp-usage-panel-icon"><i class="bi bi-speedometer2"></i></span><h6 class="gp-usage-panel-title">Campos recebidos da API da mesa</h6><span class="gp-usage-panel-note">Atualizado ${escUso(json.gerado_em||'agora')}</span></div><div class="gp-usage-fields">${utilizationFields}</div></section>`:''}
+                    ${moduleSection}${userSection}${dailySection}
+                    <details class="gp-usage-raw"><summary><i class="bi bi-braces me-1"></i> Ver resposta completa da API</summary><pre>${escUso(JSON.stringify(data,null,2))}</pre></details>`;
+                status.textContent = `ID API ${usoBtn.dataset.idClienteApi} \u00b7 Atualizado ${json.gerado_em || 'agora'}`;
+            } catch (error) {
+                status.textContent = 'Falha ao consultar a API';
+                body.innerHTML = `<div class="gp-usage-state is-error"><span class="gp-usage-state-icon"><i class="bi bi-exclamation-triangle"></i></span><strong>N\u00e3o foi poss\u00edvel carregar o uso</strong><span>${escapeHtml(error.message || 'Tente novamente em instantes.')}</span></div>`;
+            } finally {
+                usoBtn.disabled = false;
+                usoBtn.innerHTML = textoOriginal;
+            }
+            return;
+        }
+        const atualizarBtn = event.target.closest('.btn-atualizar-cliente-gp');
+        if (atualizarBtn) {
+            event.preventDefault();
+            let dados = {};
+            try { dados = JSON.parse(atualizarBtn.dataset.dados || '{}'); }
+            catch (error) { alert('Não foi possível ler os dados da API para atualização.'); return; }
+            const idApi = (atualizarBtn.dataset.idClienteApi || '').trim();
+            if (!idApi || !confirm(`Atualizar o cadastro local de ${dados.fantasia || 'este cliente'} com os dados da API GestãoPro?`)) return;
+
+            const textoOriginal = atualizarBtn.innerHTML;
+            atualizarBtn.disabled = true;
+            atualizarBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Atualizando';
+            fetch('api_atualizar_cliente_gestaopro.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                body: JSON.stringify({id_cliente_api: idApi, dados})
+            }).then(async response => {
+                const resultado = await response.json();
+                if (!response.ok || !resultado.sucesso) throw new Error(resultado.erro || 'Falha ao atualizar o cadastro.');
+                alert(resultado.mensagem || 'Cadastro local atualizado com sucesso.');
+                window.location.reload();
+            }).catch(error => {
+                alert(error.message || 'Falha ao atualizar o cadastro local.');
+                atualizarBtn.disabled = false;
+                atualizarBtn.innerHTML = textoOriginal;
+            });
+            return;
+        }
+
         const btn = event.target.closest('.copy-chamados-whatsapp');
         if (btn) {
             const msg = btn.dataset.message;
@@ -659,14 +1000,17 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                 cadastrarBtn.dataset.servidor,
                 cadastrarBtn.dataset.idClienteApi,
                 cadastrarBtn.dataset.dataInicio,
-                cadastrarBtn.dataset.licencas
+                cadastrarBtn.dataset.licencas,
+                cadastrarBtn.dataset.serial,
+                cadastrarBtn.dataset.cnpj,
+                cadastrarBtn.dataset.uf
             );
             return;
         }
     });
 
-    // Init
-    carregarDados(false);
+    // Init: mantém a última leitura da API em tela até que o usuário force a atualização manual.
+    carregarDados(false, true);
 })();
 </script>
 
@@ -678,8 +1022,10 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
 <!-- Modal Cadastro de Cliente (GestãoPro) -->
 <div class="modal fade" id="modalCadastroClienteGP" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <form method="POST" action="clientes.php" class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden;">
+        <form method="POST" action="clientes.php" class="modal-content border-0 shadow-lg" id="formCadastroClienteGP" style="border-radius: 24px; overflow: hidden;">
             <input type="hidden" name="redirect_to" value="monitoramento_gestaopro.php">
+            <input type="hidden" name="abrir_ficha_contato" id="cadastroAbrirFichaContato" value="1">
+            <input type="hidden" name="contatos_api_json" id="cadastroContatosApiJson" value="[]">
             <div class="modal-header p-4 border-0" style="background: linear-gradient(135deg, #16a34a, #22c55e);">
                 <div>
                     <h5 class="modal-title fw-bold text-white d-flex align-items-center gap-2">
@@ -727,16 +1073,53 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
                     </div>
                 </div>
                 <div class="mb-3 mt-3">
+                    <label class="form-label small fw-bold text-muted">SERIAL</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-upc-scan text-success"></i></span>
+                        <input type="text" name="serial" id="cadastroSerial" class="form-control border-start-0 ps-0" placeholder="Ex: GP-00001">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">CNPJ</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-card-text text-success"></i></span>
+                        <input type="text" name="cnpj" id="cadastroCnpj" class="form-control border-start-0 ps-0" placeholder="CNPJ do cliente">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">UF</label>
+                    <select name="uf" id="cadastroUf" class="form-select" required>
+                        <option value="">Selecione a UF</option>
+                        <?php foreach (listarUfsBrasil() as $sigla => $estado): ?>
+                            <option value="<?= $sigla ?>"><?= $sigla ?> - <?= htmlspecialchars($estado, ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="alert alert-info py-2 px-3 small border-0 rounded-3" id="cadastroResumoContatosApi" role="status">
+                    Consultando os dados detalhados do cliente na API...
+                </div>
+                <div class="mb-3">
                     <label class="form-label small fw-bold text-muted">ID Cliente API (GestãoPro)</label>
                     <div class="input-group">
                         <span class="input-group-text bg-white border-end-0"><i class="bi bi-braces-asterisk text-success"></i></span>
                         <input type="number" name="id_cliente_api" id="cadastroIdClienteApi" class="form-control border-start-0 ps-0" placeholder="Ex: 6547" required>
                     </div>
                 </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted">Link do Cadastro</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-link-45deg text-success"></i></span>
+                        <input type="text" name="anexo" id="cadastroLinkCadastro" class="form-control border-start-0 ps-0" placeholder="Ex: https://interno.gestaopro.srv.br/clientes/7618" required>
+                    </div>
+                </div>
+                <!-- campo oculto para link do Drive → salvo em Link Vídeos Passo a Passo -->
+                <input type="hidden" name="link_videos" id="cadastroLinkDrive">
+                <!-- Alerta de status da criação da pasta -->
+                <div id="alertDriveCadastro" class="alert d-none py-2 px-3 small border-0 rounded-3" role="alert"></div>
             </div>
             <div class="modal-footer border-0 p-4">
                 <button type="button" class="btn btn-link text-muted fw-bold text-decoration-none me-auto" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-success px-5 fw-bold" style="border-radius: 12px; height: 46px;">
+                <button type="submit" id="btnSubmitCadastroGP" class="btn btn-success px-5 fw-bold" style="border-radius: 12px; height: 46px;">
                     <i class="bi bi-check-lg me-2"></i> Cadastrar
                 </button>
             </div>
@@ -810,14 +1193,137 @@ const CHAMADOS_STATUS_FECHADOS = ['Resolvido','Encerrado','Cancelado'];
 
 <script>
 
-function abrirModalCadastroCliente(nome, vendedor, servidor, idClienteApi, dataInicio, numLicencas) {
+let solicitacaoDetalhesCadastro = 0;
+async function abrirModalCadastroCliente(nome, vendedor, servidor, idClienteApi, dataInicio, numLicencas, serial, cnpj, uf) {
+    const idSolicitacao = ++solicitacaoDetalhesCadastro;
+    const idApi = idClienteApi ? String(idClienteApi).trim() : '';
+    const linkCadastro = idApi ? `https://interno.gestaopro.srv.br/clientes/${idApi}` : '';
+
     document.getElementById('cadastroNomeFantasia').value = nome || '';
     document.getElementById('cadastroVendedor').value = vendedor || '';
     document.getElementById('cadastroServidor').value = servidor || '';
     document.getElementById('cadastroDataInicio').value = dataInicio || new Date().toISOString().slice(0, 10);
     document.getElementById('cadastroNumLicencas').value = numLicencas ? Number(numLicencas) : 0;
-    document.getElementById('cadastroIdClienteApi').value = idClienteApi ? String(idClienteApi).trim() : '';
+    document.getElementById('cadastroIdClienteApi').value = idApi;
+    document.getElementById('cadastroLinkCadastro').value = linkCadastro;
+    document.getElementById('cadastroSerial').value = serial || '';
+    document.getElementById('cadastroCnpj').value = cnpj || '';
+    document.getElementById('cadastroUf').value = uf || '';
+    document.getElementById('cadastroLinkDrive').value = '';
+    document.getElementById('cadastroContatosApiJson').value = '[]';
+    document.getElementById('cadastroAbrirFichaContato').value = '1';
+    const resumoContatos = document.getElementById('cadastroResumoContatosApi');
+    const botaoSalvar = document.getElementById('btnSubmitCadastroGP');
+    resumoContatos.className = 'alert alert-info py-2 px-3 small border-0 rounded-3';
+    resumoContatos.textContent = 'Consultando os dados detalhados do cliente na API...';
+    botaoSalvar.disabled = true;
+    botaoSalvar.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Consultando API...';
+    // Limpa alerta
+    const alerta = document.getElementById('alertDriveCadastro');
+    alerta.className = 'alert d-none py-2 px-3 small border-0 rounded-3';
+    alerta.textContent = '';
     bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCadastroClienteGP')).show();
+
+    try {
+        if (!/^\d+$/.test(idApi)) throw new Error('ID do cliente da API inválido.');
+        const response = await fetch(`api_gestaopro_bridge.php?endpoint=cliente_detalhes&id_cliente_api=${encodeURIComponent(idApi)}&forcar=1`, {
+            headers: {'Accept':'application/json', 'X-Requested-With':'XMLHttpRequest'}
+        });
+        const resultado = await response.json();
+        if (!response.ok || !resultado.sucesso || !resultado.dados) {
+            throw new Error(resultado.erro || 'Não foi possível carregar os detalhes do cliente.');
+        }
+        if (idSolicitacao !== solicitacaoDetalhesCadastro) return;
+
+        const detalhes = resultado.dados;
+        document.getElementById('cadastroNomeFantasia').value = detalhes.FANTASIA || detalhes.RAZAOSOCIAL || nome || '';
+        document.getElementById('cadastroVendedor').value = detalhes.VENDEDOR || vendedor || '';
+        document.getElementById('cadastroServidor').value = detalhes.SERVIDOR || servidor || '';
+        document.getElementById('cadastroDataInicio').value = String(detalhes.DATA_INICIO || detalhes.DATACAD || dataInicio || new Date().toISOString()).slice(0, 10);
+        const totalLicencas = Number(detalhes.NUMLIC || 0) + Number(detalhes.NUMLIC_GPT || 0);
+        document.getElementById('cadastroNumLicencas').value = Number.isFinite(totalLicencas) ? totalLicencas : (numLicencas || 0);
+        document.getElementById('cadastroSerial').value = detalhes.SERIAL || serial || '';
+        document.getElementById('cadastroCnpj').value = detalhes.CNPJ || cnpj || '';
+        document.getElementById('cadastroUf').value = detalhes.UF || detalhes.uf || uf || '';
+
+        const contatosApi = Array.isArray(detalhes.contatos)
+            ? detalhes.contatos.filter(contato => contato && String(contato.CONTATO || '').trim() !== '')
+            : [];
+        document.getElementById('cadastroContatosApiJson').value = JSON.stringify(contatosApi);
+        document.getElementById('cadastroAbrirFichaContato').value = contatosApi.length ? '0' : '1';
+        resumoContatos.className = contatosApi.length
+            ? 'alert alert-success py-2 px-3 small border-0 rounded-3'
+            : 'alert alert-warning py-2 px-3 small border-0 rounded-3';
+        resumoContatos.textContent = contatosApi.length
+            ? `${contatosApi.length} contato(s) da API será(ão) cadastrado(s): ${contatosApi.map(contato => [contato.CONTATO, contato.EMAIL, [contato.DDD, contato.TELEFONE].filter(Boolean).join(' ')].filter(Boolean).join(' · ')).join('; ')}`
+            : 'A API não retornou contatos. Após cadastrar o cliente, será aberta a tela para incluir um contato manualmente.';
+        botaoSalvar.innerHTML = `<i class="bi bi-check-lg me-2"></i>${contatosApi.length ? 'Cadastrar Cliente e Contato(s)' : 'Cadastrar Cliente'}`;
+    } catch (erro) {
+        if (idSolicitacao !== solicitacaoDetalhesCadastro) return;
+        resumoContatos.className = 'alert alert-warning py-2 px-3 small border-0 rounded-3';
+        resumoContatos.textContent = `Não foi possível carregar os detalhes da API (${erro.message}). Os dados da listagem poderão ser usados e o contato poderá ser cadastrado depois.`;
+        botaoSalvar.innerHTML = '<i class="bi bi-check-lg me-2"></i>Cadastrar Cliente';
+    } finally {
+        if (idSolicitacao === solicitacaoDetalhesCadastro) botaoSalvar.disabled = false;
+    }
+}
+
+const cadastroIdClienteApiInput = document.getElementById('cadastroIdClienteApi');
+if (cadastroIdClienteApiInput) {
+    cadastroIdClienteApiInput.addEventListener('input', function () {
+        const idApi = this.value.trim();
+        const linkInput = document.getElementById('cadastroLinkCadastro');
+        if (linkInput) {
+            linkInput.value = idApi ? `https://interno.gestaopro.srv.br/clientes/${idApi}` : '';
+        }
+    });
+}
+
+// ── Intercepta o submit do modal para criar pasta no Drive antes de cadastrar ──
+const formCadastroGP = document.getElementById('formCadastroClienteGP');
+if (formCadastroGP) {
+    formCadastroGP.addEventListener('submit', async function(e) {
+        const serial = document.getElementById('cadastroSerial').value.trim();
+        // Se não tiver serial, envia direto sem criar pasta
+        if (!serial) { return; }
+
+        e.preventDefault();
+        const btn = document.getElementById('btnSubmitCadastroGP');
+        const alerta = document.getElementById('alertDriveCadastro');
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Criando pasta no Drive...';
+        alerta.className = 'alert alert-info py-2 px-3 small border-0 rounded-3';
+        alerta.textContent = 'Criando pasta no Google Drive...';
+
+        try {
+            const fd = new FormData();
+            fd.append('serial', serial);
+            const resp = await fetch('criar_pasta_drive.php', { method: 'POST', body: fd });
+            const data = await resp.json();
+
+            if (data.sucesso) {
+                document.getElementById('cadastroLinkDrive').value = data.link || '';
+                alerta.className = 'alert alert-success py-2 px-3 small border-0 rounded-3';
+                alerta.textContent = '✅ Pasta criada no Google Drive! Salvando cadastro...';
+                // Aguarda 600ms para o usuário ver o sucesso, depois envia o form
+                setTimeout(() => { formCadastroGP.submit(); }, 600);
+            } else {
+                alerta.className = 'alert alert-warning py-2 px-3 small border-0 rounded-3';
+                alerta.textContent = '⚠️ Não foi possível criar a pasta no Drive: ' + (data.erro || 'Erro desconhecido') + '. O cadastro será salvo sem o link.';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check-lg me-2"></i> Cadastrar mesmo assim';
+                // Permite que o usuário tente enviar manualmente
+                formCadastroGP.removeEventListener('submit', arguments.callee);
+            }
+        } catch (err) {
+            alerta.className = 'alert alert-warning py-2 px-3 small border-0 rounded-3';
+            alerta.textContent = '⚠️ Erro de conexão ao criar pasta no Drive. O cadastro será salvo sem o link.';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg me-2"></i> Cadastrar mesmo assim';
+            formCadastroGP.removeEventListener('submit', arguments.callee);
+        }
+    });
 }
 </script>
 
